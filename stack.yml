@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  cardapio_saas:
+    image: SEU_USUARIO_DOCKER/cardapio_saas:latest
+    networks:
+      - yugonet
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_CONNECT_API=https://connect.yugochat.com.br
+      - NEXT_PUBLIC_BASE_DOMAIN=cardapio.yugochat.com.br
+      - NEXT_PUBLIC_WHATSAPP_DEFAULT=5571999952268
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=yugonet"
+        - "traefik.http.routers.cardapio_saas.rule=Host(`cardapio.yugochat.com.br`) || HostRegexp(`{subdomain:[a-z0-9-]+}.cardapio.yugochat.com.br`)"
+        - "traefik.http.routers.cardapio_saas.entrypoints=websecure"
+        - "traefik.http.routers.cardapio_saas.tls=true"
+        - "traefik.http.routers.cardapio_saas.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.cardapio_saas.loadbalancer.server.port=3000"
+
+networks:
+  yugonet:
+    external: true
