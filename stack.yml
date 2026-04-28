@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   cardapio_saas:
-    image: SEU_USUARIO_DOCKER/cardapio_saas:latest
+    image: cardapio_saas:latest
     networks:
       - yugonet
     environment:
