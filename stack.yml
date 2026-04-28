@@ -3,6 +3,7 @@ version: "3.8"
 services:
   cardapio_saas:
     image: cardapio_saas:latest
+    pull_policy: never
     networks:
       - yugonet
     environment:
