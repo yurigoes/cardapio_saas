@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  min-height: 100%;
+  background: #020617;
+}
+
+* {
+  box-sizing: border-box;
+}
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.light-admin input,
+.light-admin select,
+.light-admin textarea {
+  background: #ffffff !important;
+  color: #0a0a0a !important;
+  border: 1px solid #e5e7eb;
+}
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.light-admin input,
+.light-admin select,
+.light-admin textarea {
+  background: #ffffff !important;
+  color: #0a0a0a !important;
+  border: 1px solid #e5e7eb;
+}
+
+.light-admin .bg-zinc-900 {
+  background: #ffffff !important;
+  color: #0a0a0a !important;
+}
