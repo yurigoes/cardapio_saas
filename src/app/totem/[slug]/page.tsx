@@ -12,6 +12,12 @@ import {
 interface EmpresaInfo {
   id: string; nome_fantasia: string; logo_url: string | null;
   cor_primaria: string | null; whatsapp: string | null;
+  totem_bg_video_url: string | null;
+  totem_bg_image_url: string | null;
+  totem_cta_text: string | null;
+  totem_slogan: string | null;
+  horario_abertura: string | null;
+  horario_fechamento: string | null;
 }
 
 interface Categoria {
@@ -73,30 +79,99 @@ function ProductImage({ src, alt }: { src: string | null; alt: string }) {
 function StartScreen({
   empresa, onStart,
 }: { empresa: EmpresaInfo; onStart: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 p-8">
-      <div className="flex flex-col items-center gap-6 max-w-xs w-full text-center">
-        {empresa.logo_url ? (
-          <img src={empresa.logo_url} alt="" className="h-24 w-24 rounded-2xl object-cover shadow-xl" />
-        ) : (
-          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-emerald-500/20 shadow-xl">
-            <ChefHat className="h-12 w-12 text-emerald-400" />
-          </div>
-        )}
+  const ctaText = empresa.totem_cta_text || "Toque para fazer seu pedido";
+  const primaryColor = empresa.cor_primaria || "#f59e0b"; // amber fallback
 
-        <div>
-          <h1 className="text-2xl font-black text-white">{empresa.nome_fantasia}</h1>
-          <p className="mt-1 text-sm text-slate-400">Autoatendimento</p>
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      {/* ── Background layer ── */}
+      {empresa.totem_bg_video_url ? (
+        <video
+          src={empresa.totem_bg_video_url}
+          autoPlay muted loop playsInline
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : empresa.totem_bg_image_url ? (
+        <img
+          src={empresa.totem_bg_image_url}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800" />
+      )}
+
+      {/* ── Dark overlay for readability ── */}
+      <div className="absolute inset-0 bg-black/60" />
+
+      {/* ── Content ── */}
+      <div className="relative z-10 flex h-full flex-col items-center justify-between px-8 py-12">
+
+        {/* Top: logo + nome + badge */}
+        <div className="flex flex-col items-center gap-4 text-center">
+          {empresa.logo_url ? (
+            <img
+              src={empresa.logo_url}
+              alt={empresa.nome_fantasia}
+              className="h-24 w-24 rounded-2xl object-cover shadow-2xl ring-2 ring-white/20"
+            />
+          ) : (
+            <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-white/10 shadow-2xl ring-2 ring-white/20 backdrop-blur">
+              <ChefHat className="h-12 w-12 text-white" />
+            </div>
+          )}
+
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-widest text-white/70">
+              {empresa.nome_fantasia}
+            </p>
+          </div>
+
+          {/* ABERTO AGORA badge */}
+          <div className="flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/15 px-4 py-1.5 backdrop-blur">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-300">
+              Aberto Agora
+            </span>
+          </div>
         </div>
 
-        <button
-          onClick={onStart}
-          className="mt-4 w-full rounded-2xl bg-emerald-500 py-5 text-xl font-bold text-white shadow-xl shadow-emerald-500/20 hover:bg-emerald-400 active:scale-95 transition-all"
-        >
-          Iniciar meu pedido
-        </button>
+        {/* Center: main title + slogan */}
+        <div className="flex flex-col items-center gap-4 text-center">
+          <h1
+            className="max-w-sm text-5xl font-black leading-tight tracking-tight text-white drop-shadow-2xl"
+            style={{ textShadow: "0 4px 24px rgba(0,0,0,0.7)" }}
+          >
+            {empresa.totem_slogan || empresa.nome_fantasia}
+          </h1>
+          {empresa.totem_slogan && (
+            <p className="text-lg font-medium text-white/60">
+              {empresa.nome_fantasia}
+            </p>
+          )}
+        </div>
 
-        <p className="text-xs text-slate-600">Toque para começar</p>
+        {/* Bottom: CTA button */}
+        <div className="flex flex-col items-center gap-3">
+          <button
+            onClick={onStart}
+            style={{ backgroundColor: primaryColor }}
+            className="
+              group flex items-center gap-3 rounded-full px-12 py-6
+              text-xl font-black uppercase tracking-widest text-white
+              shadow-2xl transition-all duration-200
+              hover:scale-105 hover:brightness-110
+              active:scale-95
+              animate-[pulse_3s_ease-in-out_infinite]
+            "
+          >
+            <span>{ctaText}</span>
+            <span className="text-2xl transition-transform duration-200 group-hover:translate-x-1">›</span>
+          </button>
+          <p className="text-xs font-medium uppercase tracking-widest text-white/30">
+            Autoatendimento
+          </p>
+        </div>
       </div>
     </div>
   );

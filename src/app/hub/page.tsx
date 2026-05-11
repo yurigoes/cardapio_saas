@@ -6,7 +6,7 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, ChefHat,
   Bike, MapPin, DollarSign, Users, LogOut, Settings,
   ShieldCheck, Building2, Plus, X, ChevronDown, Trash2,
-  Eye, EyeOff,
+  Eye, EyeOff, Tag, Monitor,
 } from "lucide-react";
 
 /* ─── módulos por role ───────────────────────── */
@@ -84,6 +84,34 @@ const MODULOS: ModuloCard[] = [
     descricao: "Gerencie usuários e permissões de acesso",
     icon: Users,
     cor: "from-indigo-500/20 to-indigo-600/10 border-indigo-500/30 hover:border-indigo-500/60",
+    roles: ["admin", "gerente"],
+  },
+  {
+    href: "/painel/clientes", label: "Clientes",
+    descricao: "Fidelidade e ranking de compradores",
+    icon: Users,
+    cor: "from-blue-500/20 to-blue-600/10 border-blue-500/30 hover:border-blue-500/60",
+    roles: ["admin", "gerente"],
+  },
+  {
+    href: "/painel/cupons", label: "Cupons",
+    descricao: "Cupons e resgate de pontos",
+    icon: Tag,
+    cor: "from-purple-500/20 to-purple-600/10 border-purple-500/30 hover:border-purple-500/60",
+    roles: ["admin", "gerente"],
+  },
+  {
+    href: "/painel/config", label: "Configurações",
+    descricao: "Personalização e totem",
+    icon: Settings,
+    cor: "from-slate-500/20 to-slate-600/10 border-slate-500/30 hover:border-slate-500/60",
+    roles: ["admin"],
+  },
+  {
+    href: "/totem", label: "Totem",
+    descricao: "Autoatendimento PWA",
+    icon: Monitor,
+    cor: "from-amber-500/20 to-amber-600/10 border-amber-500/30 hover:border-amber-500/60",
     roles: ["admin", "gerente"],
   },
 ];

@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
          aceita_dinheiro, aceita_pix, aceita_cartao,
          taxa_entrega, pedido_minimo, tempo_entrega_min,
          fidelidade_ativo, pontos_por_real, real_por_ponto,
+         totem_bg_video_url, totem_bg_image_url, totem_cta_text, totem_slogan,
          modulos_ativos, status
        FROM empresas
        WHERE id = $1 AND deleted_at IS NULL`,
@@ -60,6 +61,7 @@ export async function PATCH(req: NextRequest) {
     "aceita_dinheiro", "aceita_pix", "aceita_cartao",
     "taxa_entrega", "pedido_minimo", "tempo_entrega_min",
     "fidelidade_ativo", "pontos_por_real", "real_por_ponto",
+    "totem_bg_video_url", "totem_bg_image_url", "totem_cta_text", "totem_slogan",
   ];
 
   const updates: Record<string, unknown> = {};

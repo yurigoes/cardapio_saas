@@ -8,7 +8,10 @@
       "Bash(node -e \"require\\('typescript'\\)\")",
       "Bash(ls /mnt/a/Sistemas/cardapio_saas/public/)",
       "Read(//c/Sistemas/**)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(mkdir -p \"A:\\\\Sistemas\\\\cardapio_saas\\\\src\\\\app\\\\api\\\\painel\\\\motoboys\\\\[id]\")",
+      "Bash(mkdir -p \"A:\\\\Sistemas\\\\cardapio_saas\\\\src\\\\app\\\\api\\\\painel\\\\zonas-entrega\\\\[id]\")"
     ]
   }
 }

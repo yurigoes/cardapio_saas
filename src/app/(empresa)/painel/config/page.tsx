@@ -3,9 +3,9 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Settings, Palette, Phone, CreditCard, Award,
+  Settings, Palette, Phone, CreditCard, Award, Monitor,
   Upload, Save, Eye, Sun, Moon, ToggleLeft, ToggleRight,
-  CheckCircle, AlertCircle, Loader2,
+  CheckCircle, AlertCircle, Loader2, Video, ImageIcon, ExternalLink,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -33,9 +33,14 @@ interface EmpresaConfig {
   fidelidade_ativo:  boolean;
   pontos_por_real:   number;
   real_por_ponto:    number;
+  // Totem customization
+  totem_bg_video_url: string;
+  totem_bg_image_url: string;
+  totem_cta_text:     string;
+  totem_slogan:       string;
 }
 
-type Tab = "identidade" | "contato" | "pagamentos" | "fidelidade";
+type Tab = "identidade" | "contato" | "pagamentos" | "fidelidade" | "totem";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -65,6 +70,10 @@ const DEFAULT_CONFIG: EmpresaConfig = {
   fidelidade_ativo:   false,
   pontos_por_real:    1,
   real_por_ponto:     0.01,
+  totem_bg_video_url: "",
+  totem_bg_image_url: "",
+  totem_cta_text:     "Toque para fazer seu pedido",
+  totem_slogan:       "",
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -362,6 +371,7 @@ export default function ConfigPage() {
     { key: "contato",    label: "Contato",    Icon: Phone        },
     { key: "pagamentos", label: "Pagamentos", Icon: CreditCard   },
     { key: "fidelidade", label: "Fidelidade", Icon: Award        },
+    { key: "totem",      label: "Totem",      Icon: Monitor      },
   ];
 
   return (
@@ -883,6 +893,81 @@ export default function ConfigPage() {
                     <span>A fidelidade só funciona se o módulo estiver ativo no seu plano.</span>
                   </li>
                 </ul>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Tab: Totem ── */}
+        {!loading && tab === "totem" && (
+          <motion.div key="totem" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-5">
+              <div className="flex items-center gap-3 mb-2">
+                <Monitor className="h-5 w-5 text-amber-400" />
+                <p className="font-semibold text-white">Personalização da tela inicial do Totem</p>
+              </div>
+
+              {/* CTA Text */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">Texto do botão principal</label>
+                <input
+                  value={form.totem_cta_text}
+                  onChange={e => setForm(f => ({ ...f, totem_cta_text: e.target.value }))}
+                  placeholder="Toque para fazer seu pedido"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-500/50 focus:outline-none"
+                />
+              </div>
+
+              {/* Slogan */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">Slogan / frase de destaque</label>
+                <input
+                  value={form.totem_slogan}
+                  onChange={e => setForm(f => ({ ...f, totem_slogan: e.target.value }))}
+                  placeholder="Ex: Sabores que atravessam séculos"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-500/50 focus:outline-none"
+                />
+              </div>
+
+              {/* Background video URL */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5 flex items-center gap-1.5">
+                  <Video className="h-3.5 w-3.5" /> URL do vídeo de fundo (MP4 direto)
+                </label>
+                <input
+                  value={form.totem_bg_video_url}
+                  onChange={e => setForm(f => ({ ...f, totem_bg_video_url: e.target.value }))}
+                  placeholder="https://exemplo.com/video.mp4"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-500/50 focus:outline-none"
+                />
+                <p className="mt-1 text-xs text-slate-500">Use um link direto de arquivo .mp4. YouTube não é suportado (sem autoplay).</p>
+              </div>
+
+              {/* Background image URL */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5 flex items-center gap-1.5">
+                  <ImageIcon className="h-3.5 w-3.5" /> Imagem de fundo (fallback quando sem vídeo)
+                </label>
+                <input
+                  value={form.totem_bg_image_url}
+                  onChange={e => setForm(f => ({ ...f, totem_bg_image_url: e.target.value }))}
+                  placeholder="https://exemplo.com/imagem.jpg"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-500/50 focus:outline-none"
+                />
+              </div>
+
+              {/* Preview link */}
+              <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+                <p className="text-xs text-amber-300 font-medium mb-2">Pré-visualização</p>
+                <p className="text-xs text-slate-400 mb-3">Acesse o totem pelo slug da empresa para ver o resultado. O vídeo/imagem e o texto do botão serão exibidos na tela inicial.</p>
+                <button
+                  type="button"
+                  onClick={() => window.open(`/totem/${window.location.pathname.split('/')[1] || 'demo'}`, '_blank')}
+                  className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Abrir totem em nova aba
+                </button>
               </div>
             </div>
           </motion.div>
