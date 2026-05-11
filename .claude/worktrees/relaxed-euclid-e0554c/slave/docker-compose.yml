@@ -1,0 +1,153 @@
+version: "3.9"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Cardápio SaaS — Slave Stack
+#
+# Serviços:
+#  1. postgres   — PostgreSQL local (banco: cardapio_slave)
+#  2. app        — Next.js (mesma imagem da VPS, aponta para postgres local)
+#  3. sync-agent — Daemon de sincronização com a VPS
+#  4. print-agent — Servidor HTTP de impressão ESC/POS
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ─── PostgreSQL local ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME:-cardapio_slave}
+      POSTGRES_USER:     ${DB_USER:-cardapio}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - slave_net
+    healthcheck:
+      test:     ["CMD-SHELL", "pg_isready -U ${DB_USER:-cardapio} -d ${DB_NAME:-cardapio_slave}"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+
+  # ─── Next.js App (interface do restaurante) ───────────────────────────────
+  app:
+    image: cardapio-saas:latest   # mesma imagem buildada para a VPS
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV:        production
+      PORT:            3000
+
+      # Aponta para o PostgreSQL LOCAL (não para a VPS)
+      DB_HOST:         postgres
+      DB_PORT:         5432
+      DB_NAME:         ${DB_NAME:-cardapio_slave}
+      DB_USER:         ${DB_USER:-cardapio}
+      DB_PASSWORD:     ${DB_PASSWORD}
+
+      # JWT — mesmo secret da VPS para validar tokens de usuário
+      JWT_SECRET:          ${JWT_SECRET}
+      JWT_REFRESH_SECRET:  ${JWT_REFRESH_SECRET:-}
+      SLAVE_JWT_SECRET:    ${SLAVE_JWT_SECRET:-}
+
+      # Modo slave — desativa features que exigem Redis/VPS
+      SLAVE_MODE:      "true"
+      SLAVE_VPS_URL:   ${VPS_URL}
+
+      # Print agent local
+      PRINT_AGENT_URL: http://print-agent:3001
+    ports:
+      - "3000:3000"
+    networks:
+      - slave_net
+    healthcheck:
+      test:     ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout:  10s
+      retries:  3
+
+  # ─── Sync Agent ─────────────────────────────────────────────────────────────
+  sync-agent:
+    build:
+      context:    ./sync-agent
+      dockerfile: Dockerfile
+    image: cardapio-sync-agent:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # VPS
+      VPS_URL:      ${VPS_URL:-https://cardapio.yugochat.com.br}
+      SLAVE_KEY:    ${SLAVE_KEY}
+      EMPRESA_CNPJ: ${EMPRESA_CNPJ}
+
+      # Banco local
+      DB_HOST:      postgres
+      DB_PORT:      5432
+      DB_NAME:      ${DB_NAME:-cardapio_slave}
+      DB_USER:      ${DB_USER:-cardapio}
+      DB_PASSWORD:  ${DB_PASSWORD}
+
+      # Configurações de sync
+      SYNC_INTERVAL_MS: ${SYNC_INTERVAL_MS:-30000}
+      PRINT_AGENT_URL:  http://print-agent:3001
+      STATE_DIR:        /var/lib/sync-agent
+      HEALTH_PORT:      3002
+    volumes:
+      - sync_state:/var/lib/sync-agent
+      - sync_logs:/var/log/sync-agent
+    ports:
+      - "127.0.0.1:3002:3002"   # health check local apenas
+    networks:
+      - slave_net
+
+  # ─── Print Agent ────────────────────────────────────────────────────────────
+  print-agent:
+    build:
+      context:    ./print-agent
+      dockerfile: Dockerfile
+    image: cardapio-print-agent:latest
+    restart: unless-stopped
+    environment:
+      PORT:         3001
+      EMPRESA_NOME: ${EMPRESA_NOME:-Restaurante}
+      EMPRESA_CNPJ: ${EMPRESA_CNPJ}
+      PRINTERS:     ${PRINTERS:-{}}
+      LOG_LEVEL:    ${LOG_LEVEL:-info}
+    # Acesso a dispositivos USB para impressão
+    # Descomente se usar impressora USB:
+    # devices:
+    #   - /dev/bus/usb:/dev/bus/usb
+    # privileged: true
+    ports:
+      - "127.0.0.1:3001:3001"   # acessível apenas localmente
+    networks:
+      - slave_net
+    volumes:
+      - print_logs:/var/log/print-agent
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Redes
+# ──────────────────────────────────────────────────────────────────────────────
+
+networks:
+  slave_net:
+    driver: bridge
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Volumes
+# ──────────────────────────────────────────────────────────────────────────────
+
+volumes:
+  postgres_data:
+    driver: local
+  sync_state:
+    driver: local
+  sync_logs:
+    driver: local
+  print_logs:
+    driver: local

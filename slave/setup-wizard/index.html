@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cardápio SaaS — Configuração</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      width: 100%;
+      max-width: 520px;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .logo h1 {
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #10b981, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .logo p {
+      color: #64748b;
+      margin-top: 6px;
+      font-size: 14px;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 32px;
+    }
+    /* Steps */
+    .steps {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    .step {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: #334155;
+      transition: background 0.3s;
+    }
+    .step.active   { background: #10b981; }
+    .step.done     { background: #10b981; opacity: 0.5; }
+    /* Mode cards */
+    .mode-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .mode-card {
+      border: 2px solid #334155;
+      border-radius: 12px;
+      padding: 20px 16px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+      background: #0f172a;
+    }
+    .mode-card:hover { border-color: #10b981; }
+    .mode-card.selected { border-color: #10b981; background: #0d2818; }
+    .mode-icon { font-size: 32px; margin-bottom: 10px; }
+    .mode-title { font-weight: 700; font-size: 15px; }
+    .mode-desc  { color: #64748b; font-size: 12px; margin-top: 6px; line-height: 1.5; }
+    /* Form */
+    label {
+      display: block;
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    input[type=text], input[type=url], input[type=password], input[type=number], select {
+      width: 100%;
+      padding: 10px 14px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 14px;
+      margin-bottom: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus { border-color: #10b981; }
+    .form-row { display: grid; grid-template-columns: 1fr 80px; gap: 10px; }
+    .form-row input:last-child { margin-bottom: 16px; }
+    /* Buttons */
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary  { background: #10b981; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #059669; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: #334155; color: #cbd5e1; margin-top: 10px; }
+    .btn-secondary:hover { background: #475569; }
+    /* Alert */
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .alert.error   { background: #1f0a0a; border: 1px solid #ef4444; color: #fca5a5; }
+    .alert.success { background: #0a1f10; border: 1px solid #10b981; color: #6ee7b7; }
+    .alert.show    { display: block; }
+    /* Info box */
+    .info-box {
+      background: #0c1a32;
+      border: 1px solid #1e40af;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 12px;
+      color: #93c5fd;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .info-box strong { color: #bfdbfe; }
+    /* Section title */
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #475569;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #334155;
+    }
+    /* Loading spinner */
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Pages */
+    .page { display: none; }
+    .page.active { display: block; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">
+    <h1>Cardápio SaaS</h1>
+    <p>Configuração inicial do agente local</p>
+  </div>
+
+  <div class="card">
+    <div class="steps">
+      <div class="step active" id="step1"></div>
+      <div class="step" id="step2"></div>
+      <div class="step" id="step3"></div>
+    </div>
+
+    <!-- Página 1: Escolha de modo -->
+    <div class="page active" id="page-mode">
+      <p style="color:#94a3b8;font-size:13px;margin-bottom:20px;">
+        Como você quer usar o Cardápio SaaS aqui neste computador?
+      </p>
+
+      <div class="mode-grid">
+        <div class="mode-card" id="card-cloud" onclick="selectMode('cloud')">
+          <div class="mode-icon">☁️</div>
+          <div class="mode-title">Nuvem Direta</div>
+          <div class="mode-desc">Acessa o sistema em nuvem pelo navegador. Ideal para uso no caixa sem impressão local.</div>
+        </div>
+        <div class="mode-card" id="card-slave" onclick="selectMode('slave')">
+          <div class="mode-icon">🖨️</div>
+          <div class="mode-title">Servidor Slave</div>
+          <div class="mode-desc">Sincroniza pedidos e gerencia impressão local via rede ou USB.</div>
+        </div>
+      </div>
+
+      <div id="alert-mode" class="alert error"></div>
+      <button class="btn btn-primary" id="btn-mode" onclick="nextFromMode()" disabled>
+        Próximo →
+      </button>
+    </div>
+
+    <!-- Página 2: Configuração -->
+    <div class="page" id="page-config">
+      <div class="section-title">Configuração da Nuvem</div>
+
+      <label>URL do sistema na nuvem</label>
+      <input type="url" id="cloudUrl" placeholder="https://cardapio.suaempresa.com.br"
+             oninput="validateConfig()" />
+
+      <div id="slave-fields">
+        <div class="info-box">
+          <strong>O que é a Slave Key?</strong><br>
+          É uma chave gerada pelo <strong>administrador master</strong> no painel
+          (<em>Empresas → sua empresa → Integrações</em>).
+          Ela vincula este computador à sua empresa.
+        </div>
+
+        <label>Slave Key (chave da empresa)</label>
+        <input type="password" id="slaveKey" placeholder="Cole a slave key aqui"
+               oninput="validateConfig()" />
+      </div>
+
+      <div id="printer-fields" style="display:none">
+        <div class="section-title" style="margin-top:8px">Impressora Térmica</div>
+
+        <label>Tipo de conexão</label>
+        <select id="printerType" onchange="togglePrinterHost()">
+          <option value="none">Sem impressora (só sincronização)</option>
+          <option value="network">Rede (IP + porta)</option>
+          <option value="usb">USB (driver instalado)</option>
+        </select>
+
+        <div id="printer-host-row">
+          <label>IP da impressora</label>
+          <div class="form-row">
+            <input type="text" id="printerHost" placeholder="192.168.1.100" />
+            <input type="number" id="printerPort" value="9100" placeholder="9100" />
+          </div>
+        </div>
+      </div>
+
+      <div id="alert-config" class="alert error"></div>
+      <button class="btn btn-primary" id="btn-config" onclick="submitConfig()" disabled>
+        Conectar e salvar
+      </button>
+      <button class="btn btn-secondary" onclick="goBack()">← Voltar</button>
+    </div>
+
+    <!-- Página 3: Sucesso -->
+    <div class="page" id="page-done">
+      <div style="text-align:center;padding:20px 0">
+        <div style="font-size:56px;margin-bottom:16px">✅</div>
+        <h2 style="font-size:22px;font-weight:800;margin-bottom:8px" id="done-title">Configurado!</h2>
+        <p style="color:#64748b;font-size:14px;line-height:1.6" id="done-desc"></p>
+      </div>
+      <button class="btn btn-primary" id="btn-done" onclick="goDone()">
+        Acessar agora →
+      </button>
+      <button class="btn btn-secondary" onclick="openSettings()">⚙️ Configurações</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let selectedMode = null;
+  let configData   = {};
+
+  // Verifica se já está configurado ao carregar
+  fetch('/api/status').then(r => r.json()).then(s => {
+    if (s.configured && s.mode) {
+      if (s.mode === 'cloud' && s.cloudUrl) {
+        window.location.href = s.cloudUrl + (s.empresaSlug ? '/' + s.empresaSlug : '/painel');
+      } else if (s.mode === 'slave') {
+        showPage('page-done');
+        updateDoneScreen(s);
+      }
+    }
+  }).catch(() => {});
+
+  function selectMode(mode) {
+    selectedMode = mode;
+    document.getElementById('card-cloud').classList.remove('selected');
+    document.getElementById('card-slave').classList.remove('selected');
+    document.getElementById('card-' + mode).classList.add('selected');
+    document.getElementById('btn-mode').disabled = false;
+  }
+
+  function nextFromMode() {
+    if (!selectedMode) return;
+    showPage('page-config');
+    setStep(2);
+
+    // Mostra campos específicos
+    document.getElementById('slave-fields').style.display  = selectedMode === 'slave' ? 'block' : 'none';
+    document.getElementById('printer-fields').style.display = selectedMode === 'slave' ? 'block' : 'none';
+
+    validateConfig();
+  }
+
+  function validateConfig() {
+    const cloudUrl  = document.getElementById('cloudUrl').value.trim();
+    const slaveKey  = document.getElementById('slaveKey')?.value.trim();
+    const btn       = document.getElementById('btn-config');
+    const urlOk     = /^https?:\/\/.+/.test(cloudUrl);
+    const slaveOk   = selectedMode !== 'slave' || (slaveKey && slaveKey.length >= 32);
+    btn.disabled = !(urlOk && slaveOk);
+  }
+
+  function togglePrinterHost() {
+    const type = document.getElementById('printerType').value;
+    document.getElementById('printer-host-row').style.display = type === 'network' ? 'block' : 'none';
+  }
+
+  async function submitConfig() {
+    const btn = document.getElementById('btn-config');
+    const alert = document.getElementById('alert-config');
+    alert.className = 'alert';
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Conectando...';
+
+    const payload = {
+      mode:        selectedMode,
+      cloudUrl:    document.getElementById('cloudUrl').value.trim(),
+      slaveKey:    document.getElementById('slaveKey')?.value.trim() || '',
+      printerType: document.getElementById('printerType')?.value || 'none',
+      printerHost: document.getElementById('printerHost')?.value.trim() || '',
+      printerPort: document.getElementById('printerPort')?.value || '9100',
+    };
+
+    try {
+      const resp = await fetch('/api/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(data.error || 'Erro desconhecido');
+      }
+
+      configData = data;
+      setStep(3);
+
+      if (selectedMode === 'cloud' && data.redirect) {
+        window.location.href = data.redirect;
+        return;
+      }
+
+      showPage('page-done');
+      updateDoneScreen({ mode: selectedMode, cloudUrl: payload.cloudUrl });
+
+    } catch (err) {
+      alert.textContent = '❌ ' + err.message;
+      alert.className = 'alert error show';
+      btn.disabled = false;
+      btn.textContent = 'Conectar e salvar';
+    }
+  }
+
+  function updateDoneScreen(status) {
+    if (status.mode === 'slave') {
+      document.getElementById('done-title').textContent = 'Slave configurado!';
+      document.getElementById('done-desc').innerHTML =
+        'Este computador está sincronizando pedidos com a nuvem.<br>' +
+        'O agente roda em segundo plano e imprime automaticamente.';
+      document.getElementById('btn-done').textContent = 'Abrir painel do restaurante →';
+    }
+  }
+
+  function goDone() {
+    const url = configData.redirect || (
+      document.getElementById('cloudUrl')?.value + '/painel'
+    );
+    if (url) window.location.href = url;
+  }
+
+  function openSettings() {
+    window.location.href = '/settings.html';
+  }
+
+  function goBack() {
+    showPage('page-mode');
+    setStep(1);
+  }
+
+  function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function setStep(n) {
+    for (let i = 1; i <= 3; i++) {
+      const el = document.getElementById('step' + i);
+      el.className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
+    }
+  }
+</script>
+</body>
+</html>

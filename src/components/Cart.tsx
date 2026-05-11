@@ -1,19 +1,26 @@
 "use client";
 
-import { Produto } from "@/types";
+import { ProdutoPublico } from "@/types";
 import { Send, ShoppingCart, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-type CartItem = Produto & {
+type CartItem = ProdutoPublico & {
   quantidade: number;
 };
 
-export default function Cart() {
+type Props = {
+  whatsapp?: string | null;
+  empresaNome?: string;
+};
+
+export default function Cart({ whatsapp, empresaNome }: Props) {
   const [items, setItems] = useState<CartItem[]>([]);
 
   useEffect(() => {
     const saved = localStorage.getItem("cardapio_cart");
-    if (saved) setItems(JSON.parse(saved));
+    if (saved) {
+      try { setItems(JSON.parse(saved)); } catch { /* ignore */ }
+    }
   }, []);
 
   useEffect(() => {
@@ -22,14 +29,14 @@ export default function Cart() {
 
   useEffect(() => {
     function handleAdd(event: Event) {
-      const produto = (event as CustomEvent<Produto>).detail;
+      const produto = (event as CustomEvent<ProdutoPublico>).detail;
 
       setItems((current) => {
-        const exists = current.find((item) => item.Id === produto.Id);
+        const exists = current.find((item) => item.id === produto.id);
 
         if (exists) {
           return current.map((item) =>
-            item.Id === produto.Id
+            item.id === produto.id
               ? { ...item, quantidade: item.quantidade + 1 }
               : item
           );
@@ -49,13 +56,14 @@ export default function Cart() {
   );
 
   function enviarWhatsApp() {
-    const numero = process.env.NEXT_PUBLIC_WHATSAPP_DEFAULT || "5571999952268";
+    const numero = whatsapp || process.env.NEXT_PUBLIC_WHATSAPP_DEFAULT || "5571999952268";
 
     const lista = items
       .map((item) => `${item.quantidade}x ${item.nome}`)
       .join("\n");
 
-    const texto = `Olá! Quero fazer este pedido:\n\n${lista}\n\nTotal: ${total.toLocaleString(
+    const saudacao = empresaNome ? `Olá, ${empresaNome}!` : "Olá!";
+    const texto = `${saudacao} Quero fazer este pedido:\n\n${lista}\n\nTotal: ${total.toLocaleString(
       "pt-BR",
       { style: "currency", currency: "BRL" }
     )}`;
@@ -80,14 +88,14 @@ export default function Cart() {
 
       <div className="max-h-40 space-y-2 overflow-auto text-sm text-slate-300">
         {items.map((item) => (
-          <div key={item.Id} className="flex justify-between gap-3">
+          <div key={item.id} className="flex justify-between gap-3">
             <span>
               {item.quantidade}x {item.nome}
             </span>
             <span>
               {(Number(item.preco) * item.quantidade).toLocaleString("pt-BR", {
                 style: "currency",
-                currency: "BRL"
+                currency: "BRL",
               })}
             </span>
           </div>
@@ -98,7 +106,7 @@ export default function Cart() {
         <strong>
           {total.toLocaleString("pt-BR", {
             style: "currency",
-            currency: "BRL"
+            currency: "BRL",
           })}
         </strong>
 

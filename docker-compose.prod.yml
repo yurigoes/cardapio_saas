@@ -1,0 +1,328 @@
+version: "3.8"
+
+# ─────────────────────────────────────────────────────────────────
+#  Cardápio SaaS — Stack de Produção Completa
+#  Variáveis injetadas pelo install.sh via arquivo .env
+# ─────────────────────────────────────────────────────────────────
+
+services:
+
+  # ─────────────────────────────────────────────
+  # Traefik — Reverse proxy + SSL automático
+  # ─────────────────────────────────────────────
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      - --log.level=WARN
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=cardapio_net
+      # Arquivo de rotas dinâmicas (domínios personalizados)
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      # Entrypoints
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      # Let's Encrypt
+      - --certificatesresolvers.le.acme.tlschallenge=true
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/certs/acme.json
+      # API interna (para health)
+      - --api.dashboard=false
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_certs:/certs
+      - ./infra/traefik/dynamic:/etc/traefik/dynamic
+    networks:
+      - cardapio_net
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: cardapio_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       cardapio_saas
+      POSTGRES_USER:     cardapio
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PGDATA:            /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - cardapio_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cardapio -d cardapio_saas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # Redis
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: cardapio_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - cardapio_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # MinIO — Armazenamento de imagens
+  # ─────────────────────────────────────────────
+  minio:
+    image: quay.io/minio/minio:RELEASE.2024-01-13T07-53-03Z-cpuv1
+    container_name: minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+      MINIO_SITE_NAME:     cardapio-saas
+      # URL pública para geração de links
+      MINIO_SERVER_URL:    https://s3.${DOMAIN}
+    volumes:
+      - minio_data:/data
+    networks:
+      - cardapio_net
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    labels:
+      - traefik.enable=true
+      # API S3
+      - traefik.http.routers.minio-api.rule=Host(`s3.${DOMAIN}`)
+      - traefik.http.routers.minio-api.entrypoints=websecure
+      - traefik.http.routers.minio-api.tls.certresolver=le
+      - traefik.http.routers.minio-api.service=minio-api-svc
+      - traefik.http.services.minio-api-svc.loadbalancer.server.port=9000
+      # Console web (acesso restrito — não exposto por padrão)
+      - traefik.http.routers.minio-console.rule=Host(`minio.${DOMAIN}`)
+      - traefik.http.routers.minio-console.entrypoints=websecure
+      - traefik.http.routers.minio-console.tls.certresolver=le
+      - traefik.http.routers.minio-console.service=minio-console-svc
+      - traefik.http.routers.minio-console.middlewares=admin-ip@file
+      - traefik.http.services.minio-console-svc.loadbalancer.server.port=9001
+
+  # ─────────────────────────────────────────────
+  # Evolution API — WhatsApp
+  # ─────────────────────────────────────────────
+  evolution:
+    image: atendai/evolution-api:v2.2.3
+    container_name: cardapio_evolution
+    restart: unless-stopped
+    environment:
+      SERVER_URL:                        https://evolution.${DOMAIN}
+      AUTHENTICATION_TYPE:               apikey
+      AUTHENTICATION_API_KEY:            ${EVOLUTION_API_KEY}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: true
+      # Banco de dados (banco dedicado "evolution", usuário dedicado)
+      DATABASE_ENABLED:                  true
+      DATABASE_PROVIDER:                 postgresql
+      DATABASE_CONNECTION_URI:           "postgresql://evolution:${EVOLUTION_DB_PASSWORD}@postgres:5432/evolution?schema=public"
+      DATABASE_CONNECTION_CLIENT_NAME:   evolution_exchange
+      DATABASE_SAVE_DATA_INSTANCE:       true
+      DATABASE_SAVE_DATA_NEW_MESSAGE:    true
+      DATABASE_SAVE_MESSAGE_UPDATE:      true
+      DATABASE_SAVE_DATA_CONTACTS:       true
+      DATABASE_SAVE_DATA_CHATS:          true
+      DATABASE_SAVE_DATA_LABELS:         true
+      DATABASE_SAVE_DATA_HISTORIC:       true
+      # Redis (env vars corretos para v2.2.3)
+      REDIS_ENABLED:                     true
+      REDIS_URI:                         "redis://:${REDIS_PASSWORD}@redis:6379/2"
+      REDIS_PREFIX_KEY:                  evolution
+      # QR Code
+      QRCODE_LIMIT:                      30
+      QRCODE_COLOR:                      '#198754'
+      # Webhook padrão → notifica o app
+      WEBHOOK_GLOBAL_URL:                http://app:3000/api/webhooks/evolution
+      WEBHOOK_GLOBAL_ENABLED:            false
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS:  false
+      # Configurações gerais
+      DEL_INSTANCE:                      false
+      LANGUAGE:                          pt-BR
+    volumes:
+      - evolution_data:/evolution/instances
+    networks:
+      - cardapio_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.evolution.rule=Host(`evolution.${DOMAIN}`)
+      - traefik.http.routers.evolution.entrypoints=websecure
+      - traefik.http.routers.evolution.tls.certresolver=le
+      - traefik.http.services.evolution.loadbalancer.server.port=8080
+
+  # ─────────────────────────────────────────────
+  # N8N — Automações (aniversários, fidelidade, cupons)
+  # ─────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: cardapio_n8n
+    restart: unless-stopped
+    environment:
+      N8N_HOST:             n8n.${DOMAIN}
+      N8N_PORT:             5678
+      N8N_PROTOCOL:         https
+      WEBHOOK_URL:          https://n8n.${DOMAIN}
+      N8N_EDITOR_BASE_URL:  https://n8n.${DOMAIN}
+      # Banco de dados
+      DB_TYPE:                 postgresdb
+      DB_POSTGRESDB_HOST:      postgres
+      DB_POSTGRESDB_PORT:      5432
+      DB_POSTGRESDB_DATABASE:  cardapio_saas
+      DB_POSTGRESDB_USER:      cardapio
+      DB_POSTGRESDB_PASSWORD:  ${DB_PASSWORD}
+      DB_POSTGRESDB_SCHEMA:    n8n
+      # Segurança
+      N8N_BASIC_AUTH_ACTIVE:   true
+      N8N_BASIC_AUTH_USER:     ${N8N_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_PASSWORD}
+      # Sem telemetria
+      N8N_DIAGNOSTICS_ENABLED: false
+      N8N_VERSION_NOTIFICATIONS_ENABLED: false
+      # Fuso horário
+      GENERIC_TIMEZONE:     America/Sao_Paulo
+      TZ:                   America/Sao_Paulo
+      # Integração com cardápio (variáveis disponíveis nos workflows)
+      CARDAPIO_API_URL:     http://app:3000
+      CARDAPIO_API_KEY:     ${N8N_CARDAPIO_API_KEY}
+      EVOLUTION_API_URL:    http://evolution:8080
+      EVOLUTION_API_KEY:    ${EVOLUTION_API_KEY}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - cardapio_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.n8n.rule=Host(`n8n.${DOMAIN}`)
+      - traefik.http.routers.n8n.entrypoints=websecure
+      - traefik.http.routers.n8n.tls.certresolver=le
+      - traefik.http.routers.n8n.middlewares=admin-ip@file
+      - traefik.http.services.n8n.loadbalancer.server.port=5678
+
+  # ─────────────────────────────────────────────
+  # App — Cardápio SaaS (Next.js)
+  # ─────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cardapio-saas:latest
+    container_name: cardapio_app
+    restart: unless-stopped
+    environment:
+      NODE_ENV:                production
+      PORT:                    3000
+      HOSTNAME:                0.0.0.0
+      # Domínio
+      NEXT_PUBLIC_BASE_DOMAIN: ${DOMAIN}
+      NEXT_PUBLIC_APP_URL:     https://${DOMAIN}
+      # Banco
+      DB_HOST:     postgres
+      DB_PORT:     5432
+      DB_NAME:     cardapio_saas
+      DB_USER:     cardapio
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_POOL_MAX: 20
+      # Redis
+      REDIS_HOST:     redis
+      REDIS_PORT:     6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # JWT
+      JWT_SECRET:         ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_EXPIRES_IN:     15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      SLAVE_JWT_SECRET:   ${SLAVE_JWT_SECRET}
+      # Criptografia
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      # MinIO
+      MINIO_ENDPOINT:    minio
+      MINIO_PORT:        9000
+      MINIO_USE_SSL:     false
+      MINIO_ACCESS_KEY:  ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY:  ${MINIO_SECRET_KEY}
+      MINIO_BUCKET:      cardapio
+      # URL pública para imagens (via Traefik/SSL)
+      MINIO_PUBLIC_URL:  https://s3.${DOMAIN}
+      # Evolution API
+      EVOLUTION_API_URL: http://evolution:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      # N8N
+      N8N_CARDAPIO_API_KEY: ${N8N_CARDAPIO_API_KEY}
+      # Admin master
+      MASTER_EMAIL:    ${MASTER_EMAIL}
+      MASTER_PASSWORD: ${MASTER_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - cardapio_net
+    labels:
+      - traefik.enable=true
+      # App principal
+      - traefik.http.routers.app.rule=Host(`${DOMAIN}`) || HostRegexp(`{sub:[a-z0-9-]+}.${DOMAIN}`)
+      - traefik.http.routers.app.entrypoints=websecure
+      - traefik.http.routers.app.tls.certresolver=le
+      - traefik.http.routers.app.tls.domains[0].main=${DOMAIN}
+      - traefik.http.routers.app.tls.domains[0].sans=*.${DOMAIN}
+      - traefik.http.routers.app.middlewares=secure-headers@docker,rate-limit@docker
+      - traefik.http.services.app.loadbalancer.server.port=3000
+      # Security headers
+      - traefik.http.middlewares.secure-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.secure-headers.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.secure-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.secure-headers.headers.browserXssFilter=true
+      - traefik.http.middlewares.secure-headers.headers.referrerPolicy=strict-origin-when-cross-origin
+      # Rate limiting
+      - traefik.http.middlewares.rate-limit.ratelimit.average=100
+      - traefik.http.middlewares.rate-limit.ratelimit.burst=50
+      - traefik.http.middlewares.rate-limit.ratelimit.period=1m
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  evolution_data:
+  n8n_data:
+  traefik_certs:
+
+networks:
+  cardapio_net:
+    name: cardapio_net
+    driver: bridge

@@ -1,33 +1,46 @@
 {
   "name": "cardapio_saas",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed.js"
   },
   "dependencies": {
-    "@react-three/drei": "latest",
-    "@react-three/fiber": "latest",
-    "framer-motion": "latest",
-    "lucide-react": "latest",
+    "@react-three/drei": "^9.114.3",
+    "@react-three/fiber": "^8.17.10",
+    "bcryptjs": "^2.4.3",
+    "framer-motion": "^11.13.1",
+    "ioredis": "^5.4.1",
+    "jose": "^5.9.6",
+    "lucide-react": "^0.468.0",
     "next": "14.2.23",
+    "pg": "^8.13.1",
+    "qrcode.react": "^4.2.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "three": "latest"
+    "three": "^0.171.0",
+    "uuid": "^11.0.3",
+    "minio": "^8.0.2",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "@types/three": "latest",
-    "autoprefixer": "latest",
-    "eslint": "latest",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@types/three": "^0.171.0",
+    "@types/uuid": "^10.0.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.0",
     "eslint-config-next": "14.2.23",
-    "postcss": "latest",
-    "tailwindcss": "latest",
-    "typescript": "latest"
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2"
   }
 }

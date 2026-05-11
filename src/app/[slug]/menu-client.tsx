@@ -1,38 +1,39 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Categoria, Empresa, Produto } from "@/types";
-import Product3DViewer from "@/components/Product3DViewer";
+import { EmpresaPublica, CategoriaPublica, ProdutoPublico } from "@/types";
 import CategoryFilter from "@/components/CategoryFilter";
 import ProductCard from "@/components/ProductCard";
 import Cart from "@/components/Cart";
 import { motion } from "framer-motion";
 
 type Props = {
-  empresa: Empresa;
-  categorias: Categoria[];
-  produtos: Produto[];
+  empresa: EmpresaPublica;
+  categorias: CategoriaPublica[];
+  produtos: ProdutoPublico[];
 };
 
 export default function MenuClient({ empresa, categorias, produtos }: Props) {
-  const [categoriaSelecionada, setCategoriaSelecionada] = useState<number | "todos">("todos");
-
-  const produtoDestaque = produtos.find((produto) => produto.modelo_3d_url);
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState<string | "todos">("todos");
 
   const produtosFiltrados = useMemo(() => {
     if (categoriaSelecionada === "todos") return produtos;
-
-    return produtos.filter(
-      (produto) => Number(produto.categoria_id) === Number(categoriaSelecionada)
-    );
+    return produtos.filter((p) => p.categoria_id === categoriaSelecionada);
   }, [produtos, categoriaSelecionada]);
 
-  function adicionarAoCarrinho(produto: Produto) {
+  function adicionarAoCarrinho(produto: ProdutoPublico) {
     window.dispatchEvent(new CustomEvent("add-to-cart", { detail: produto }));
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1e293b,#020617_55%)] px-5 pb-32 pt-6 text-white">
+    <main
+      className="min-h-screen px-5 pb-32 pt-6 text-white"
+      style={{
+        background: empresa.cor_primaria
+          ? `radial-gradient(circle at top, ${empresa.cor_primaria}33, #020617 55%)`
+          : "radial-gradient(circle at top, #1e293b, #020617 55%)",
+      }}
+    >
       <section className="mx-auto max-w-6xl">
         <motion.header
           initial={{ opacity: 0, y: -16 }}
@@ -57,35 +58,41 @@ export default function MenuClient({ empresa, categorias, produtos }: Props) {
           )}
         </motion.header>
 
-        <Product3DViewer modelUrl={produtoDestaque?.modelo_3d_url} />
-
         <section className="mt-10">
           <h2 className="text-2xl font-bold">Escolha seu pedido</h2>
           <p className="mt-2 text-slate-300">
-            Filtre por categoria, veja os produtos e envie o pedido pelo WhatsApp.
+            Filtre por categoria e envie o pedido pelo WhatsApp.
           </p>
 
-          <div className="mt-6">
-            <CategoryFilter
-              categorias={categorias}
-              selected={categoriaSelecionada}
-              onChange={setCategoriaSelecionada}
-            />
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {produtosFiltrados.map((produto) => (
-              <ProductCard
-                key={produto.Id}
-                produto={produto}
-                onAdd={adicionarAoCarrinho}
+          {categorias.length > 0 && (
+            <div className="mt-6">
+              <CategoryFilter
+                categorias={categorias}
+                selected={categoriaSelecionada}
+                onChange={setCategoriaSelecionada}
               />
-            ))}
-          </div>
+            </div>
+          )}
+
+          {produtosFiltrados.length === 0 ? (
+            <div className="mt-12 text-center text-slate-400">
+              <p className="text-lg">Nenhum produto disponível nesta categoria.</p>
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              {produtosFiltrados.map((produto) => (
+                <ProductCard
+                  key={produto.id}
+                  produto={produto}
+                  onAdd={adicionarAoCarrinho}
+                />
+              ))}
+            </div>
+          )}
         </section>
       </section>
 
-      <Cart />
+      <Cart whatsapp={empresa.whatsapp} empresaNome={empresa.nome_fantasia} />
     </main>
   );
 }

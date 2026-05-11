@@ -1,0 +1,23 @@
+# Traefik — Roteamento de domínios personalizados por empresa
+# Este arquivo é GERADO AUTOMATICAMENTE pela API de domínios.
+# NÃO edite manualmente — use o painel admin para gerenciar domínios.
+#
+# Formato de cada entrada (adicionado via /api/admin/dominios):
+#
+# http:
+#   routers:
+#     empresa-slug:
+#       rule: Host(`dominio.com.br`)
+#       entrypoints: [websecure]
+#       service: app
+#       tls:
+#         certResolver: le
+#   services:
+#     app:
+#       loadBalancer:
+#         servers:
+#           - url: "http://app:3000"
+
+http:
+  routers: {}
+  services: {}

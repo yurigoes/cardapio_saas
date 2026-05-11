@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(robocopy \"A:\\\\Sistemas\\\\cardapio_saas\\\\.claude\\\\worktrees\\\\relaxed-euclid-e0554c\" \"A:\\\\Sistemas\\\\cardapio_saas\" /E /XD .git .claude node_modules .next /XF tsconfig.tsbuildinfo package-lock.json /NFL /NJH /NJS /NC /NS)",
+      "PowerShell(robocopy \"A:\\\\Sistemas\\\\cardapio_saas\\\\.claude\\\\worktrees\\\\relaxed-euclid-e0554c\" \"A:\\\\Sistemas\\\\cardapio_saas\" /E /XD .git .claude node_modules .next installer-windows slave /XF tsconfig.tsbuildinfo package-lock.json /NFL /NJH /NJS /NC /NS /NDL)",
+      "PowerShell(Get-ChildItem \"C:\\\\Temp\\\\old_saas\\\\cardapio_saas\" | ForEach-Object { Write-Host $_.FullName })",
+      "Bash(layout\\\\.tsx\")",
+      "Bash(node -e \"require\\('typescript'\\)\")",
+      "Bash(ls /mnt/a/Sistemas/cardapio_saas/public/)",
+      "Read(//c/Sistemas/**)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

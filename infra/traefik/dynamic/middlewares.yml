@@ -1,0 +1,31 @@
+# Traefik — Middlewares globais e restrições de IP
+# Gerado pelo install.sh — edite com cuidado
+
+http:
+  middlewares:
+    # Acesso ao painel admin (N8N, MinIO Console)
+    # Adicione IPs de admin na lista abaixo
+    admin-ip:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          # IPs externos dos administradores — adicione aqui
+          # - "SEU_IP_FIXO/32"
+
+    # Compressão gzip
+    compress:
+      compress: {}
+
+    # Cabeçalhos de segurança extra
+    security-headers:
+      headers:
+        customResponseHeaders:
+          X-Robots-Tag: "noindex,nofollow"
+          Server: ""
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        contentTypeNosniff: true
+        browserXssFilter: true

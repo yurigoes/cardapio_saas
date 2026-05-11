@@ -1,3 +1,8 @@
+// ─────────────────────────────────────────────
+// Tipos legados mantidos para compatibilidade
+// com o cardápio público existente
+// ─────────────────────────────────────────────
+
 export type Empresa = {
   Id: number;
   nome_fantasia: string;
@@ -31,6 +36,78 @@ export type Produto = {
 export type LicencaResponse = {
   ativa: boolean;
   status: string;
-  licenca?: any;
+  licenca?: unknown;
   motivo?: string;
 };
+
+// ─────────────────────────────────────────────
+// Tipos do cardápio público (PostgreSQL / UUID)
+// ─────────────────────────────────────────────
+
+export type EmpresaPublica = {
+  id: string;
+  nome_fantasia: string;
+  logo_url: string | null;
+  cor_primaria: string | null;
+  cor_secundaria: string | null;
+  whatsapp: string | null;
+};
+
+export type CategoriaPublica = {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  imagem_url?: string | null;
+  ordem: number;
+};
+
+export type ProdutoPublico = {
+  id: string;
+  categoria_id: string | null;
+  nome: string;
+  descricao?: string | null;
+  preco: number;
+  imagem_url?: string | null;
+  tempo_preparo?: number | null;
+  tipo?: string;
+  destaque?: boolean;
+};
+
+// ─────────────────────────────────────────────
+// Tipos do novo sistema interno
+// ─────────────────────────────────────────────
+
+export type JWTRole =
+  | "master" | "admin" | "gerente" | "garcom" | "cozinha"
+  | "atendente" | "financeiro" | "delivery" | "motoboy" | "cliente";
+
+export interface UsuarioAutenticado {
+  id:        string;
+  nome:      string;
+  email:     string;
+  role:      JWTRole;
+  empresaId: string | null;
+}
+
+export interface PaginationMeta {
+  total:   number;
+  page:    number;
+  limit:   number;
+  pages:   number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface ApiSuccessResponse<T = unknown> {
+  success: true;
+  data:    T;
+  meta?:   { pagination?: PaginationMeta } & Record<string, unknown>;
+}
+
+export interface ApiErrorResponse {
+  success: false;
+  error:   string;
+  code?:   string;
+}
+
+export type ApiResponse<T = unknown> = ApiSuccessResponse<T> | ApiErrorResponse;

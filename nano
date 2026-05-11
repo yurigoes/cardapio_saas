@@ -1,0 +1,157 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+const API =
+  process.env.NEXT_PUBLIC_CONNECT_API || "https://connect.yugochat.com.br";
+
+type Pedido = {
+  Id: number;
+  numero_pedido: string;
+  status: string;
+};
+
+type Empresa = {
+  Id: number;
+  nome_fantasia: string;
+  logo_url?: string;
+  cor_primaria?: string;
+};
+
+export default function PainelPage({
+  params
+}: {
+  params: { empresaId: string };
+}) {
+  const [empresa, setEmpresa] = useState<Empresa | null>(null);
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [ultimoChamado, setUltimoChamado] = useState<string | null>(null);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const primaryColor = empresa?.cor_primaria || "#d9b35f";
+
+  async function loadEmpresa() {
+    try {
+      const res = await fetch(
+        `${API}/api/db/empresas_cardapio?where=(Id,eq,${params.empresaId})&limit=1`
+      );
+
+      const data = await res.json();
+      setEmpresa(data?.list?.[0] || null);
+    } catch {}
+  }
+
+  async function loadPedidos(playSound = false) {
+    try {
+      const res = await fetch(
+        `${API}/api/cardapio/cozinha/${params.empresaId}/pedidos?status=Pronto`,
+        { cache: "no-store" }
+      );
+
+      const data = await res.json();
+
+      if (data.sucesso) {
+        const lista = data.pedidos || [];
+
+        if (playSound && lista.length > pedidos.length) {
+          const novo = lista[0]?.numero_pedido;
+
+          if (novo && novo !== ultimoChamado) {
+            setUltimoChamado(novo);
+            audioRef.current?.play().catch(() => {});
+          }
+        }
+
+        setPedidos(lista.slice(0, 12)); // limita na tela
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  useEffect(() => {
+    loadEmpresa();
+    loadPedidos();
+
+    const interval = setInterval(() => {
+      loadPedidos(true);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <main className="min-h-screen bg-black text-white">
+      <audio ref={audioRef} src="/sounds/new-order.mp3" preload="auto" />
+
+      {/* FUNDO */}
+      <div
+        className="fixed inset-0 opacity-70"
+        style={{
+          background: `radial-gradient(circle at top left, ${primaryColor}33, transparent 30%), radial-gradient(circle at bottom right, ${primaryColor}22, transparent 40%), #050505`
+        }}
+      />
+
+      <section className="relative z-10 flex min-h-screen flex-col">
+        {/* HEADER */}
+        <header className="flex items-center justify-between border-b border-white/10 p-6">
+          <div className="flex items-center gap-6">
+            {empresa?.logo_url && (
+              <img
+                src={empresa.logo_url}
+                className="h-16 object-contain"
+              />
+            )}
+
+            <h1 className="text-3xl font-black">
+              {empresa?.nome_fantasia || "Painel de Pedidos"}
+            </h1>
+          </div>
+
+          <span
+            className="rounded-full px-5 py-2 font-black text-black"
+            style={{
+              background: primaryColor
+            }}
+          >
+            AO VIVO
+          </span>
+        </header>
+
+        {/* DESTAQUE */}
+        {ultimoChamado && (
+          <div className="flex flex-col items-center justify-center py-10">
+            <p className="text-lg text-white/60">Chamando pedido</p>
+
+            <h2
+              className="mt-2 text-[6rem] font-black"
+              style={{ color: primaryColor }}
+            >
+              #{ultimoChamado}
+            </h2>
+          </div>
+        )}
+
+        {/* GRID */}
+        <div className="grid flex-1 grid-cols-2 gap-6 p-8 md:grid-cols-3 xl:grid-cols-4">
+          {pedidos.map((pedido) => (
+            <div
+              key={pedido.Id}
+              className="flex items-center justify-center rounded-3xl border border-white/10 bg-white/[0.04] p-10 text-5xl font-black shadow-2xl"
+            >
+              #{pedido.numero_pedido}
+            </div>
+          ))}
+        </div>
+
+        {/* VAZIO */}
+        {!pedidos.length && (
+          <div className="flex flex-1 items-center justify-center text-2xl text-white/40">
+            Nenhum pedido pronto
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
