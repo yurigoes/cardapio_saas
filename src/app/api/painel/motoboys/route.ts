@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const motoboys = await query(
     `SELECT id, nome, telefone, veiculo, placa, status, ativo, created_at
      FROM motoboys
-     WHERE empresa_id = $1
+     WHERE empresa_id = $1 AND ativo = true
      ORDER BY nome`,
     [empresaId]
   );
@@ -48,8 +48,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const motoboy = await queryOne<{ id: string }>(
-      `INSERT INTO motoboys (empresa_id, nome, telefone, veiculo, placa, status)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO motoboys (empresa_id, nome, telefone, veiculo, placa, status, ativo)
+       VALUES ($1, $2, $3, $4, $5, $6, true)
        RETURNING id`,
       [empresaId, body.nome, body.telefone ?? null, body.veiculo ?? null, body.placa ?? null, body.status]
     );

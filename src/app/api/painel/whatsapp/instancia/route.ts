@@ -11,28 +11,26 @@ import { ok, created, forbidden, serverError, badRequest } from "@/lib/utils/res
 
 // ── Evolution API helpers ──────────────────────────────────────────────────────
 
-const EVO_BASE  = process.env.EVOLUTION_API_URL  ?? "http://evolution:8080";
-const EVO_KEY   = process.env.EVOLUTION_API_KEY  ?? "";
-
-function evoHeaders() {
-  return { "apikey": EVO_KEY, "Content-Type": "application/json" };
+interface EmpresaEvoConfig {
+  slug:          string;
+  evolution_url: string | null;
+  evolution_key: string | null;
 }
 
-async function evoFetch(path: string, init?: RequestInit) {
-  return fetch(`${EVO_BASE}${path}`, {
-    ...init,
-    headers: { ...evoHeaders(), ...(init?.headers ?? {}) },
-  });
-}
-
-// ── Fetch empresa slug from DB ─────────────────────────────────────────────────
-
-async function getEmpresaSlug(empresaId: string): Promise<string | null> {
-  const row = await queryOne<{ slug: string }>(
-    `SELECT slug FROM empresas WHERE id = $1 AND deleted_at IS NULL`,
+async function getEmpresaEvoConfig(empresaId: string): Promise<EmpresaEvoConfig | null> {
+  return queryOne<EmpresaEvoConfig>(
+    `SELECT slug, evolution_url, evolution_key FROM empresas WHERE id = $1 AND deleted_at IS NULL`,
     [empresaId]
   );
-  return row?.slug ?? null;
+}
+
+function makeEvoFetch(evoUrl: string, evoKey: string) {
+  const headers = { "apikey": evoKey, "Content-Type": "application/json" };
+  return (path: string, init?: RequestInit) =>
+    fetch(`${evoUrl}${path}`, {
+      ...init,
+      headers: { ...headers, ...(init?.headers ?? {}) },
+    });
 }
 
 // ── GET — connection state + QR if disconnected ────────────────────────────────
@@ -45,8 +43,13 @@ export async function GET(req: NextRequest) {
   if (!empresaId) return forbidden();
   if (!temRole(role, "admin")) return forbidden();
 
-  const slug = await getEmpresaSlug(empresaId);
-  if (!slug) return serverError("Empresa não encontrada");
+  const empresaConfig = await getEmpresaEvoConfig(empresaId);
+  if (!empresaConfig) return serverError("Empresa não encontrada");
+
+  const slug    = empresaConfig.slug;
+  const EVO_URL = empresaConfig.evolution_url || process.env.EVOLUTION_API_URL || "http://evolution:8080";
+  const EVO_KEY = empresaConfig.evolution_key || process.env.EVOLUTION_API_KEY || "";
+  const evoFetch = makeEvoFetch(EVO_URL, EVO_KEY);
 
   try {
     // Check connection state
@@ -118,8 +121,13 @@ export async function POST(req: NextRequest) {
   if (!empresaId) return forbidden();
   if (!temRole(role, "admin")) return forbidden();
 
-  const slug = await getEmpresaSlug(empresaId);
-  if (!slug) return serverError("Empresa não encontrada");
+  const empresaConfig = await getEmpresaEvoConfig(empresaId);
+  if (!empresaConfig) return serverError("Empresa não encontrada");
+
+  const slug    = empresaConfig.slug;
+  const EVO_URL = empresaConfig.evolution_url || process.env.EVOLUTION_API_URL || "http://evolution:8080";
+  const EVO_KEY = empresaConfig.evolution_key || process.env.EVOLUTION_API_KEY || "";
+  const evoFetch = makeEvoFetch(EVO_URL, EVO_KEY);
 
   try {
     // Check if instance already exists
@@ -162,8 +170,13 @@ export async function DELETE(req: NextRequest) {
   if (!empresaId) return forbidden();
   if (!temRole(role, "admin")) return forbidden();
 
-  const slug = await getEmpresaSlug(empresaId);
-  if (!slug) return serverError("Empresa não encontrada");
+  const empresaConfig = await getEmpresaEvoConfig(empresaId);
+  if (!empresaConfig) return serverError("Empresa não encontrada");
+
+  const slug    = empresaConfig.slug;
+  const EVO_URL = empresaConfig.evolution_url || process.env.EVOLUTION_API_URL || "http://evolution:8080";
+  const EVO_KEY = empresaConfig.evolution_key || process.env.EVOLUTION_API_KEY || "";
+  const evoFetch = makeEvoFetch(EVO_URL, EVO_KEY);
 
   try {
     const res = await evoFetch(`/instance/delete/${slug}`, { method: "DELETE" });

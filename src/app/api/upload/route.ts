@@ -29,18 +29,9 @@ function getMinioClient(): Minio.Client {
 
 function getPublicUrl(objectName: string): string {
   const bucket = process.env.MINIO_BUCKET || "cardapio";
-  // MINIO_PUBLIC_URL is the external-facing base URL (e.g. https://s3.domain.com or http://host:9010)
-  const publicBase = process.env.MINIO_PUBLIC_URL;
-  if (publicBase) {
-    return `${publicBase.replace(/\/$/, "")}/${bucket}/${objectName}`;
-  }
-  // Fallback: build from endpoint/port
-  const endpoint = process.env.MINIO_ENDPOINT || "localhost";
-  const port     = process.env.MINIO_PORT;
-  const useSSL   = process.env.MINIO_USE_SSL === "true";
-  const proto    = useSSL ? "https" : "http";
-  const portPart = port && port !== "443" && port !== "80" ? `:${port}` : "";
-  return `${proto}://${endpoint}${portPart}/${bucket}/${objectName}`;
+  // Always use the internal proxy route so browsers can load images
+  // regardless of MinIO's network location
+  return `/api/pub/media/${bucket}/${objectName}`;
 }
 
 export async function POST(req: NextRequest) {

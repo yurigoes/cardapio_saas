@@ -10,9 +10,11 @@ import {
 } from "lucide-react";
 
 interface Empresa {
-  nome_fantasia: string;
-  logo_url:      string | null;
+  nome_fantasia:  string;
+  logo_url:       string | null;
   modulos_ativos: string[];
+  cor_primaria:   string | null;
+  cor_secundaria: string | null;
 }
 
 const ALL_NAV = [
@@ -50,6 +52,15 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         const role = data.data?.usuario?.role;
         if (role === "master") { window.location.href = "/admin"; return; }
         setEmpresa(data.data?.empresa);
+
+        // Apply brand colors as CSS variables
+        const primary   = data.data?.empresa?.cor_primaria   || "#10b981";
+        const secondary = data.data?.empresa?.cor_secundaria || "#1e293b";
+        document.documentElement.style.setProperty("--color-primary",    primary);
+        document.documentElement.style.setProperty("--color-secondary",  secondary);
+        document.documentElement.style.setProperty("--color-primary-15", primary + "26"); // 15% opacity hex
+        document.documentElement.style.setProperty("--color-primary-50", primary + "80"); // 50% opacity hex
+
         setLoading(false);
       })
       .catch(() => (window.location.href = "/login"));
@@ -131,7 +142,15 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
 
       {/* Main */}
       <div className="flex flex-1 flex-col pl-60">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-end border-b border-white/5 bg-slate-950/80 px-6 backdrop-blur">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/5 bg-slate-950/80 px-6 backdrop-blur">
+          <div className="flex items-center gap-2">
+            {empresa?.logo_url ? (
+              <img src={empresa.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover" />
+            ) : null}
+            <span className="text-sm font-semibold text-white hidden sm:block">
+              {empresa?.nome_fantasia}
+            </span>
+          </div>
           <button className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 hover:border-white/20 transition">
             <Bell className="h-4 w-4 text-slate-400" />
           </button>

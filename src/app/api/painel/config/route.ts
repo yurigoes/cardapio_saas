@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
          taxa_entrega, pedido_minimo, tempo_entrega_min,
          fidelidade_ativo, pontos_por_real, real_por_ponto,
          totem_bg_video_url, totem_bg_image_url, totem_cta_text, totem_slogan,
+         evolution_url, evolution_key, evolution_eventos,
+         n8n_url, n8n_token, n8n_eventos,
          modulos_ativos, status
        FROM empresas
        WHERE id = $1 AND deleted_at IS NULL`,
@@ -62,6 +64,8 @@ export async function PATCH(req: NextRequest) {
     "taxa_entrega", "pedido_minimo", "tempo_entrega_min",
     "fidelidade_ativo", "pontos_por_real", "real_por_ponto",
     "totem_bg_video_url", "totem_bg_image_url", "totem_cta_text", "totem_slogan",
+    "evolution_url", "evolution_key", "evolution_eventos",
+    "n8n_url", "n8n_token", "n8n_eventos",
   ];
 
   const updates: Record<string, unknown> = {};

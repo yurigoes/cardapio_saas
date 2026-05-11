@@ -2,12 +2,98 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ShoppingCart, X, Plus, Minus, ChefHat, CheckCircle, ArrowLeft,
   Search, MapPin, User, Phone, RotateCcw, Clock, Star, Gift,
 } from "lucide-react";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Translations ─────────────────────────────────────────────────────────────
+
+const TR = {
+  pt: {
+    iniciar: "Toque para fazer seu pedido",
+    identificacao_titulo: "Identificação",
+    identificacao_sub: "Para acumular pontos e ver seu histórico",
+    telefone: "Telefone",
+    cpf: "CPF",
+    continuar: "Continuar",
+    sem_identificacao: "Continuar sem identificação",
+    cadastro_titulo: "Complete seu cadastro",
+    nome: "Nome completo",
+    email: "E-mail",
+    salvar: "Salvar e continuar",
+    repetir_titulo: "Repetir último pedido?",
+    repetir_sim: "Repetir pedido",
+    repetir_nao: "Ver cardápio completo",
+    buscar: "Buscar no cardápio...",
+    todos: "Todos",
+    destaques: "✦ Destaques",
+    ver_pedido: "Ver pedido",
+    confirmar: "Confirmar Pedido",
+    enviando: "Enviando...",
+    obs_geral: "Observação geral (opcional)",
+    obs_item: "Observações",
+    adicionar: "Adicionar",
+    pedido_titulo: "Pedido",
+    sucesso: "Pedido recebido com sucesso!",
+    pontos_ganhos: "pontos adicionados",
+    pontos_total: "Total de pontos",
+    novo_pedido: "Fazer novo pedido",
+    bebidas_titulo: "Que tal uma bebida?",
+    bebidas_sub: "Complemente seu pedido",
+    bebidas_nao: "Não, obrigado",
+    aberto: "ABERTO AGORA",
+    autoatendimento: "AUTOATENDIMENTO",
+    cliente_identificado: "Cliente identificado",
+    pontos_acumulados: "pontos acumulados",
+  },
+  en: {
+    iniciar: "Tap to place your order",
+    identificacao_titulo: "Identification",
+    identificacao_sub: "To earn points and see your history",
+    telefone: "Phone",
+    cpf: "CPF/ID",
+    continuar: "Continue",
+    sem_identificacao: "Continue without identification",
+    cadastro_titulo: "Complete your registration",
+    nome: "Full name",
+    email: "E-mail",
+    salvar: "Save and continue",
+    repetir_titulo: "Repeat last order?",
+    repetir_sim: "Repeat order",
+    repetir_nao: "View full menu",
+    buscar: "Search menu...",
+    todos: "All",
+    destaques: "✦ Featured",
+    ver_pedido: "View order",
+    confirmar: "Confirm Order",
+    enviando: "Sending...",
+    obs_geral: "General note (optional)",
+    obs_item: "Notes",
+    adicionar: "Add",
+    pedido_titulo: "Order",
+    sucesso: "Order received successfully!",
+    pontos_ganhos: "points added",
+    pontos_total: "Total points",
+    novo_pedido: "Place new order",
+    bebidas_titulo: "How about a drink?",
+    bebidas_sub: "Complete your order",
+    bebidas_nao: "No, thank you",
+    aberto: "OPEN NOW",
+    autoatendimento: "SELF-SERVICE",
+    cliente_identificado: "Identified customer",
+    pontos_acumulados: "points accumulated",
+  },
+} as const;
+
+type Idioma = keyof typeof TR;
+
+function t(idioma: Idioma, key: keyof (typeof TR)["pt"]): string {
+  return TR[idioma][key];
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface EmpresaInfo {
   id: string; nome_fantasia: string; logo_url: string | null;
@@ -74,104 +160,301 @@ function ProductImage({ src, alt }: { src: string | null; alt: string }) {
   );
 }
 
-// ─── StartScreen ─────────────────────────────────────────────────────────────
+// ─── Language Switcher ────────────────────────────────────────────────────────
+
+function LangSwitcher({ idioma, setIdioma }: { idioma: Idioma; setIdioma: (i: Idioma) => void }) {
+  return (
+    <div className="flex items-center gap-1 rounded-full bg-black/30 p-1 backdrop-blur">
+      <button
+        onClick={() => setIdioma("pt")}
+        className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+          idioma === "pt" ? "bg-white/20 text-white" : "text-white/50 hover:text-white/80"
+        }`}
+      >
+        🇧🇷 PT
+      </button>
+      <button
+        onClick={() => setIdioma("en")}
+        className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+          idioma === "en" ? "bg-white/20 text-white" : "text-white/50 hover:text-white/80"
+        }`}
+      >
+        🇺🇸 EN
+      </button>
+    </div>
+  );
+}
+
+// ─── StartScreen ──────────────────────────────────────────────────────────────
 
 function StartScreen({
-  empresa, onStart,
-}: { empresa: EmpresaInfo; onStart: () => void }) {
-  const ctaText = empresa.totem_cta_text || "Toque para fazer seu pedido";
-  const primaryColor = empresa.cor_primaria || "#f59e0b"; // amber fallback
+  empresa, idioma, setIdioma, onStart,
+}: {
+  empresa: EmpresaInfo;
+  idioma: Idioma;
+  setIdioma: (i: Idioma) => void;
+  onStart: () => void;
+}) {
+  // Split slogan: first line is the hero title, rest is subtitle
+  const sloganLines = (empresa.totem_slogan || "").split("\n").map(l => l.trim()).filter(Boolean);
+  const heroTitle   = sloganLines[0] || empresa.nome_fantasia;
+  const subtitle    = sloganLines[1] || null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
-      {/* ── Background layer ── */}
+      {/* Background layer */}
       {empresa.totem_bg_video_url ? (
         <video
           src={empresa.totem_bg_video_url}
           autoPlay muted loop playsInline
-          className="absolute inset-0 h-full w-full object-cover"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
         />
       ) : empresa.totem_bg_image_url ? (
         <img
           src={empresa.totem_bg_image_url}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
         />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800" />
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-stone-900 to-slate-900" />
       )}
 
-      {/* ── Dark overlay for readability ── */}
-      <div className="absolute inset-0 bg-black/60" />
+      {/* Gradient overlay */}
+      <div
+        className="absolute inset-0"
+        style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.72) 100%)" }}
+      />
 
-      {/* ── Content ── */}
-      <div className="relative z-10 flex h-full flex-col items-center justify-between px-8 py-12">
+      {/* Content */}
+      <div className="relative z-10 flex h-full flex-col px-8 py-10">
 
-        {/* Top: logo + nome + badge */}
-        <div className="flex flex-col items-center gap-4 text-center">
-          {empresa.logo_url ? (
-            <img
-              src={empresa.logo_url}
-              alt={empresa.nome_fantasia}
-              className="h-24 w-24 rounded-2xl object-cover shadow-2xl ring-2 ring-white/20"
-            />
-          ) : (
-            <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-white/10 shadow-2xl ring-2 ring-white/20 backdrop-blur">
-              <ChefHat className="h-12 w-12 text-white" />
+        {/* TOP ROW: logo+name on left, lang+badge on right */}
+        <div className="flex items-start justify-between">
+          {/* Logo + name */}
+          <div className="flex items-center gap-3">
+            {empresa.logo_url ? (
+              <img
+                src={empresa.logo_url}
+                alt={empresa.nome_fantasia}
+                className="h-14 w-14 rounded-xl object-cover shadow-xl ring-1 ring-white/20"
+              />
+            ) : (
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 shadow-xl ring-1 ring-white/20 backdrop-blur">
+                <ChefHat className="h-7 w-7 text-white" />
+              </div>
+            )}
+            <div>
+              <p className="text-sm font-semibold tracking-wide text-white/90">
+                {empresa.nome_fantasia}
+              </p>
             </div>
-          )}
-
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-widest text-white/70">
-              {empresa.nome_fantasia}
-            </p>
           </div>
 
-          {/* ABERTO AGORA badge */}
-          <div className="flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/15 px-4 py-1.5 backdrop-blur">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-            <span className="text-xs font-bold uppercase tracking-widest text-amber-300">
-              Aberto Agora
-            </span>
+          {/* Right: lang switcher + open badge */}
+          <div className="flex flex-col items-end gap-2">
+            <LangSwitcher idioma={idioma} setIdioma={setIdioma} />
+            <div className="flex items-center gap-2 rounded-full border border-amber-400/30 bg-black/40 px-3 py-1.5 backdrop-blur">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-300">
+                {t(idioma, "aberto")}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Center: main title + slogan */}
-        <div className="flex flex-col items-center gap-4 text-center">
+        {/* CENTER: subtitle + hero title */}
+        <div className="flex flex-1 flex-col items-center justify-center text-center gap-5">
+          {subtitle && (
+            <p
+              className="uppercase text-white/40"
+              style={{ letterSpacing: "0.3em", fontSize: "0.7rem", fontWeight: 500 }}
+            >
+              — {subtitle} —
+            </p>
+          )}
+
           <h1
-            className="max-w-sm text-5xl font-black leading-tight tracking-tight text-white drop-shadow-2xl"
-            style={{ textShadow: "0 4px 24px rgba(0,0,0,0.7)" }}
+            style={{
+              fontSize: "clamp(3rem, 10vw, 8rem)",
+              fontWeight: 900,
+              lineHeight: 1.05,
+              fontFamily: "Georgia, 'Times New Roman', serif",
+              background: "linear-gradient(135deg, #f5e6c8 0%, #d4a853 50%, #f5e6c8 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              textShadow: "none",
+              filter: "drop-shadow(0 4px 24px rgba(212,168,83,0.35))",
+              maxWidth: "90vw",
+            }}
           >
-            {empresa.totem_slogan || empresa.nome_fantasia}
+            {heroTitle}
           </h1>
-          {empresa.totem_slogan && (
-            <p className="text-lg font-medium text-white/60">
+
+          {!subtitle && empresa.totem_slogan && (
+            <p
+              className="uppercase text-white/40"
+              style={{ letterSpacing: "0.2em", fontSize: "0.75rem", fontWeight: 500 }}
+            >
               {empresa.nome_fantasia}
             </p>
           )}
         </div>
 
-        {/* Bottom: CTA button */}
-        <div className="flex flex-col items-center gap-3">
+        {/* BOTTOM: CTA button + autoatendimento text */}
+        <div className="flex flex-col items-center gap-4">
           <button
             onClick={onStart}
-            style={{ backgroundColor: primaryColor }}
+            style={{
+              background: "linear-gradient(135deg, #d4a853, #f5e6c8, #d4a853)",
+              boxShadow: "0 0 30px rgba(212,168,83,0.4), 0 8px 32px rgba(0,0,0,0.4)",
+            }}
             className="
-              group flex items-center gap-3 rounded-full px-12 py-6
-              text-xl font-black uppercase tracking-widest text-white
-              shadow-2xl transition-all duration-200
+              group flex items-center gap-3 rounded-full px-10 py-5
+              text-lg font-black uppercase tracking-widest text-slate-900
+              transition-all duration-200
               hover:scale-105 hover:brightness-110
               active:scale-95
-              animate-[pulse_3s_ease-in-out_infinite]
             "
           >
-            <span>{ctaText}</span>
+            <span>{t(idioma, "iniciar")}</span>
             <span className="text-2xl transition-transform duration-200 group-hover:translate-x-1">›</span>
           </button>
-          <p className="text-xs font-medium uppercase tracking-widest text-white/30">
-            Autoatendimento
+          <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/20">
+            {t(idioma, "autoatendimento")}
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── RegisterModal (when customer not found) ──────────────────────────────────
+
+interface RegisterModalProps {
+  slug:          string;
+  idioma:        Idioma;
+  tipo:          "telefone" | "cpf";
+  valorInicial:  string; // digits only from search
+  onCreated:     (cliente: ClienteIdentificado) => void;
+  onSkip:        () => void;
+}
+
+function RegisterModal({ slug, idioma, tipo, valorInicial, onCreated, onSkip }: RegisterModalProps) {
+  const [nome,  setNome]  = useState("");
+  const [email, setEmail] = useState("");
+  const [tel,   setTel]   = useState(tipo === "telefone" ? valorInicial : "");
+  const [cpf,   setCpf]   = useState(tipo === "cpf"      ? valorInicial : "");
+  const [loading, setLoading] = useState(false);
+  const [erro,    setErro]   = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nome.trim()) { setErro("Nome é obrigatório"); return; }
+    setLoading(true); setErro("");
+    try {
+      const body: Record<string, string> = { nome: nome.trim() };
+      if (tel)   body.telefone = tel.replace(/\D/g, "");
+      if (cpf)   body.cpf     = cpf.replace(/\D/g, "");
+      if (email) body.email   = email.trim();
+
+      const res  = await fetch(`/api/painel/clientes?slug=${slug}`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success || data.data) {
+        onCreated({
+          id:       data.data?.id ?? "",
+          nome:     data.data?.nome ?? nome.trim(),
+          telefone: data.data?.telefone ?? (tel ? tel.replace(/\D/g, "") : null),
+          cpf:      data.data?.cpf      ?? (cpf ? cpf.replace(/\D/g, "") : null),
+          pontos:   0,
+        });
+      } else {
+        setErro(data.error || "Erro ao criar cadastro");
+      }
+    } catch {
+      setErro("Erro de conexão");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
+      <div className="flex items-center gap-3 border-b border-white/5 p-4">
+        <button onClick={onSkip} className="text-slate-400 hover:text-white transition">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <div>
+          <h2 className="text-lg font-bold text-white">{t(idioma, "cadastro_titulo")}</h2>
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col justify-center px-6 pb-8">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">{t(idioma, "nome")} *</label>
+            <input
+              value={nome}
+              onChange={e => setNome(e.target.value)}
+              placeholder={t(idioma, "nome")}
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-4 py-3 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">{t(idioma, "telefone")}</label>
+            <input
+              value={tel}
+              onChange={e => setTel(e.target.value)}
+              placeholder="(00) 00000-0000"
+              inputMode="numeric"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-4 py-3 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">{t(idioma, "cpf")}</label>
+            <input
+              value={cpf}
+              onChange={e => setCpf(e.target.value)}
+              placeholder="000.000.000-00"
+              inputMode="numeric"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-4 py-3 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">{t(idioma, "email")} (opcional)</label>
+            <input
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="email@exemplo.com"
+              type="email"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-4 py-3 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+
+          {erro && <p className="text-sm text-red-400 text-center">{erro}</p>}
+
+          <button
+            type="submit"
+            disabled={loading || !nome.trim()}
+            className="w-full rounded-xl bg-emerald-500 py-4 text-lg font-bold text-white hover:bg-emerald-400 disabled:opacity-40 transition"
+          >
+            {loading ? "..." : t(idioma, "salvar")}
+          </button>
+        </form>
+
+        <button
+          onClick={onSkip}
+          className="mt-4 text-center text-sm text-slate-500 hover:text-slate-300 transition"
+        >
+          {t(idioma, "sem_identificacao")}
+        </button>
       </div>
     </div>
   );
@@ -181,15 +464,20 @@ function StartScreen({
 
 interface CustomerModalProps {
   slug:          string;
+  idioma:        Idioma;
   onIdentified:  (cliente: ClienteIdentificado, ultimoPedido: UltimoPedido | null) => void;
   onSkip:        () => void;
 }
 
-function CustomerModal({ slug, onIdentified, onSkip }: CustomerModalProps) {
-  const [tipo, setTipo]       = useState<"telefone" | "cpf">("telefone");
-  const [valor, setValor]     = useState("");
+function CustomerModal({ slug, idioma, onIdentified, onSkip }: CustomerModalProps) {
+  const [tipo, setTipo]   = useState<"telefone" | "cpf">("telefone");
+  const [valor, setValor] = useState("");
   const [loading, setLoading] = useState(false);
-  const [erro, setErro]       = useState("");
+  const [erro, setErro]   = useState("");
+
+  // When customer not found, show registration modal
+  const [showRegister, setShowRegister]   = useState(false);
+  const [digitsParaReg, setDigitosParaReg] = useState("");
 
   function formatInput(raw: string) {
     const digits = raw.replace(/\D/g, "");
@@ -218,32 +506,33 @@ function CustomerModal({ slug, onIdentified, onSkip }: CustomerModalProps) {
       const data = await res.json();
       if (!data.success) { setErro("Erro na consulta"); return; }
       if (!data.data.encontrado) {
-        // Auto-create customer
-        const res2 = await fetch(`/api/painel/clientes?slug=${slug}`, {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ [tipo]: digits }),
-        });
-        const data2 = await res2.json();
-        if (data2.success || data2.data) {
-          onIdentified({
-            id: data2.data?.id ?? "",
-            nome: data2.data?.nome ?? null,
-            telefone: tipo === "telefone" ? digits : data2.data?.telefone ?? null,
-            cpf: tipo === "cpf" ? digits : null,
-            pontos: 0,
-          }, null);
-        } else {
-          onSkip();
-        }
+        // Open registration modal instead of auto-creating
+        setDigitosParaReg(digits);
+        setShowRegister(true);
       } else {
-        onIdentified(data.data.cliente as ClienteIdentificado, data.data.ultimoPedido as UltimoPedido | null);
+        onIdentified(
+          data.data.cliente as ClienteIdentificado,
+          data.data.ultimoPedido as UltimoPedido | null,
+        );
       }
     } catch {
       setErro("Erro de conexão");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (showRegister) {
+    return (
+      <RegisterModal
+        slug={slug}
+        idioma={idioma}
+        tipo={tipo}
+        valorInicial={digitsParaReg}
+        onCreated={(c) => onIdentified(c, null)}
+        onSkip={onSkip}
+      />
+    );
   }
 
   return (
@@ -253,8 +542,8 @@ function CustomerModal({ slug, onIdentified, onSkip }: CustomerModalProps) {
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div>
-          <h2 className="text-lg font-bold text-white">Identificação</h2>
-          <p className="text-xs text-slate-500">Para acumular pontos e ver seu histórico</p>
+          <h2 className="text-lg font-bold text-white">{t(idioma, "identificacao_titulo")}</h2>
+          <p className="text-xs text-slate-500">{t(idioma, "identificacao_sub")}</p>
         </div>
       </div>
 
@@ -265,11 +554,6 @@ function CustomerModal({ slug, onIdentified, onSkip }: CustomerModalProps) {
           </div>
         </div>
 
-        <div className="text-center">
-          <p className="text-white font-semibold text-lg">Como quer se identificar?</p>
-          <p className="mt-1 text-sm text-slate-400">Ganhe pontos a cada pedido!</p>
-        </div>
-
         {/* Type toggle */}
         <div className="flex rounded-xl bg-slate-900 p-1">
           <button
@@ -278,7 +562,7 @@ function CustomerModal({ slug, onIdentified, onSkip }: CustomerModalProps) {
               tipo === "telefone" ? "bg-emerald-500 text-white" : "text-slate-400"
             }`}
           >
-            <Phone className="h-4 w-4" /> Telefone
+            <Phone className="h-4 w-4" /> {t(idioma, "telefone")}
           </button>
           <button
             onClick={() => { setTipo("cpf"); setValor(""); setErro(""); }}
@@ -286,7 +570,7 @@ function CustomerModal({ slug, onIdentified, onSkip }: CustomerModalProps) {
               tipo === "cpf" ? "bg-emerald-500 text-white" : "text-slate-400"
             }`}
           >
-            <User className="h-4 w-4" /> CPF
+            <User className="h-4 w-4" /> {t(idioma, "cpf")}
           </button>
         </div>
 
@@ -304,7 +588,7 @@ function CustomerModal({ slug, onIdentified, onSkip }: CustomerModalProps) {
             disabled={loading || valor.replace(/\D/g, "").length < (tipo === "cpf" ? 11 : 10)}
             className="w-full rounded-xl bg-emerald-500 py-4 text-lg font-bold text-white hover:bg-emerald-400 disabled:opacity-40 transition"
           >
-            {loading ? "Buscando..." : "Continuar"}
+            {loading ? "..." : t(idioma, "continuar")}
           </button>
         </form>
 
@@ -312,33 +596,32 @@ function CustomerModal({ slug, onIdentified, onSkip }: CustomerModalProps) {
           onClick={onSkip}
           className="text-center text-sm text-slate-500 hover:text-slate-300 transition"
         >
-          Continuar sem identificação
+          {t(idioma, "sem_identificacao")}
         </button>
       </div>
     </div>
   );
 }
 
-// ─── RepeatOrderModal ────────────────────────────────────────────────────────
+// ─── RepeatOrderModal ─────────────────────────────────────────────────────────
 
 interface RepeatOrderModalProps {
   cliente:      ClienteIdentificado;
   ultimoPedido: UltimoPedido;
+  idioma:       Idioma;
   produtos:     Produto[];
   onRepeat:     (items: CartItem[]) => void;
   onSkip:       () => void;
 }
 
-function RepeatOrderModal({ cliente, ultimoPedido, produtos, onRepeat, onSkip }: RepeatOrderModalProps) {
+function RepeatOrderModal({ cliente, ultimoPedido, idioma, produtos, onRepeat, onSkip }: RepeatOrderModalProps) {
   const itens = ultimoPedido.itens ?? [];
 
   function handleRepeat() {
     const cartItems: CartItem[] = [];
     for (const item of itens) {
       const prod = produtos.find(p => p.nome === item.nome);
-      if (prod) {
-        cartItems.push({ produto: prod, quantidade: item.quantidade, obs: "" });
-      }
+      if (prod) cartItems.push({ produto: prod, quantidade: item.quantidade, obs: "" });
     }
     if (cartItems.length > 0) onRepeat(cartItems);
     else onSkip();
@@ -349,11 +632,11 @@ function RepeatOrderModal({ cliente, ultimoPedido, produtos, onRepeat, onSkip }:
       <div className="flex items-center gap-3 border-b border-white/5 p-4">
         <div>
           <h2 className="text-lg font-bold text-white">
-            Olá, {cliente.nome || "bem-vindo"}! 👋
+            {t(idioma, "cliente_identificado")}: {cliente.nome || ""}
           </h2>
           {cliente.pontos > 0 && (
             <p className="flex items-center gap-1 text-xs text-emerald-400">
-              <Gift className="h-3 w-3" /> {cliente.pontos} pontos acumulados
+              <Gift className="h-3 w-3" /> {cliente.pontos} {t(idioma, "pontos_acumulados")}
             </p>
           )}
         </div>
@@ -367,9 +650,9 @@ function RepeatOrderModal({ cliente, ultimoPedido, produtos, onRepeat, onSkip }:
         </div>
 
         <div className="text-center">
-          <p className="text-white font-semibold text-lg">Repetir último pedido?</p>
+          <p className="text-white font-semibold text-lg">{t(idioma, "repetir_titulo")}</p>
           <p className="mt-1 text-xs text-slate-400">
-            Pedido #{ultimoPedido.numero} · {formatBRL(Number(ultimoPedido.total))}
+            #{ultimoPedido.numero} · {formatBRL(Number(ultimoPedido.total))}
           </p>
         </div>
 
@@ -395,13 +678,13 @@ function RepeatOrderModal({ cliente, ultimoPedido, produtos, onRepeat, onSkip }:
             className="w-full rounded-xl bg-emerald-500 py-4 text-lg font-bold text-white hover:bg-emerald-400 transition"
           >
             <RotateCcw className="inline h-5 w-5 mr-2" />
-            Repetir pedido
+            {t(idioma, "repetir_sim")}
           </button>
           <button
             onClick={onSkip}
             className="w-full rounded-xl bg-slate-800 py-4 text-base font-medium text-slate-300 hover:bg-slate-700 transition"
           >
-            Ver cardápio completo
+            {t(idioma, "repetir_nao")}
           </button>
         </div>
       </div>
@@ -413,11 +696,12 @@ function RepeatOrderModal({ cliente, ultimoPedido, produtos, onRepeat, onSkip }:
 
 interface ProductDetailProps {
   produto:     Produto;
+  idioma:      Idioma;
   onClose:     () => void;
   onAddToCart: (produto: Produto, qty: number, obs: string) => void;
 }
 
-function ProductDetail({ produto, onClose, onAddToCart }: ProductDetailProps) {
+function ProductDetail({ produto, idioma, onClose, onAddToCart }: ProductDetailProps) {
   const [qty, setQty] = useState(1);
   const [obs, setObs] = useState("");
 
@@ -445,13 +729,13 @@ function ProductDetail({ produto, onClose, onAddToCart }: ProductDetailProps) {
         )}
         {produto.tempo_preparo && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-            <Clock className="h-3.5 w-3.5" /> Preparo: ~{produto.tempo_preparo} min
+            <Clock className="h-3.5 w-3.5" /> ~{produto.tempo_preparo} min
           </p>
         )}
         <p className="mt-4 text-2xl font-bold text-emerald-400">{formatBRL(produto.preco)}</p>
 
         <div className="mt-6">
-          <label className="block text-sm text-slate-400 mb-2">Observações</label>
+          <label className="block text-sm text-slate-400 mb-2">{t(idioma, "obs_item")}</label>
           <textarea
             value={obs} onChange={(e) => setObs(e.target.value)}
             placeholder="Ex: sem cebola, bem passado..."
@@ -474,9 +758,59 @@ function ProductDetail({ produto, onClose, onAddToCart }: ProductDetailProps) {
             onClick={() => { onAddToCart(produto, qty, obs); onClose(); }}
             className="flex-1 rounded-xl bg-emerald-500 py-3 font-semibold text-white hover:bg-emerald-400 transition"
           >
-            Adicionar · {formatBRL(produto.preco * qty)}
+            {t(idioma, "adicionar")} · {formatBRL(produto.preco * qty)}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DrinksModal ──────────────────────────────────────────────────────────────
+
+interface DrinksModalProps {
+  bebidas:     Produto[];
+  idioma:      Idioma;
+  onAdd:       (produto: Produto) => void;
+  onSkip:      () => void;
+}
+
+function DrinksModal({ bebidas, idioma, onAdd, onSkip }: DrinksModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-end bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-t-3xl bg-slate-900 p-6 pb-8">
+        <div className="mb-1 text-center">
+          <h2 className="text-xl font-bold text-white">{t(idioma, "bebidas_titulo")}</h2>
+          <p className="mt-1 text-sm text-slate-400">{t(idioma, "bebidas_sub")}</p>
+        </div>
+
+        <div className="mt-4 flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+          {bebidas.map(b => (
+            <button
+              key={b.id}
+              onClick={() => { onAdd(b); onSkip(); }}
+              className="flex-shrink-0 w-36 rounded-2xl bg-slate-800 border border-white/5 overflow-hidden text-left hover:border-emerald-500/30 transition"
+            >
+              <div className="h-24">
+                <ProductImage src={b.imagem_url} alt={b.nome} />
+              </div>
+              <div className="p-2.5">
+                <p className="text-xs font-semibold text-white line-clamp-2">{b.nome}</p>
+                <p className="mt-1 text-sm font-bold text-emerald-400">{formatBRL(b.preco)}</p>
+                <div className="mt-1.5 flex items-center justify-center rounded-lg bg-emerald-500/20 py-1">
+                  <Plus className="h-3.5 w-3.5 text-emerald-400" />
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={onSkip}
+          className="mt-5 w-full rounded-xl bg-slate-800 py-3 text-sm font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition"
+        >
+          {t(idioma, "bebidas_nao")}
+        </button>
       </div>
     </div>
   );
@@ -488,15 +822,16 @@ interface CartDrawerProps {
   cart:        CartItem[];
   mesaNumero:  number | null;
   cliente:     ClienteIdentificado | null;
+  idioma:      Idioma;
   onClose:     () => void;
   onUpdate:    (produtoId: string, delta: number) => void;
   onConfirm:   (clienteNome: string, clienteTel: string, obs: string) => Promise<void>;
 }
 
-function CartDrawer({ cart, mesaNumero, cliente, onClose, onUpdate, onConfirm }: CartDrawerProps) {
-  const [nome, setNome]   = useState(cliente?.nome ?? "");
-  const [tel, setTel]     = useState(cliente?.telefone ?? "");
-  const [obs, setObs]     = useState("");
+function CartDrawer({ cart, mesaNumero, cliente, idioma, onClose, onUpdate, onConfirm }: CartDrawerProps) {
+  const [nome, setNome]     = useState(cliente?.nome ?? "");
+  const [tel, setTel]       = useState(cliente?.telefone ?? "");
+  const [obs, setObs]       = useState("");
   const [sending, setSending] = useState(false);
 
   const total = cart.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0);
@@ -514,7 +849,7 @@ function CartDrawer({ cart, mesaNumero, cliente, onClose, onUpdate, onConfirm }:
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div>
-          <h2 className="text-lg font-bold text-white">Seu Pedido</h2>
+          <h2 className="text-lg font-bold text-white">{t(idioma, "pedido_titulo")}</h2>
           {mesaNumero && (
             <p className="text-xs text-emerald-400 flex items-center gap-1">
               <MapPin className="h-3 w-3" /> Mesa {mesaNumero}
@@ -559,12 +894,12 @@ function CartDrawer({ cart, mesaNumero, cliente, onClose, onUpdate, onConfirm }:
           <>
             <input
               value={nome} onChange={(e) => setNome(e.target.value)}
-              placeholder="Seu nome (para chamar quando ficar pronto)"
+              placeholder={t(idioma, "nome")}
               className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
             />
             <input
               value={tel} onChange={(e) => setTel(e.target.value.replace(/\D/g, ""))}
-              placeholder="Telefone (opcional)"
+              placeholder={t(idioma, "telefone") + " (opcional)"}
               className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
             />
           </>
@@ -573,15 +908,15 @@ function CartDrawer({ cart, mesaNumero, cliente, onClose, onUpdate, onConfirm }:
           <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
             <User className="h-4 w-4 text-emerald-400 flex-shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-white truncate">{cliente.nome || "Cliente identificado"}</p>
-              <p className="text-xs text-emerald-400">{cliente.pontos} pontos acumulados</p>
+              <p className="text-sm font-medium text-white truncate">{cliente.nome || t(idioma, "cliente_identificado")}</p>
+              <p className="text-xs text-emerald-400">{cliente.pontos} {t(idioma, "pontos_acumulados")}</p>
             </div>
           </div>
         )}
 
         <input
           value={obs} onChange={(e) => setObs(e.target.value)}
-          placeholder="Observação geral (opcional)"
+          placeholder={t(idioma, "obs_geral")}
           className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
         />
 
@@ -589,53 +924,110 @@ function CartDrawer({ cart, mesaNumero, cliente, onClose, onUpdate, onConfirm }:
           onClick={handleOrder} disabled={sending || cart.length === 0}
           className="w-full rounded-xl bg-emerald-500 py-3 font-semibold text-white hover:bg-emerald-400 transition disabled:opacity-50"
         >
-          {sending ? "Enviando..." : "Confirmar Pedido"}
+          {sending ? t(idioma, "enviando") : t(idioma, "confirmar")}
         </button>
       </div>
     </div>
   );
 }
 
-// ─── SuccessScreen ────────────────────────────────────────────────────────────
+// ─── SuccessScreen (rich, with points + countdown ring) ───────────────────────
+
+interface SuccessScreenProps {
+  numero:      number;
+  mesaNumero:  number | null;
+  clienteNome: string;
+  pontosGanhos?: number;
+  totalPontos?:  number;
+  idioma:      Idioma;
+  onReset:     () => void;
+}
 
 function SuccessScreen({
-  numero, mesaNumero, clienteNome, pontos, onReset,
-}: { numero: number; mesaNumero: number | null; clienteNome: string; pontos?: number; onReset: () => void }) {
-  // Auto-reset after 15 s
+  numero, mesaNumero, clienteNome, pontosGanhos, totalPontos, idioma, onReset,
+}: SuccessScreenProps) {
+  const [remaining, setRemaining] = useState(15);
+  const TOTAL = 15;
+
   useEffect(() => {
-    const t = setTimeout(onReset, 15_000);
-    return () => clearTimeout(t);
+    const interval = setInterval(() => {
+      setRemaining(r => {
+        if (r <= 1) { clearInterval(interval); onReset(); return 0; }
+        return r - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
   }, [onReset]);
+
+  const radius    = 30;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset  = circumference * (1 - remaining / TOTAL);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-slate-950 p-8 text-center">
-      <CheckCircle className="h-20 w-20 text-emerald-400" />
-      <div>
-        <h2 className="text-3xl font-black text-white">Pedido #{numero}</h2>
+      {/* Animated checkmark */}
+      <div className="relative flex items-center justify-center">
+        {/* Countdown ring */}
+        <svg className="absolute" width="120" height="120" viewBox="0 0 80 80">
+          <circle cx="40" cy="40" r={radius} fill="none" stroke="#1e293b" strokeWidth="4" />
+          <circle
+            cx="40" cy="40" r={radius}
+            fill="none"
+            stroke="#10b981"
+            strokeWidth="4"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            strokeLinecap="round"
+            style={{ transform: "rotate(-90deg)", transformOrigin: "50% 50%", transition: "stroke-dashoffset 1s linear" }}
+          />
+        </svg>
+        <CheckCircle className="h-14 w-14 text-emerald-400" />
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm font-semibold uppercase tracking-widest text-emerald-400">
+          {t(idioma, "sucesso")}
+        </p>
+        <h2 className="text-4xl font-black text-white">#{numero}</h2>
+
         {mesaNumero && (
-          <p className="mt-2 text-emerald-400 font-semibold text-lg flex items-center justify-center gap-1">
+          <p className="text-emerald-400 font-semibold flex items-center justify-center gap-1">
             <MapPin className="h-4 w-4" /> Mesa {mesaNumero}
           </p>
         )}
+
         {clienteNome && (
-          <p className="mt-1 text-slate-300">Obrigado, <span className="font-semibold">{clienteNome}</span>!</p>
-        )}
-        {pontos !== undefined && pontos > 0 && (
-          <p className="mt-2 flex items-center justify-center gap-1.5 text-sm text-amber-400">
-            <Gift className="h-4 w-4" /> +{pontos} pontos adicionados
+          <p className="text-slate-300">
+            {clienteNome}
           </p>
         )}
-        <p className="mt-2 text-slate-400">Seu pedido foi recebido com sucesso!</p>
-        <p className="mt-1 text-sm text-slate-500">
-          {mesaNumero ? "Iremos trazer até sua mesa quando estiver pronto." : "Aguarde, em breve estará pronto."}
-        </p>
+
+        {(pontosGanhos !== undefined && pontosGanhos > 0) && (
+          <div className="inline-flex items-center gap-2 rounded-full bg-amber-400/10 border border-amber-400/20 px-4 py-2 mt-2">
+            <Gift className="h-4 w-4 text-amber-400" />
+            <span className="text-sm font-bold text-amber-300">
+              +{pontosGanhos} {t(idioma, "pontos_ganhos")}
+            </span>
+          </div>
+        )}
+
+        {(totalPontos !== undefined && totalPontos > 0) && (
+          <p className="text-xs text-slate-500 mt-1">
+            {t(idioma, "pontos_total")}: {totalPontos}
+          </p>
+        )}
       </div>
+
       <button
         onClick={onReset}
-        className="mt-4 rounded-xl bg-emerald-500 px-8 py-3 font-semibold text-white hover:bg-emerald-400 transition"
+        className="mt-2 rounded-xl bg-emerald-500 px-8 py-3 font-semibold text-white hover:bg-emerald-400 transition"
       >
-        Fazer novo pedido
+        {t(idioma, "novo_pedido")}
       </button>
+
+      <p className="text-xs text-slate-600">
+        {remaining}s
+      </p>
     </div>
   );
 }
@@ -668,15 +1060,22 @@ function ProductRow({ produto, onOpen }: { produto: Produto; onOpen: (p: Produto
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-// Idle timeout: 3 minutes
 const IDLE_MS = 3 * 60 * 1000;
 
 type Fase = "start" | "identificacao" | "repeat" | "cardapio";
 
+// Framer Motion variants for page-level transitions
+const pageVariants = {
+  initial: { opacity: 0, x: 60 },
+  animate: { opacity: 1, x: 0 },
+  exit:    { opacity: 0, x: -60 },
+};
+const pageTransition = { duration: 0.35, ease: "easeInOut" as const };
+
 export default function TotemPage({ params }: { params: { slug: string } }) {
-  const searchParams   = useSearchParams();
-  const mesaId         = searchParams.get("mesa");
-  const mesaNumero     = searchParams.get("mesa_numero");
+  const searchParams = useSearchParams();
+  const mesaId       = searchParams.get("mesa");
+  const mesaNumero   = searchParams.get("mesa_numero");
 
   const [empresa, setEmpresa]       = useState<EmpresaInfo | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -685,11 +1084,16 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   const [notFound, setNotFound]     = useState(false);
   const [mesaNumeroReal]            = useState<number | null>(mesaNumero ? Number(mesaNumero) : null);
 
+  // Language
+  const [idioma, setIdioma] = useState<Idioma>("pt");
+
   // Totem flow
-  const [fase, setFase]                     = useState<Fase>("start");
-  const [cliente, setCliente]               = useState<ClienteIdentificado | null>(null);
-  const [ultimoPedido, setUltimoPedido]     = useState<UltimoPedido | null>(null);
-  const [pedidoFeito, setPedidoFeito]       = useState<{ numero: number; clienteNome: string; pontos?: number } | null>(null);
+  const [fase, setFase]                 = useState<Fase>("start");
+  const [cliente, setCliente]           = useState<ClienteIdentificado | null>(null);
+  const [ultimoPedido, setUltimoPedido] = useState<UltimoPedido | null>(null);
+  const [pedidoFeito, setPedidoFeito]   = useState<{
+    numero: number; clienteNome: string; pontosGanhos?: number; totalPontos?: number;
+  } | null>(null);
 
   // Menu nav
   const [catSelecionada, setCatSelecionada] = useState<string>("todos");
@@ -698,16 +1102,17 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   const [cartOpen, setCartOpen]             = useState(false);
   const [cart, setCart]                     = useState<CartItem[]>([]);
 
+  // Drinks modal
+  const [showDrinksModal, setShowDrinksModal] = useState(false);
+  const drinksShownRef = useRef(false);
+
   // Idle timer
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function resetIdleTimer() {
     if (idleRef.current) clearTimeout(idleRef.current);
-    // Only set idle timer when in cardapio phase
     if (fase === "cardapio" && !cartOpen && !produtoAberto) {
-      idleRef.current = setTimeout(() => {
-        handleFullReset();
-      }, IDLE_MS);
+      idleRef.current = setTimeout(handleFullReset, IDLE_MS);
     }
   }
 
@@ -780,6 +1185,9 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     setPedidoFeito(null);
     setQ("");
     setCatSelecionada("todos");
+    setShowDrinksModal(false);
+    drinksShownRef.current = false;
+    setIdioma("pt");
   }
 
   // ── Cart ───────────────────────────────────────────────────────────────────
@@ -801,6 +1209,22 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
   const cartTotal = cart.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0);
   const cartCount = cart.reduce((acc, i) => acc + i.quantidade, 0);
+
+  // Bebidas available
+  const bebidas = useMemo(() => produtos.filter(p => p.tipo === "bebida"), [produtos]);
+
+  // ── Open cart (with drinks interstitial) ──────────────────────────────────
+
+  function handleOpenCart() {
+    // Show drinks modal if: not shown yet, no drink in cart, there are bebidas
+    const hasDrinkInCart = cart.some(i => i.produto.tipo === "bebida");
+    if (!drinksShownRef.current && !hasDrinkInCart && bebidas.length > 0) {
+      drinksShownRef.current = true;
+      setShowDrinksModal(true);
+    } else {
+      setCartOpen(true);
+    }
+  }
 
   // ── Confirm order ──────────────────────────────────────────────────────────
 
@@ -827,12 +1251,16 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     const data = await res.json();
     if (!data.success) { alert(data.error || "Erro ao enviar pedido"); return; }
 
+    const pontosGanhos = data.data.pontos_ganhos as number | undefined;
+    const totalPontos  = (cliente?.pontos ?? 0) + (pontosGanhos ?? 0);
+
     setCart([]);
     setCartOpen(false);
     setPedidoFeito({
       numero:      data.data.numero,
       clienteNome: clienteNome || cliente?.nome || "",
-      pontos:      data.data.pontos_ganhos,
+      pontosGanhos,
+      totalPontos: totalPontos > 0 ? totalPontos : undefined,
     });
   }
 
@@ -843,7 +1271,9 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     if (catSelecionada !== "todos") list = list.filter(p => p.categoria_id === catSelecionada);
     if (q.trim()) {
       const lower = q.toLowerCase();
-      list = list.filter(p => p.nome.toLowerCase().includes(lower) || p.descricao?.toLowerCase().includes(lower));
+      list = list.filter(p =>
+        p.nome.toLowerCase().includes(lower) || p.descricao?.toLowerCase().includes(lower)
+      );
     }
     return list;
   }, [produtos, catSelecionada, q]);
@@ -871,204 +1301,280 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 pb-32 text-white">
-      {/* ── Start Screen ── */}
-      {fase === "start" && <StartScreen empresa={empresa} onStart={handleStart} />}
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
 
-      {/* ── Customer Identification ── */}
-      {fase === "identificacao" && (
-        <CustomerModal slug={params.slug} onIdentified={handleIdentified} onSkip={handleSkipIdentificacao} />
-      )}
+      {/* ── Animated phase container ─────────────────────────────────────────── */}
+      <AnimatePresence mode="wait">
+        {fase === "start" && (
+          <motion.div
+            key="start"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={pageTransition}
+            style={{ position: "absolute", inset: 0 }}
+          >
+            <StartScreen
+              empresa={empresa}
+              idioma={idioma}
+              setIdioma={setIdioma}
+              onStart={handleStart}
+            />
+          </motion.div>
+        )}
 
-      {/* ── Repeat last order ── */}
-      {fase === "repeat" && cliente && ultimoPedido && (
-        <RepeatOrderModal
-          cliente={cliente}
-          ultimoPedido={ultimoPedido}
-          produtos={produtos}
-          onRepeat={handleRepeatOrder}
-          onSkip={() => setFase("cardapio")}
-        />
-      )}
+        {fase === "identificacao" && (
+          <motion.div
+            key="identificacao"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={pageTransition}
+            style={{ position: "absolute", inset: 0 }}
+          >
+            <CustomerModal
+              slug={params.slug}
+              idioma={idioma}
+              onIdentified={handleIdentified}
+              onSkip={handleSkipIdentificacao}
+            />
+          </motion.div>
+        )}
 
-      {/* ── Cardápio ── */}
-      {fase === "cardapio" && (
-        <>
-          {/* Header */}
-          <div className="sticky top-0 z-10 border-b border-white/5 bg-slate-950/90 backdrop-blur">
-            <div className="flex items-center gap-3 px-4 py-3">
-              {empresa.logo_url ? (
-                <img src={empresa.logo_url} alt="" className="h-9 w-9 rounded-xl object-cover" />
-              ) : (
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20">
-                  <ChefHat className="h-4 w-4 text-emerald-400" />
+        {fase === "repeat" && cliente && ultimoPedido && (
+          <motion.div
+            key="repeat"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={pageTransition}
+            style={{ position: "absolute", inset: 0 }}
+          >
+            <RepeatOrderModal
+              cliente={cliente}
+              ultimoPedido={ultimoPedido}
+              idioma={idioma}
+              produtos={produtos}
+              onRepeat={handleRepeatOrder}
+              onSkip={() => setFase("cardapio")}
+            />
+          </motion.div>
+        )}
+
+        {fase === "cardapio" && (
+          <motion.div
+            key="cardapio"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={pageTransition}
+            style={{ position: "absolute", inset: 0, overflowY: "auto" }}
+            className="pb-32"
+          >
+            {/* Header */}
+            <div className="sticky top-0 z-10 border-b border-white/5 bg-slate-950/90 backdrop-blur">
+              <div className="flex items-center gap-3 px-4 py-3">
+                {empresa.logo_url ? (
+                  <img src={empresa.logo_url} alt="" className="h-9 w-9 rounded-xl object-cover" />
+                ) : (
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20">
+                    <ChefHat className="h-4 w-4 text-emerald-400" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="truncate font-bold">{empresa.nome_fantasia}</p>
+                  {mesaNumeroReal ? (
+                    <p className="text-xs text-emerald-400 flex items-center gap-1">
+                      <MapPin className="h-3 w-3" /> Mesa {mesaNumeroReal}
+                    </p>
+                  ) : cliente ? (
+                    <p className="text-xs text-emerald-400 flex items-center gap-1">
+                      <User className="h-3 w-3" /> {cliente.nome || t(idioma, "cliente_identificado")} · {cliente.pontos} pts
+                    </p>
+                  ) : null}
                 </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="truncate font-bold">{empresa.nome_fantasia}</p>
-                {mesaNumeroReal ? (
-                  <p className="text-xs text-emerald-400 flex items-center gap-1">
-                    <MapPin className="h-3 w-3" /> Mesa {mesaNumeroReal}
-                  </p>
-                ) : cliente ? (
-                  <p className="text-xs text-emerald-400 flex items-center gap-1">
-                    <User className="h-3 w-3" /> {cliente.nome || "Cliente"} · {cliente.pontos} pts
-                  </p>
-                ) : null}
-              </div>
-              <button
-                onClick={() => setCartOpen(true)}
-                className="relative flex items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-medium"
-              >
-                <ShoppingCart className="h-4 w-4" />
-                {cartCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold">
-                    {cartCount}
-                  </span>
-                )}
-                {cartCount > 0 && <span>{formatBRL(cartTotal)}</span>}
-              </button>
-            </div>
-
-            <div className="px-4 pb-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <input
-                  value={q} onChange={e => setQ(e.target.value)}
-                  placeholder="Buscar no cardápio..."
-                  className="w-full rounded-xl bg-slate-800 border border-white/10 pl-9 pr-4 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none"
-                />
-                {q && (
-                  <button onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {!q && (
-              <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-hide">
                 <button
-                  onClick={() => setCatSelecionada("todos")}
-                  className={`flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition ${
-                    catSelecionada === "todos" ? "bg-emerald-500 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
-                  }`}
+                  onClick={handleOpenCart}
+                  className="relative flex items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-medium"
                 >
-                  Todos
+                  <ShoppingCart className="h-4 w-4" />
+                  {cartCount > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold">
+                      {cartCount}
+                    </span>
+                  )}
+                  {cartCount > 0 && <span>{formatBRL(cartTotal)}</span>}
                 </button>
-                {categorias.map(c => (
+              </div>
+
+              <div className="px-4 pb-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    value={q} onChange={e => setQ(e.target.value)}
+                    placeholder={t(idioma, "buscar")}
+                    className="w-full rounded-xl bg-slate-800 border border-white/10 pl-9 pr-4 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                  />
+                  {q && (
+                    <button onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {!q && (
+                <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-hide">
                   <button
-                    key={c.id}
-                    onClick={() => setCatSelecionada(c.id)}
+                    onClick={() => setCatSelecionada("todos")}
                     className={`flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition ${
-                      catSelecionada === c.id ? "bg-emerald-500 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
+                      catSelecionada === "todos" ? "bg-emerald-500 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
                     }`}
                   >
-                    {c.nome}
+                    {t(idioma, "todos")}
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="px-4 pt-4 space-y-8">
-            {catSelecionada === "todos" && !q && destaques.length > 0 && (
-              <section>
-                <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-emerald-400">✦ Destaques</h2>
-                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                  {destaques.map(produto => (
+                  {categorias.map(c => (
                     <button
-                      key={produto.id}
-                      onClick={() => setProdutoAberto(produto)}
-                      className="flex-shrink-0 w-40 rounded-2xl bg-slate-900 border border-white/5 overflow-hidden text-left hover:border-emerald-500/30 transition"
+                      key={c.id}
+                      onClick={() => setCatSelecionada(c.id)}
+                      className={`flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition ${
+                        catSelecionada === c.id ? "bg-emerald-500 text-white" : "bg-slate-800 text-slate-400 hover:text-white"
+                      }`}
                     >
-                      <div className="h-28">
-                        <ProductImage src={produto.imagem_url} alt={produto.nome} />
-                      </div>
-                      <div className="p-3">
-                        <p className="text-xs font-semibold text-white line-clamp-2">{produto.nome}</p>
-                        <p className="mt-1 text-sm font-bold text-emerald-400">{formatBRL(produto.preco)}</p>
-                      </div>
+                      {c.nome}
                     </button>
                   ))}
                 </div>
-              </section>
-            )}
+              )}
+            </div>
 
-            {catSelecionada === "todos" && !q
-              ? categorias.map(cat => {
-                  const catProdutos = produtosFiltrados.filter(p => p.categoria_id === cat.id);
-                  if (catProdutos.length === 0) return null;
-                  return (
-                    <section key={cat.id}>
-                      <h2 className="mb-3 text-base font-bold text-white">{cat.nome}</h2>
+            {/* Content */}
+            <div className="px-4 pt-4 space-y-8">
+              {catSelecionada === "todos" && !q && destaques.length > 0 && (
+                <section>
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-emerald-400">
+                    {t(idioma, "destaques")}
+                  </h2>
+                  <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                    {destaques.map(produto => (
+                      <button
+                        key={produto.id}
+                        onClick={() => setProdutoAberto(produto)}
+                        className="flex-shrink-0 w-40 rounded-2xl bg-slate-900 border border-white/5 overflow-hidden text-left hover:border-emerald-500/30 transition"
+                      >
+                        <div className="h-28">
+                          <ProductImage src={produto.imagem_url} alt={produto.nome} />
+                        </div>
+                        <div className="p-3">
+                          <p className="text-xs font-semibold text-white line-clamp-2">{produto.nome}</p>
+                          <p className="mt-1 text-sm font-bold text-emerald-400">{formatBRL(produto.preco)}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {catSelecionada === "todos" && !q
+                ? categorias.map(cat => {
+                    const catProdutos = produtosFiltrados.filter(p => p.categoria_id === cat.id);
+                    if (catProdutos.length === 0) return null;
+                    return (
+                      <section key={cat.id}>
+                        <h2 className="mb-3 text-base font-bold text-white">{cat.nome}</h2>
+                        <div className="space-y-2">
+                          {catProdutos.map(produto => (
+                            <ProductRow key={produto.id} produto={produto} onOpen={setProdutoAberto} />
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })
+                : (
+                  <section>
+                    {q && (
+                      <p className="mb-3 text-sm text-slate-400">
+                        {produtosFiltrados.length} resultado{produtosFiltrados.length !== 1 ? "s" : ""} para &ldquo;{q}&rdquo;
+                      </p>
+                    )}
+                    {produtosFiltrados.length === 0 ? (
+                      <div className="flex flex-col items-center gap-3 py-12 text-slate-500">
+                        <ChefHat className="h-10 w-10" />
+                        <p className="text-sm">Nenhum produto encontrado</p>
+                      </div>
+                    ) : (
                       <div className="space-y-2">
-                        {catProdutos.map(produto => (
+                        {produtosFiltrados.map(produto => (
                           <ProductRow key={produto.id} produto={produto} onOpen={setProdutoAberto} />
                         ))}
                       </div>
-                    </section>
-                  );
-                })
-              : (
-                <section>
-                  {q && (
-                    <p className="mb-3 text-sm text-slate-400">
-                      {produtosFiltrados.length} resultado{produtosFiltrados.length !== 1 ? "s" : ""} para &ldquo;{q}&rdquo;
-                    </p>
-                  )}
-                  {produtosFiltrados.length === 0 ? (
-                    <div className="flex flex-col items-center gap-3 py-12 text-slate-500">
-                      <ChefHat className="h-10 w-10" />
-                      <p className="text-sm">Nenhum produto encontrado</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {produtosFiltrados.map(produto => (
-                        <ProductRow key={produto.id} produto={produto} onOpen={setProdutoAberto} />
-                      ))}
-                    </div>
-                  )}
-                </section>
-              )
-            }
-          </div>
-
-          {cartCount > 0 && !cartOpen && (
-            <div className="fixed bottom-6 left-4 right-4 z-20">
-              <button
-                onClick={() => setCartOpen(true)}
-                className="w-full flex items-center justify-between rounded-2xl bg-emerald-500 px-5 py-4 font-semibold text-white shadow-xl shadow-emerald-500/20 hover:bg-emerald-400 transition"
-              >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-xs font-bold">{cartCount}</span>
-                <span>Ver pedido</span>
-                <span>{formatBRL(cartTotal)}</span>
-              </button>
+                    )}
+                  </section>
+                )
+              }
             </div>
-          )}
-        </>
+
+            {/* Sticky cart button */}
+            {cartCount > 0 && !cartOpen && (
+              <div className="fixed bottom-6 left-4 right-4 z-20">
+                <button
+                  onClick={handleOpenCart}
+                  className="w-full flex items-center justify-between rounded-2xl bg-emerald-500 px-5 py-4 font-semibold text-white shadow-xl shadow-emerald-500/20 hover:bg-emerald-400 transition"
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-xs font-bold">{cartCount}</span>
+                  <span>{t(idioma, "ver_pedido")}</span>
+                  <span>{formatBRL(cartTotal)}</span>
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Overlays (always on top, outside AnimatePresence) ─────────────────── */}
+
+      {produtoAberto && (
+        <ProductDetail
+          produto={produtoAberto}
+          idioma={idioma}
+          onClose={() => setProdutoAberto(null)}
+          onAddToCart={addToCart}
+        />
       )}
 
-      {/* ── Overlays (always on top) ── */}
-      {produtoAberto && (
-        <ProductDetail produto={produtoAberto} onClose={() => setProdutoAberto(null)} onAddToCart={addToCart} />
+      {showDrinksModal && (
+        <DrinksModal
+          bebidas={bebidas}
+          idioma={idioma}
+          onAdd={(b) => addToCart(b, 1, "")}
+          onSkip={() => { setShowDrinksModal(false); setCartOpen(true); }}
+        />
       )}
+
       {cartOpen && (
         <CartDrawer
           cart={cart}
           mesaNumero={mesaNumeroReal}
           cliente={cliente}
+          idioma={idioma}
           onClose={() => setCartOpen(false)}
           onUpdate={updateCart}
           onConfirm={handleConfirmarPedido}
         />
       )}
+
       {pedidoFeito && (
         <SuccessScreen
           numero={pedidoFeito.numero}
           mesaNumero={mesaNumeroReal}
           clienteNome={pedidoFeito.clienteNome}
-          pontos={pedidoFeito.pontos}
+          pontosGanhos={pedidoFeito.pontosGanhos}
+          totalPontos={pedidoFeito.totalPontos}
+          idioma={idioma}
           onReset={handleFullReset}
         />
       )}

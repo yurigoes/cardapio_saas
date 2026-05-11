@@ -501,10 +501,13 @@ function OperadorView({ usuario, empresa }: { usuario: Usuario; empresa: Empresa
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {modulosDisponiveis.map((mod) => {
             const Icon = mod.icon;
+            const href = mod.label === "Totem"
+              ? `/totem/${empresa?.slug || "demo"}`
+              : mod.href;
             return (
               <Link
                 key={mod.href + mod.label}
-                href={mod.href}
+                href={href}
                 className={`group relative overflow-hidden rounded-2xl border bg-gradient-to-br p-5 transition-all duration-200 ${mod.cor}`}
               >
                 <div className="flex items-start gap-4">

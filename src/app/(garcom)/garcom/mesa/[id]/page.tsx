@@ -207,9 +207,16 @@ export default function MesaGarcomPage() {
   const [enviado, setEnviado]     = useState(false);
   const [errMsg, setErrMsg]       = useState("");
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") ?? "" : "";
+  const [token, setToken]         = useState<string>("");
+
+  useEffect(() => {
+    const t = localStorage.getItem("access_token") ?? "";
+    setToken(t);
+    if (!t) { window.location.href = "/login"; }
+  }, []);
 
   const load = useCallback(async () => {
+    if (!token) return;
     setLoading(true);
     try {
       const [mesaRes, catsRes, prodsRes] = await Promise.all([
@@ -226,7 +233,7 @@ export default function MesaGarcomPage() {
     }
   }, [id, token]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (token) load(); }, [token, load]);
 
   /* filtro */
   const filtrados = useMemo(() => {

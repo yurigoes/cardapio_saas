@@ -7,13 +7,6 @@ import { queryOne } from "@/lib/db/client";
 import { temRole } from "@/lib/auth/rbac";
 import { ok, forbidden, serverError } from "@/lib/utils/response";
 
-const EVO_BASE = process.env.EVOLUTION_API_URL ?? "http://evolution:8080";
-const EVO_KEY  = process.env.EVOLUTION_API_KEY ?? "";
-
-function evoHeaders() {
-  return { "apikey": EVO_KEY, "Content-Type": "application/json" };
-}
-
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
@@ -22,16 +15,19 @@ export async function GET(req: NextRequest) {
   if (!empresaId) return forbidden();
   if (!temRole(role, "admin")) return forbidden();
 
-  const row = await queryOne<{ slug: string }>(
-    `SELECT slug FROM empresas WHERE id = $1 AND deleted_at IS NULL`,
+  const row = await queryOne<{ slug: string; evolution_url: string | null; evolution_key: string | null }>(
+    `SELECT slug, evolution_url, evolution_key FROM empresas WHERE id = $1 AND deleted_at IS NULL`,
     [empresaId]
   );
-  const slug = row?.slug;
-  if (!slug) return serverError("Empresa não encontrada");
+  if (!row?.slug) return serverError("Empresa não encontrada");
+
+  const slug    = row.slug;
+  const EVO_URL = row.evolution_url || process.env.EVOLUTION_API_URL || "http://evolution:8080";
+  const EVO_KEY = row.evolution_key || process.env.EVOLUTION_API_KEY || "";
 
   try {
-    const res = await fetch(`${EVO_BASE}/instance/connect/${slug}`, {
-      headers: evoHeaders(),
+    const res = await fetch(`${EVO_URL}/instance/connect/${slug}`, {
+      headers: { "apikey": EVO_KEY, "Content-Type": "application/json" },
     });
 
     if (res.status === 404 || res.status === 400) {
