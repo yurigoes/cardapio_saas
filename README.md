@@ -323,6 +323,15 @@ VAPID_SUBJECT=mailto:contato@seudominio.com
 
 ---
 
+## Scripts utilitários
+
+| Script | O que faz |
+|---|---|
+| `npx tsx scripts/recomprimir-imagens.ts` | Re-comprime imagens antigas (PNG/JPEG → WebP) — dry-run por padrão |
+| `npx tsx scripts/recomprimir-imagens.ts --apply` | Aplica de fato (`--empresa <id>` e `--limit N` opcionais) |
+
+---
+
 ## Convenções
 
 ### Padrão de API
