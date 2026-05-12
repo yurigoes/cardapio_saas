@@ -21,6 +21,7 @@ import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
+import { logWebhook } from "@/lib/webhook/log";
 
 interface StoneWebhookPayload {
   event:     string;                          // ex: "pix.payment_link.paid"
@@ -173,6 +174,19 @@ export async function POST(req: NextRequest) {
     }
 
     console.info(`[Stone/webhook] Pedido ${pedidoId} → ${novoStatus} (${event})`);
+    logWebhook({
+      gateway:    "stone",
+      empresaId:  gateway.empresa_id,
+      evento:     event,
+      recursoId:  resource.id,
+      pedidoId,
+      resultado:  "processado",
+      httpStatus: 200,
+      mensagem:   `${resource.status} → ${novoStatus}`,
+      payload,
+      headers:    Object.fromEntries(req.headers),
+      ipOrigem:   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
+    });
     return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });
   } catch (err) {
     console.error("[Stone/webhook]", err);

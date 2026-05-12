@@ -15,6 +15,7 @@ import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
+import { logWebhook } from "@/lib/webhook/log";
 
 const MP_API = "https://api.mercadopago.com";
 
@@ -170,6 +171,19 @@ export async function POST(req: NextRequest) {
     }
 
     console.info(`[MP/webhook] Pedido ${pedidoId} → ${novoStatus} (MP status: ${payment.status})`);
+    logWebhook({
+      gateway:    "mercadopago",
+      empresaId:  gateways.empresa_id,
+      evento:     payload.action ?? payload.type,
+      recursoId:  String(payment.id),
+      pedidoId,
+      resultado:  "processado",
+      httpStatus: 200,
+      mensagem:   `${payment.status} → ${novoStatus}`,
+      payload,
+      headers:    Object.fromEntries(req.headers),
+      ipOrigem:   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
+    });
     return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });
   } catch (err) {
     console.error("[MP/webhook] Erro:", err);

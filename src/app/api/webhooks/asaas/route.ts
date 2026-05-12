@@ -18,6 +18,7 @@ import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
+import { logWebhook } from "@/lib/webhook/log";
 
 interface AsaasWebhookPayload {
   event:  string;
@@ -161,6 +162,19 @@ export async function POST(req: NextRequest) {
     }
 
     console.info(`[Asaas/webhook] Pedido ${pedidoId} → ${novoStatus} (${payload.event})`);
+    logWebhook({
+      gateway:    "asaas",
+      empresaId:  gateway.empresa_id,
+      evento:     payload.event,
+      recursoId:  payload.payment.id,
+      pedidoId,
+      resultado:  "processado",
+      httpStatus: 200,
+      mensagem:   `${payload.payment.status} → ${novoStatus}`,
+      payload,
+      headers:    Object.fromEntries(req.headers),
+      ipOrigem:   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
+    });
     return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });
   } catch (err) {
     console.error("[Asaas/webhook]", err);

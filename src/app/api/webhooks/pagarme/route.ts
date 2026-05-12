@@ -20,6 +20,7 @@ import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
+import { logWebhook } from "@/lib/webhook/log";
 
 interface PmWebhookPayload {
   id:    string;
@@ -166,6 +167,19 @@ export async function POST(req: NextRequest) {
     }
 
     console.info(`[Pagarme/webhook] Pedido ${pedidoId} → ${novoStatus} (${payload.type})`);
+    logWebhook({
+      gateway:    "pagarme",
+      empresaId:  gateway.empresa_id,
+      evento:     payload.type,
+      recursoId:  String(payload.data?.charges?.[0]?.id ?? payload.data?.id ?? ""),
+      pedidoId,
+      resultado:  "processado",
+      httpStatus: 200,
+      mensagem:   `${payload.data.status} → ${novoStatus}`,
+      payload,
+      headers:    Object.fromEntries(req.headers),
+      ipOrigem:   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
+    });
     return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });
   } catch (err) {
     console.error("[Pagarme/webhook]", err);
