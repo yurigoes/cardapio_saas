@@ -10,6 +10,7 @@ import { z } from "zod";
 import { queryOne, transaction } from "@/lib/db/client";
 import { ok, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
+import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 import type { PoolClient } from "pg";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -370,6 +371,18 @@ export async function POST(
 
       return { ...row, pontosGanhos };
     });
+
+    // Notificação Web Push (não bloqueia resposta)
+    if (!("acumulado" in pedido && pedido.acumulado)) {
+      enviarPushParaUsuariosDaEmpresa(empresa.id, {
+        title: `Novo pedido #${pedido.numero}`,
+        body:  body.cliente_nome
+          ? `${body.cliente_nome} · ${body.tipo_consumo ?? "local"}`
+          : `${body.tipo_consumo ?? "local"} · ${body.itens.length} item(s)`,
+        url:   `/painel/pedidos`,
+        tag:   "pedido-novo",
+      }).catch(e => console.warn("[Push] erro:", e));
+    }
 
     return ok({
       id:           pedido.id,

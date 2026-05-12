@@ -6,6 +6,7 @@ import {
   RefreshCw, Eye, X, Filter, Bell, BellOff, Printer,
 } from "lucide-react";
 import { useNewOrderAlerts } from "@/lib/hooks/useNewOrderAlerts";
+import { useWebPush } from "@/lib/hooks/useWebPush";
 
 /** Abre janela de impressão térmica (popup com auto-print). */
 function abrirImpressao(pedidoId: string, tipo: "cliente" | "cozinha" | "comanda") {
@@ -351,7 +352,8 @@ export default function PedidosPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   // Alertas (som + notificação) ao chegar pedido novo
-  const alerts = useNewOrderAlerts(pedidos, { storageKey: "alerts_pedidos_admin" });
+  const alerts   = useNewOrderAlerts(pedidos, { storageKey: "alerts_pedidos_admin" });
+  const webPush  = useWebPush();
 
   // Auto-print do cupom do cliente
   const [imprimirCupomAuto, setImprimirCupomAuto] = useState(false);
@@ -457,6 +459,27 @@ export default function PedidosPage() {
               <span className="text-[9px] uppercase">só som</span>
             )}
           </button>
+
+          {/* Web Push (notificações fora do browser) */}
+          {webPush.disponivel && (
+            <button
+              onClick={webPush.toggle}
+              disabled={webPush.negado}
+              title={
+                webPush.ativo  ? "Push ativo (notifica mesmo com browser fechado)" :
+                webPush.negado ? "Permissão negada — habilite nas configurações do navegador" :
+                                 "Ativar push (notifica mesmo com browser fechado)"
+              }
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition disabled:opacity-50 ${
+                webPush.ativo
+                  ? "border-brand/30 bg-brand/10 text-brand"
+                  : "border-white/10 text-slate-400 hover:text-white"
+              }`}
+            >
+              <Bell className="h-3.5 w-3.5" />
+              Push
+            </button>
+          )}
 
           {/* Indicador de auto-print do cupom (status, não interativo) */}
           {imprimirCupomAuto && (

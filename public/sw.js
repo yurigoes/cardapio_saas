@@ -15,7 +15,7 @@
  *   - SW notifica cliente via postMessage("QUEUE_DRAINED" | "QUEUE_FAILED")
  */
 
-const CACHE_NAME       = "cardapio-pwa-v3";
+const CACHE_NAME       = "cardapio-pwa-v4";
 const CARDAPIO_CACHE   = "cardapio-data-v1";
 const QUEUE_DB_NAME    = "cardapio-offline";
 const QUEUE_STORE      = "queued_orders";
@@ -172,6 +172,53 @@ self.addEventListener("message", (event) => {
   if (event.data === "QUEUE_STATUS") {
     queueCount().then((count) => broadcast({ type: "QUEUE_STATUS", count }));
   }
+});
+
+// ── Web Push ────────────────────────────────────────────────────────────────
+
+self.addEventListener("push", (event) => {
+  let payload = {
+    title: "Cardápio SaaS",
+    body:  "Você tem uma nova notificação",
+  };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch {
+    if (event.data) payload.body = event.data.text();
+  }
+
+  const opts = {
+    body:  payload.body,
+    icon:  payload.icon  || "/icon.svg",
+    badge: payload.badge || "/icon.svg",
+    tag:   payload.tag   || "default",
+    renotify: true,
+    vibrate: [200, 100, 200],
+    data: {
+      url: payload.url || "/painel/pedidos",
+      ...payload.data,
+    },
+  };
+
+  event.waitUntil(self.registration.showNotification(payload.title, opts));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Se já há aba aberta com o app, foca nela
+      for (const c of clients) {
+        if (c.url.includes(self.location.origin) && "focus" in c) {
+          c.navigate(url);
+          return c.focus();
+        }
+      }
+      // Senão, abre nova
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })
+  );
 });
 
 // ── Fetch handler ────────────────────────────────────────────────────────────
