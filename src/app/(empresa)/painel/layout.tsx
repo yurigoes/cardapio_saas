@@ -84,7 +84,13 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-2"
+          style={{
+            borderColor:    "var(--color-primary, #10b981)",
+            borderTopColor: "transparent",
+          }}
+        />
       </div>
     );
   }
@@ -98,8 +104,14 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
           {empresa?.logo_url ? (
             <img src={empresa.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover" />
           ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20">
-              <ChefHat className="h-4 w-4 text-emerald-400" />
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg"
+              style={{ background: "var(--color-primary-15, rgba(16,185,129,0.12))" }}
+            >
+              <ChefHat
+                className="h-4 w-4"
+                style={{ color: "var(--color-primary, #10b981)" }}
+              />
             </div>
           )}
           <p className="truncate text-sm font-semibold">
@@ -118,10 +130,12 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-2.5 mx-2 mb-0.5 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
-                  active
-                    ? "bg-emerald-500/15 text-emerald-400"
-                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+                  active ? "" : "text-slate-400 hover:bg-white/5 hover:text-white"
                 }`}
+                style={active ? {
+                  background: "var(--color-primary-15, rgba(16,185,129,0.12))",
+                  color:      "var(--color-primary, #10b981)",
+                } : undefined}
               >
                 <Icon className="h-4 w-4 flex-shrink-0" />
                 {item.label}
