@@ -4,6 +4,14 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { query, queryOne } from "@/lib/db/client";
 import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
+import { notificarEvolution, type EvolutionEvento } from "@/lib/notify/evolution";
+
+// Map de status do pedido → ID do evento Evolution (WA_EVENTOS no painel)
+const STATUS_TO_EVENTO: Partial<Record<PedidoStatus, EvolutionEvento>> = {
+  em_preparo: "confirmado",
+  pronto:     "pronto",
+  cancelado:  "cancelado",
+};
 
 const STATUS_SEQUENCE = ["pendente", "em_preparo", "pronto", "entregue", "cancelado"] as const;
 type PedidoStatus = typeof STATUS_SEQUENCE[number];
@@ -81,9 +89,13 @@ export async function PATCH(
   }
 
   try {
-    const pedido = await queryOne<{ id: string; status: string; mesa_id: string | null }>(
-      `SELECT id, status, mesa_id FROM pedidos
-       WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL`,
+    const pedido = await queryOne<{
+      id: string; status: string; mesa_id: string | null;
+      numero: number | null; cliente_telefone: string | null; total: string | null;
+    }>(
+      `SELECT id, status, mesa_id, numero, cliente_telefone, total
+         FROM pedidos
+        WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL`,
       [params.id, empresaId]
     );
     if (!pedido) return notFound("Pedido não encontrado");
@@ -99,6 +111,16 @@ export async function PATCH(
         `UPDATE mesas SET status = 'livre', pedido_ativo_id = NULL WHERE id = $1`,
         [pedido.mesa_id]
       );
+    }
+
+    // WhatsApp ao cliente em transições relevantes (best-effort)
+    const evento = STATUS_TO_EVENTO[body.status];
+    if (evento && pedido.status !== body.status) {
+      notificarEvolution(empresaId, evento, {
+        telefone:     pedido.cliente_telefone,
+        pedidoNumero: pedido.numero,
+        total:        pedido.total != null ? Number(pedido.total) : null,
+      }).catch(e => console.warn("[Pedidos/PATCH] notify:", e));
     }
 
     return ok({ id: params.id, status: body.status });

@@ -6,6 +6,7 @@ import { NextRequest } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { query, queryOne, queryCount } from "@/lib/db/client";
 import { ok, created, forbidden, serverError, badRequest, paginatedOk } from "@/lib/utils/response";
+import { notificarEvolution } from "@/lib/notify/evolution";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -158,6 +159,11 @@ export async function POST(req: NextRequest) {
        RETURNING id, pontos`,
       [empresaId, nome || null, telefone || null, cpf || null, email || null]
     );
+
+    // WhatsApp ao dono (best-effort)
+    notificarEvolution(empresaId, "novo_cliente", {
+      clienteNome: nome || telefone || "(sem nome)",
+    }).catch(e => console.warn("[Clientes/POST] notify:", e));
 
     return created({ ...novo, nome, telefone, cpf, email, encontrado: false });
   } catch (err) {

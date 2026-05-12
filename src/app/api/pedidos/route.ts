@@ -10,6 +10,7 @@ import { auditLog } from "@/lib/security/audit";
 import { checkRateLimitByRequest, API_RATE_LIMIT } from "@/lib/security/rate-limit";
 import { isDuplicateKeyError } from "@/lib/utils/errors";
 import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
+import { notificarEvolution } from "@/lib/notify/evolution";
 import type { PoolClient } from "pg";
 
 // ─────────────────────────────────────────────
@@ -293,6 +294,14 @@ export async function POST(req: NextRequest) {
       recursoId: result.id,
       usuario:   { sub: auth.payload.sub, empresaId },
     });
+
+    // WhatsApp para o dono (best-effort, não bloqueia resposta)
+    if (!result.acumulado) {
+      notificarEvolution(empresaId, "novo_pedido", {
+        pedidoNumero: result.numero,
+        total:        body.itens.reduce((a, i) => a + i.preco_unitario * i.quantidade, 0),
+      }).catch(e => console.warn("[Pedidos/POST] notify:", e));
+    }
 
     return created(result);
   } catch (err) {

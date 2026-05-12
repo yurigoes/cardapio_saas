@@ -13,6 +13,7 @@ import { EMPRESA_OPERACIONAL_SQL } from "@/lib/billing/empresa-acesso";
 import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 import { creditarCashbackPedido, debitarCashbackPedido } from "@/lib/cashback/movimento";
+import { notificarEvolution } from "@/lib/notify/evolution";
 import type { PoolClient } from "pg";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -418,6 +419,15 @@ export async function POST(
         url:   `/painel/pedidos`,
         tag:   "pedido-novo",
       }).catch(e => console.warn("[Push] erro:", e));
+
+      // WhatsApp para o dono via Evolution (best-effort)
+      const totalCalc = body.itens.reduce(
+        (a, i) => a + i.preco_unitario * i.quantidade, 0
+      ) - (body.desconto ?? 0) - (body.cashback_usar ?? 0);
+      notificarEvolution(empresa.id, "novo_pedido", {
+        pedidoNumero: pedido.numero,
+        total:        totalCalc,
+      }).catch(e => console.warn("[Pub/Pedidos] notify novo_pedido:", e));
     }
 
     return ok({
