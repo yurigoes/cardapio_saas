@@ -9,7 +9,6 @@
  *   - order.paid              → pedido confirmado
  *   - order.payment_failed    → falhou
  *   - order.canceled          → cancelado
- *   - charge.paid / refunded  → status de cobrança individual
  *
  * O pedido é localizado via metadata.pedido_id (setado no cobrar()).
  */
@@ -20,11 +19,11 @@ import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
-import { logWebhook } from "@/lib/webhook/log";
+import { withWebhookLog } from "@/lib/webhook/wrapper";
 
 interface PmWebhookPayload {
   id:    string;
-  type:  string; // ex: "order.paid"
+  type:  string;
   data: {
     id:        string;
     status:    string;
@@ -46,29 +45,25 @@ function mapPmStatusToPedido(status: string): string | null {
   switch ((status || "").toLowerCase()) {
     case "paid":     return "confirmado";
     case "canceled": return "cancelado";
-    case "failed":   return null; // mantém status atual
     default:         return null;
   }
 }
 
+const EVENTOS_ACEITOS = ["order.paid", "order.payment_failed", "order.canceled"];
+
 export async function POST(req: NextRequest) {
-  const rawBody = await req.text();
-  let payload: PmWebhookPayload;
+  return withWebhookLog("pagarme", req, async (ctx) => {
+    const payload = ctx.payload as PmWebhookPayload | null;
+    if (!payload) {
+      return { resultado: "falha", status: 400, mensagem: "JSON inválido" };
+    }
 
-  try {
-    payload = JSON.parse(rawBody) as PmWebhookPayload;
-  } catch {
-    return NextResponse.json({ ok: false, error: "JSON inválido" }, { status: 400 });
-  }
+    const evento = payload.type ?? "";
 
-  // Filtra eventos relevantes
-  const eventosAceitos = ["order.paid", "order.payment_failed", "order.canceled"];
-  if (!eventosAceitos.includes(payload.type)) {
-    return NextResponse.json({ ok: true, ignored: true, reason: payload.type });
-  }
+    if (!EVENTOS_ACEITOS.includes(evento)) {
+      return { resultado: "ignorado", evento, mensagem: `evento não relevante: ${evento}` };
+    }
 
-  try {
-    // Busca gateway configurado
     const gateway = await queryOne<DbGateway>(
       `SELECT id, empresa_id, api_key, token, webhook_secret
        FROM gateways_config
@@ -77,50 +72,46 @@ export async function POST(req: NextRequest) {
     );
 
     if (!gateway) {
-      console.warn("[Pagarme/webhook] Nenhum gateway pagarme ativo");
-      return NextResponse.json({ ok: true, ignored: true });
+      return { resultado: "ignorado", evento, mensagem: "nenhum gateway pagarme ativo" };
     }
 
-    const secretKey = gateway.api_key
-      ? decrypt(gateway.api_key)
-      : gateway.token
-        ? decrypt(gateway.token)
-        : null;
+    const secretKey = gateway.api_key ? decrypt(gateway.api_key)
+      : gateway.token ? decrypt(gateway.token) : null;
 
     if (!secretKey) {
-      return NextResponse.json({ ok: false, error: "Secret key não configurada" }, { status: 500 });
+      return { resultado: "falha", evento, empresaId: gateway.empresa_id, mensagem: "Secret key não configurada" };
     }
 
-    // Valida assinatura (se webhook_secret estiver configurado)
     if (gateway.webhook_secret) {
-      const sig    = req.headers.get("x-hub-signature") ?? "";
+      const sig    = ctx.req.headers.get("x-hub-signature") ?? "";
       const secret = decrypt(gateway.webhook_secret);
       const config: GatewayConfig = {
         nome: "", slug: "pagarme", ambiente: "producao",
         configuracoes: {}, api_key: secretKey, webhook_secret: secret,
       };
       const gw = new PagarmeGateway(config);
-      // Re-parse para passar o objeto exato (a assinatura é sobre o body raw, não o JSON)
-      const { valid } = await gw.validarWebhook(JSON.parse(rawBody), sig);
+      const { valid } = await gw.validarWebhook(payload, sig);
       if (!valid) {
-        console.warn("[Pagarme/webhook] Assinatura inválida");
-        return NextResponse.json({ ok: false, error: "Assinatura inválida" }, { status: 401 });
+        return { resultado: "assinatura_invalida", evento, empresaId: gateway.empresa_id };
       }
     }
 
-    // pedido_id vem em data.metadata.pedido_id (que setamos no cobrar)
-    // Fallback: data.code (que também usamos)
     const pedidoId = payload.data?.metadata?.pedido_id ?? payload.data?.code;
     if (!pedidoId) {
-      return NextResponse.json({ ok: true, ignored: true, reason: "sem pedido_id" });
+      return {
+        resultado: "ignorado", evento, empresaId: gateway.empresa_id,
+        recursoId: payload.data?.id, mensagem: "sem pedido_id",
+      };
     }
 
     const novoStatus = mapPmStatusToPedido(payload.data.status);
     if (!novoStatus) {
-      return NextResponse.json({ ok: true, ignored: true, reason: `status: ${payload.data.status}` });
+      return {
+        resultado: "ignorado", evento, empresaId: gateway.empresa_id,
+        recursoId: payload.data.id, pedidoId, mensagem: `status: ${payload.data.status}`,
+      };
     }
 
-    // Atualiza pedido (não rebaixa entregue/cancelado)
     await queryOne(
       `UPDATE pedidos
          SET status = $1, updated_at = NOW()
@@ -130,9 +121,8 @@ export async function POST(req: NextRequest) {
       [novoStatus, pedidoId, gateway.empresa_id]
     );
 
-    // Atualiza tabela pagamentos (se existir)
+    const chargeId = payload.data.charges?.[0]?.id ?? payload.data.id;
     try {
-      const chargeId = payload.data.charges?.[0]?.id ?? payload.data.id;
       await queryOne(
         `UPDATE pagamentos
            SET status = $1, updated_at = NOW()
@@ -141,7 +131,6 @@ export async function POST(req: NextRequest) {
       );
     } catch { /* tabela pode não existir */ }
 
-    // Integração caixa: venda online quando confirmada
     if (novoStatus === "confirmado") {
       try {
         const pedidoData = await queryOne<{ total: string; forma_pagamento: string | null }>(
@@ -166,28 +155,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.info(`[Pagarme/webhook] Pedido ${pedidoId} → ${novoStatus} (${payload.type})`);
-    logWebhook({
-      gateway:    "pagarme",
-      empresaId:  gateway.empresa_id,
-      evento:     payload.type,
-      recursoId:  String(payload.data?.charges?.[0]?.id ?? payload.data?.id ?? ""),
+    console.info(`[Pagarme/webhook] Pedido ${pedidoId} → ${novoStatus} (${evento})`);
+    return {
+      resultado: "processado",
+      evento,
+      empresaId: gateway.empresa_id,
+      recursoId: chargeId,
       pedidoId,
-      resultado:  "processado",
-      httpStatus: 200,
-      mensagem:   `${payload.data.status} → ${novoStatus}`,
-      payload,
-      headers:    Object.fromEntries(req.headers),
-      ipOrigem:   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
-    });
-    return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });
-  } catch (err) {
-    console.error("[Pagarme/webhook]", err);
-    return NextResponse.json({ ok: false }, { status: 500 });
-  }
+      mensagem:  `${payload.data.status} → ${novoStatus}`,
+      body:      { ok: true, pedido_id: pedidoId, status: novoStatus },
+    };
+  });
 }
 
-// Pagar.me faz GET para verificar disponibilidade
 export async function GET() {
   return NextResponse.json({ ok: true, gateway: "pagarme" });
 }

@@ -10,7 +10,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Webhook, RefreshCw, Filter, X, Calendar,
-  CheckCircle2, XCircle, AlertCircle, Clock, Building2,
+  CheckCircle2, XCircle, AlertCircle, Clock, Building2, Repeat,
 } from "lucide-react";
 
 interface WebhookEntry {
@@ -77,6 +77,27 @@ export default function AdminWebhooksPage() {
 
   function limparFiltros() {
     setGateway(""); setResultado(""); setFrom(""); setTo("");
+  }
+
+  const REPLAY_SUPORTADOS = new Set(["mercadopago", "pagarme", "asaas", "stone"]);
+  const [replayingId, setReplayingId] = useState<string | null>(null);
+  async function reenviar(id: string) {
+    if (!confirm("Reenviar este webhook?\n\nO processamento gerará um novo registro no log.")) return;
+    setReplayingId(id);
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`/api/admin/webhook-log/${id}/replay`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await res.json();
+      if (d.success) {
+        alert(`Reenviado. Status: ${d.data.replay_status}`);
+        fetchLog(page);
+      } else {
+        alert(d.error?.message ?? "Falha no reenvio");
+      }
+    } finally { setReplayingId(null); }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -193,7 +214,7 @@ export default function AdminWebhooksPage() {
               const cfg = RESULTADO_CONFIG[r.resultado] ?? RESULTADO_CONFIG.recebido;
               const Icon = cfg.icon;
               return (
-                <div key={r.id} className="flex items-start gap-3 px-5 py-3 hover:bg-white/5 transition">
+                <div key={r.id} className="flex items-start gap-3 px-5 py-3 hover:bg-white/5 transition group">
                   <Icon className={`h-4 w-4 flex-shrink-0 mt-0.5 ${cfg.text}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -222,6 +243,17 @@ export default function AdminWebhooksPage() {
                       {r.recurso_id && ` · ${r.recurso_id.slice(0, 16)}${r.recurso_id.length > 16 ? "…" : ""}`}
                     </p>
                   </div>
+                  {REPLAY_SUPORTADOS.has(r.gateway_slug) && (
+                    <button
+                      onClick={() => reenviar(r.id)}
+                      disabled={replayingId === r.id}
+                      title="Reenviar este webhook"
+                      className="opacity-0 group-hover:opacity-100 flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 hover:text-white transition disabled:opacity-30"
+                    >
+                      <Repeat className={`h-3 w-3 ${replayingId === r.id ? "animate-spin" : ""}`} />
+                      Reenviar
+                    </button>
+                  )}
                 </div>
               );
             })}

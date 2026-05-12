@@ -21,17 +21,16 @@ import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
-import { logWebhook } from "@/lib/webhook/log";
+import { withWebhookLog } from "@/lib/webhook/wrapper";
 
 interface StoneWebhookPayload {
-  event:     string;                          // ex: "pix.payment_link.paid"
+  event:     string;
   resource?: {
     id:        string;
     status:    string;
-    reference: string | null;                 // pedido_id
+    reference: string | null;
     amount:    number;
   };
-  // Stone às vezes serializa como { type, data } — aceitar ambos:
   type?:     string;
   data?:     {
     id:        string;
@@ -59,23 +58,19 @@ function mapStoneEventToPedidoStatus(event: string): string | null {
 }
 
 export async function POST(req: NextRequest) {
-  const rawBody = await req.text();
-  let payload: StoneWebhookPayload;
-  try {
-    payload = JSON.parse(rawBody) as StoneWebhookPayload;
-  } catch {
-    return NextResponse.json({ ok: false, error: "JSON inválido" }, { status: 400 });
-  }
+  return withWebhookLog("stone", req, async (ctx) => {
+    const payload = ctx.payload as StoneWebhookPayload | null;
+    if (!payload) {
+      return { resultado: "falha", status: 400, mensagem: "JSON inválido" };
+    }
 
-  // Normaliza envelope (Stone pode usar event/resource OU type/data)
-  const event    = payload.event ?? payload.type ?? "";
-  const resource = payload.resource ?? payload.data;
+    const evento   = payload.event ?? payload.type ?? "";
+    const resource = payload.resource ?? payload.data;
 
-  if (!resource?.id) {
-    return NextResponse.json({ ok: true, ignored: true, reason: "sem resource.id" });
-  }
+    if (!resource?.id) {
+      return { resultado: "ignorado", evento, mensagem: "sem resource.id" };
+    }
 
-  try {
     const gateway = await queryOne<DbGateway>(
       `SELECT id, empresa_id, client_id, client_secret, webhook_secret, ambiente
        FROM gateways_config
@@ -84,13 +79,11 @@ export async function POST(req: NextRequest) {
     );
 
     if (!gateway) {
-      console.warn("[Stone/webhook] Nenhum gateway stone ativo");
-      return NextResponse.json({ ok: true, ignored: true });
+      return { resultado: "ignorado", evento, recursoId: resource.id, mensagem: "nenhum gateway stone ativo" };
     }
 
-    // Validação HMAC-SHA256 do body raw (se webhook_secret configurado)
     if (gateway.webhook_secret) {
-      const sig    = req.headers.get("x-hub-signature") ?? req.headers.get("x-stone-signature") ?? "";
+      const sig    = ctx.req.headers.get("x-hub-signature") ?? ctx.req.headers.get("x-stone-signature") ?? "";
       const secret = decrypt(gateway.webhook_secret);
       const config: GatewayConfig = {
         nome: "", slug: "stone",
@@ -101,20 +94,22 @@ export async function POST(req: NextRequest) {
         webhook_secret: secret,
       };
       const gw = new StoneGateway(config);
-      const { valid } = await gw.validarWebhook(JSON.parse(rawBody), sig);
+      const { valid } = await gw.validarWebhook(payload, sig);
       if (!valid) {
-        console.warn("[Stone/webhook] Assinatura inválida");
-        return NextResponse.json({ ok: false, error: "Assinatura inválida" }, { status: 401 });
+        return { resultado: "assinatura_invalida", evento, empresaId: gateway.empresa_id, recursoId: resource.id };
       }
     }
 
-    const pedidoId = resource.reference;
+    const pedidoId = resource.reference ?? undefined;
     if (!pedidoId) {
-      return NextResponse.json({ ok: true, ignored: true, reason: "sem reference" });
+      return {
+        resultado: "ignorado", evento, empresaId: gateway.empresa_id,
+        recursoId: resource.id, mensagem: "sem reference",
+      };
     }
 
     // Refunds: só atualizam pagamentos
-    if (event.toLowerCase().includes("refund")) {
+    if (evento.toLowerCase().includes("refund")) {
       try {
         await queryOne(
           `UPDATE pagamentos
@@ -123,12 +118,19 @@ export async function POST(req: NextRequest) {
           [resource.id]
         );
       } catch { /* tabela pode não existir */ }
-      return NextResponse.json({ ok: true, refunded: true });
+      return {
+        resultado: "processado", evento, empresaId: gateway.empresa_id,
+        recursoId: resource.id, pedidoId, mensagem: "estornado",
+        body: { ok: true, refunded: true },
+      };
     }
 
-    const novoStatus = mapStoneEventToPedidoStatus(event);
+    const novoStatus = mapStoneEventToPedidoStatus(evento);
     if (!novoStatus) {
-      return NextResponse.json({ ok: true, ignored: true, reason: event });
+      return {
+        resultado: "ignorado", evento, empresaId: gateway.empresa_id,
+        recursoId: resource.id, pedidoId, mensagem: `evento não mapeado: ${evento}`,
+      };
     }
 
     await queryOne(
@@ -173,25 +175,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.info(`[Stone/webhook] Pedido ${pedidoId} → ${novoStatus} (${event})`);
-    logWebhook({
-      gateway:    "stone",
-      empresaId:  gateway.empresa_id,
-      evento:     event,
-      recursoId:  resource.id,
+    console.info(`[Stone/webhook] Pedido ${pedidoId} → ${novoStatus} (${evento})`);
+    return {
+      resultado: "processado",
+      evento,
+      empresaId: gateway.empresa_id,
+      recursoId: resource.id,
       pedidoId,
-      resultado:  "processado",
-      httpStatus: 200,
-      mensagem:   `${resource.status} → ${novoStatus}`,
-      payload,
-      headers:    Object.fromEntries(req.headers),
-      ipOrigem:   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
-    });
-    return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });
-  } catch (err) {
-    console.error("[Stone/webhook]", err);
-    return NextResponse.json({ ok: false }, { status: 500 });
-  }
+      mensagem:  `${resource.status} → ${novoStatus}`,
+      body:      { ok: true, pedido_id: pedidoId, status: novoStatus },
+    };
+  });
 }
 
 export async function GET() {

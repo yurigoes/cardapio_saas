@@ -15,7 +15,7 @@ import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
-import { logWebhook } from "@/lib/webhook/log";
+import { withWebhookLog } from "@/lib/webhook/wrapper";
 
 const MP_API = "https://api.mercadopago.com";
 
@@ -41,38 +41,33 @@ interface DbGateway {
   empresa_id: string;
 }
 
-// Mapeia status MP → status do pedido interno
 function mapMpStatusToPedido(mpStatus: string): string | null {
   switch (mpStatus) {
     case "approved":  return "confirmado";
-    case "rejected":  return null;   // não muda o pedido
+    case "rejected":  return null;
     case "cancelled": return "cancelado";
     default:          return null;
   }
 }
 
 export async function POST(req: NextRequest) {
-  let payload: MpWebhookPayload;
+  return withWebhookLog("mercadopago", req, async (ctx) => {
+    const payload = ctx.payload as MpWebhookPayload | null;
+    if (!payload) {
+      return { resultado: "falha", status: 400, mensagem: "JSON inválido" };
+    }
 
-  try {
-    payload = await req.json() as MpWebhookPayload;
-  } catch {
-    return NextResponse.json({ ok: false, error: "JSON inválido" }, { status: 400 });
-  }
+    const evento = payload.action ?? payload.type ?? "";
 
-  // Só processa eventos de pagamento
-  if (payload.type !== "payment" && payload.action !== "payment.updated") {
-    return NextResponse.json({ ok: true, ignored: true });
-  }
+    if (payload.type !== "payment" && payload.action !== "payment.updated") {
+      return { resultado: "ignorado", evento, mensagem: "evento não relevante" };
+    }
 
-  const mpPaymentId = payload.data?.id;
-  if (!mpPaymentId) {
-    return NextResponse.json({ ok: false, error: "data.id ausente" }, { status: 400 });
-  }
+    const mpPaymentId = payload.data?.id;
+    if (!mpPaymentId) {
+      return { resultado: "falha", status: 400, evento, mensagem: "data.id ausente" };
+    }
 
-  try {
-    // Busca um gateway Mercado Pago ativo para poder consultar o pagamento
-    // (a notificação não identifica a empresa — usamos external_reference depois)
     const gateways = await queryOne<DbGateway>(
       `SELECT id, empresa_id, token, api_key, webhook_secret
        FROM gateways_config
@@ -81,23 +76,18 @@ export async function POST(req: NextRequest) {
     );
 
     if (!gateways) {
-      console.warn("[MP/webhook] Nenhum gateway mercadopago ativo encontrado");
-      return NextResponse.json({ ok: true, ignored: true });
+      return { resultado: "ignorado", evento, mensagem: "nenhum gateway mercadopago ativo" };
     }
 
-    const accessToken = gateways.token
-      ? decrypt(gateways.token)
-      : gateways.api_key
-        ? decrypt(gateways.api_key)
-        : null;
+    const accessToken = gateways.token ? decrypt(gateways.token)
+      : gateways.api_key ? decrypt(gateways.api_key) : null;
 
     if (!accessToken) {
-      return NextResponse.json({ ok: false, error: "Token não configurado" }, { status: 500 });
+      return { resultado: "falha", evento, empresaId: gateways.empresa_id, mensagem: "Token não configurado" };
     }
 
-    // Valida assinatura (opcional — se webhook_secret configurado)
-    const signature = req.headers.get("x-signature") ?? "";
     if (gateways.webhook_secret) {
+      const signature = ctx.req.headers.get("x-signature") ?? "";
       const secret = decrypt(gateways.webhook_secret);
       const tempConfig = {
         nome: "", slug: "mercadopago", ambiente: "producao",
@@ -106,35 +96,39 @@ export async function POST(req: NextRequest) {
       const gw = new MercadoPagoGateway(tempConfig);
       const { valid } = await gw.validarWebhook(payload, signature);
       if (!valid) {
-        console.warn("[MP/webhook] Assinatura inválida");
-        return NextResponse.json({ ok: false, error: "Assinatura inválida" }, { status: 401 });
+        return { resultado: "assinatura_invalida", evento, empresaId: gateways.empresa_id };
       }
     }
 
-    // Consulta detalhes do pagamento na API do MP
     const mpRes = await fetch(`${MP_API}/v1/payments/${mpPaymentId}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (!mpRes.ok) {
-      console.error("[MP/webhook] Erro ao consultar pagamento:", mpRes.status);
-      return NextResponse.json({ ok: false }, { status: 500 });
+      return {
+        resultado: "falha", evento, empresaId: gateways.empresa_id, recursoId: String(mpPaymentId),
+        mensagem: `consulta ao MP falhou: ${mpRes.status}`,
+      };
     }
 
     const payment = await mpRes.json() as MpPaymentDetail;
+    const pedidoId = payment.external_reference ?? undefined;
 
-    // external_reference = pedido_id (UUID)
-    const pedidoId = payment.external_reference;
     if (!pedidoId) {
-      return NextResponse.json({ ok: true, ignored: true, reason: "sem external_reference" });
+      return {
+        resultado: "ignorado", evento, empresaId: gateways.empresa_id,
+        recursoId: String(payment.id), mensagem: "sem external_reference",
+      };
     }
 
     const novoStatus = mapMpStatusToPedido(payment.status);
     if (!novoStatus) {
-      return NextResponse.json({ ok: true, ignored: true, reason: `status mp: ${payment.status}` });
+      return {
+        resultado: "ignorado", evento, empresaId: gateways.empresa_id,
+        recursoId: String(payment.id), pedidoId, mensagem: `status mp: ${payment.status}`,
+      };
     }
 
-    // Atualiza pedido
     await queryOne(
       `UPDATE pedidos
          SET status = $1, updated_at = NOW()
@@ -144,7 +138,6 @@ export async function POST(req: NextRequest) {
       [novoStatus, pedidoId, gateways.empresa_id]
     );
 
-    // Atualiza registro de pagamento se existir
     try {
       await queryOne(
         `UPDATE pagamentos
@@ -154,14 +147,12 @@ export async function POST(req: NextRequest) {
       );
     } catch { /* tabela pode não existir */ }
 
-    // Integração caixa: registra venda quando pagamento online é confirmado
     if (novoStatus === "confirmado") {
       try {
         await registrarVendaPedido(gateways.empresa_id, pedidoId, payment.transaction_amount, "pix");
       } catch (e) {
         console.error("[MP/webhook] CaixaIntegration:", e);
       }
-      // Push: pagamento confirmado é momento crítico
       enviarPushParaUsuariosDaEmpresa(gateways.empresa_id, {
         title: `💰 Pagamento confirmado`,
         body:  `R$ ${payment.transaction_amount.toFixed(2).replace(".", ",")} via Mercado Pago`,
@@ -171,27 +162,18 @@ export async function POST(req: NextRequest) {
     }
 
     console.info(`[MP/webhook] Pedido ${pedidoId} → ${novoStatus} (MP status: ${payment.status})`);
-    logWebhook({
-      gateway:    "mercadopago",
-      empresaId:  gateways.empresa_id,
-      evento:     payload.action ?? payload.type,
-      recursoId:  String(payment.id),
+    return {
+      resultado: "processado",
+      evento,
+      empresaId: gateways.empresa_id,
+      recursoId: String(payment.id),
       pedidoId,
-      resultado:  "processado",
-      httpStatus: 200,
-      mensagem:   `${payment.status} → ${novoStatus}`,
-      payload,
-      headers:    Object.fromEntries(req.headers),
-      ipOrigem:   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
-    });
-    return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });
-  } catch (err) {
-    console.error("[MP/webhook] Erro:", err);
-    return NextResponse.json({ ok: false }, { status: 500 });
-  }
+      mensagem:  `${payment.status} → ${novoStatus}`,
+      body:      { ok: true, pedido_id: pedidoId, status: novoStatus },
+    };
+  });
 }
 
-// MP faz GET no endpoint para verificar disponibilidade
 export async function GET() {
   return NextResponse.json({ ok: true, gateway: "mercadopago" });
 }

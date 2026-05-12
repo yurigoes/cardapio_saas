@@ -18,7 +18,7 @@ import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
-import { logWebhook } from "@/lib/webhook/log";
+import { withWebhookLog } from "@/lib/webhook/wrapper";
 
 interface AsaasWebhookPayload {
   event:  string;
@@ -46,23 +46,23 @@ function mapEventToPedidoStatus(event: string): string | null {
     case "PAYMENT_RECEIVED_IN_CASH": return "confirmado";
     case "PAYMENT_DELETED":
     case "PAYMENT_OVERDUE":          return "cancelado";
-    default:                          return null;
+    default:                         return null;
   }
 }
 
 export async function POST(req: NextRequest) {
-  let payload: AsaasWebhookPayload;
-  try {
-    payload = await req.json() as AsaasWebhookPayload;
-  } catch {
-    return NextResponse.json({ ok: false, error: "JSON inválido" }, { status: 400 });
-  }
+  return withWebhookLog("asaas", req, async (ctx) => {
+    const payload = ctx.payload as AsaasWebhookPayload | null;
+    if (!payload) {
+      return { resultado: "falha", status: 400, mensagem: "JSON inválido" };
+    }
 
-  if (!payload.payment?.id) {
-    return NextResponse.json({ ok: false, error: "payment.id ausente" }, { status: 400 });
-  }
+    const evento = payload.event ?? "";
 
-  try {
+    if (!payload.payment?.id) {
+      return { resultado: "falha", status: 400, evento, mensagem: "payment.id ausente" };
+    }
+
     const gateway = await queryOne<DbGateway>(
       `SELECT id, empresa_id, api_key, token, webhook_secret, ambiente
        FROM gateways_config
@@ -71,13 +71,11 @@ export async function POST(req: NextRequest) {
     );
 
     if (!gateway) {
-      console.warn("[Asaas/webhook] Nenhum gateway asaas ativo");
-      return NextResponse.json({ ok: true, ignored: true });
+      return { resultado: "ignorado", evento, mensagem: "nenhum gateway asaas ativo" };
     }
 
-    // Validação do token compartilhado (asaas-access-token header)
     if (gateway.webhook_secret) {
-      const sig    = req.headers.get("asaas-access-token") ?? "";
+      const sig    = ctx.req.headers.get("asaas-access-token") ?? "";
       const secret = decrypt(gateway.webhook_secret);
       const accessToken = gateway.api_key ? decrypt(gateway.api_key)
         : gateway.token ? decrypt(gateway.token) : "";
@@ -89,21 +87,20 @@ export async function POST(req: NextRequest) {
       const gw = new AsaasGateway(config);
       const { valid } = await gw.validarWebhook(payload, sig);
       if (!valid) {
-        console.warn("[Asaas/webhook] Token inválido");
-        return NextResponse.json({ ok: false, error: "Token inválido" }, { status: 401 });
+        return { resultado: "assinatura_invalida", evento, empresaId: gateway.empresa_id };
       }
     }
 
-    // pedido_id vem em payment.externalReference (setamos no cobrar)
-    const pedidoId = payload.payment.externalReference;
+    const pedidoId = payload.payment.externalReference ?? undefined;
     if (!pedidoId) {
-      return NextResponse.json({ ok: true, ignored: true, reason: "sem externalReference" });
+      return {
+        resultado: "ignorado", evento, empresaId: gateway.empresa_id,
+        recursoId: payload.payment.id, mensagem: "sem externalReference",
+      };
     }
 
-    const novoStatus = mapEventToPedidoStatus(payload.event);
-
-    // Refunds só atualizam pagamentos, não voltam o pedido pra cancelado se já entregue
-    if (payload.event === "PAYMENT_REFUNDED") {
+    // Refunds só atualizam pagamentos
+    if (evento === "PAYMENT_REFUNDED") {
       try {
         await queryOne(
           `UPDATE pagamentos
@@ -112,11 +109,19 @@ export async function POST(req: NextRequest) {
           [payload.payment.id]
         );
       } catch { /* tabela pode não existir */ }
-      return NextResponse.json({ ok: true, refunded: true });
+      return {
+        resultado: "processado", evento, empresaId: gateway.empresa_id,
+        recursoId: payload.payment.id, pedidoId, mensagem: "estornado",
+        body: { ok: true, refunded: true },
+      };
     }
 
+    const novoStatus = mapEventToPedidoStatus(evento);
     if (!novoStatus) {
-      return NextResponse.json({ ok: true, ignored: true, reason: payload.event });
+      return {
+        resultado: "ignorado", evento, empresaId: gateway.empresa_id,
+        recursoId: payload.payment.id, pedidoId, mensagem: `evento não mapeado: ${evento}`,
+      };
     }
 
     await queryOne(
@@ -161,25 +166,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.info(`[Asaas/webhook] Pedido ${pedidoId} → ${novoStatus} (${payload.event})`);
-    logWebhook({
-      gateway:    "asaas",
-      empresaId:  gateway.empresa_id,
-      evento:     payload.event,
-      recursoId:  payload.payment.id,
+    console.info(`[Asaas/webhook] Pedido ${pedidoId} → ${novoStatus} (${evento})`);
+    return {
+      resultado: "processado",
+      evento,
+      empresaId: gateway.empresa_id,
+      recursoId: payload.payment.id,
       pedidoId,
-      resultado:  "processado",
-      httpStatus: 200,
-      mensagem:   `${payload.payment.status} → ${novoStatus}`,
-      payload,
-      headers:    Object.fromEntries(req.headers),
-      ipOrigem:   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
-    });
-    return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });
-  } catch (err) {
-    console.error("[Asaas/webhook]", err);
-    return NextResponse.json({ ok: false }, { status: 500 });
-  }
+      mensagem:  `${payload.payment.status} → ${novoStatus}`,
+      body:      { ok: true, pedido_id: pedidoId, status: novoStatus },
+    };
+  });
 }
 
 export async function GET() {
