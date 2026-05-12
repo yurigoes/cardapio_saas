@@ -19,6 +19,7 @@ import {
   AlertTriangle, ChevronRight, Eye, ChefHat, Tv2,
 } from "lucide-react";
 import { TrialBanner } from "@/components/painel/TrialBanner";
+import { OnboardingBanner } from "@/components/painel/OnboardingBanner";
 
 interface Stats {
   pedidos_hoje:      number;
@@ -141,6 +142,9 @@ function PainelDashboard() {
     <div className="space-y-5 pb-12">
       {/* Trial */}
       <TrialBanner />
+
+      {/* Onboarding */}
+      <OnboardingBanner />
 
       {/* Header */}
       <div>
