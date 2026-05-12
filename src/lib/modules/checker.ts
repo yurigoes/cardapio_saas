@@ -1,7 +1,14 @@
 import { queryOne } from "@/lib/db/client";
 import { redis } from "@/lib/db/redis";
-import { ModuloId } from "./registry";
+import { ModuloId, MODULOS_REGISTRY } from "./registry";
 import { ModuleDisabledError } from "@/lib/utils/errors";
+
+/**
+ * Durante trial a empresa tem acesso a TODOS os módulos do registry
+ * (para experimentar o produto inteiro). Após conversão em 'ativo',
+ * passa a valer apenas o que o plano pago liberou em modulos_ativos.
+ */
+const TODOS_MODULOS_TRIAL: ModuloId[] = Object.keys(MODULOS_REGISTRY) as ModuloId[];
 
 const CACHE_TTL = 300; // 5 minutos
 
@@ -37,7 +44,8 @@ async function getModulosAtivos(empresaId: string): Promise<ModuloId[]> {
     return [];
   }
 
-  const modulos = empresa.modulos_ativos ?? [];
+  // Trial = acesso completo; assinante pagante = o que está em modulos_ativos
+  const modulos = trialAtivo ? TODOS_MODULOS_TRIAL : (empresa.modulos_ativos ?? []);
   await redis.set(cacheKey, JSON.stringify(modulos), "EX", CACHE_TTL);
 
   return modulos;

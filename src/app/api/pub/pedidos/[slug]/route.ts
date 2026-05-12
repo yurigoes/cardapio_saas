@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { queryOne, transaction } from "@/lib/db/client";
 import { ok, notFound, badRequest, serverError } from "@/lib/utils/response";
+import { EMPRESA_OPERACIONAL_SQL } from "@/lib/billing/empresa-acesso";
 import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 import { creditarCashbackPedido, debitarCashbackPedido } from "@/lib/cashback/movimento";
@@ -116,7 +117,7 @@ export async function POST(
               COALESCE(fidelidade_ativo, false)   AS fidelidade_ativo,
               COALESCE(caixa_obrigatorio, false)  AS caixa_obrigatorio
        FROM empresas
-       WHERE slug = $1 AND deleted_at IS NULL AND status = 'ativo'`,
+       WHERE slug = $1 AND deleted_at IS NULL AND ${EMPRESA_OPERACIONAL_SQL}`,
       [params.slug]
     );
     if (!empresa) return notFound("Empresa não encontrada");

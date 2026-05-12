@@ -13,6 +13,7 @@ import { z } from "zod";
 import { queryOne } from "@/lib/db/client";
 import { getGateway } from "@/lib/gateways/registry";
 import { ok, notFound, badRequest, serverError } from "@/lib/utils/response";
+import { EMPRESA_OPERACIONAL_SQL } from "@/lib/billing/empresa-acesso";
 import type { GatewaySlug } from "@/lib/gateways/types";
 
 // ── GET — poll de status ────────────────────────────────────────────────────
@@ -28,7 +29,7 @@ export async function GET(
 
   try {
     const empresa = await queryOne<{ id: string }>(
-      `SELECT id FROM empresas WHERE slug = $1 AND deleted_at IS NULL AND status = 'ativo'`,
+      `SELECT id FROM empresas WHERE slug = $1 AND deleted_at IS NULL AND ${EMPRESA_OPERACIONAL_SQL}`,
       [params.slug]
     );
     if (!empresa) return notFound("Empresa não encontrada");
@@ -76,7 +77,7 @@ export async function POST(
   try {
     // Empresa
     const empresa = await queryOne<{ id: string }>(
-      `SELECT id FROM empresas WHERE slug = $1 AND deleted_at IS NULL AND status = 'ativo'`,
+      `SELECT id FROM empresas WHERE slug = $1 AND deleted_at IS NULL AND ${EMPRESA_OPERACIONAL_SQL}`,
       [params.slug]
     );
     if (!empresa) return notFound("Empresa não encontrada");

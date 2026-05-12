@@ -8,6 +8,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { queryOne } from "@/lib/db/client";
+import { EMPRESA_OPERACIONAL_SQL } from "@/lib/billing/empresa-acesso";
 
 interface EmpresaPwa {
   nome_fantasia:  string;
@@ -23,7 +24,7 @@ export async function GET(
   const empresa = await queryOne<EmpresaPwa>(
     `SELECT nome_fantasia, cor_primaria, cor_secundaria, logo_url
      FROM empresas
-     WHERE slug = $1 AND deleted_at IS NULL AND status = 'ativo'`,
+     WHERE slug = $1 AND deleted_at IS NULL AND ${EMPRESA_OPERACIONAL_SQL}`,
     [params.slug]
   );
 

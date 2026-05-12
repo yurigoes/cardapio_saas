@@ -127,7 +127,10 @@ export async function POST(req: NextRequest) {
       await assertModuloAtivo(empresaId, modulo as never);
     }
   } catch {
-    return forbidden("Módulo necessário não está ativo");
+    return forbidden(
+      `Módulo "${body.tipo}" não está ativo para esta empresa. ` +
+      `Acesse /admin/empresas para liberar o módulo, ou aguarde a ativação do trial.`
+    );
   }
 
   try {

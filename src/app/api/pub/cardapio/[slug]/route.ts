@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { query, queryOne } from "@/lib/db/client";
 import { ok, notFound, serverError } from "@/lib/utils/response";
+import { EMPRESA_OPERACIONAL_SQL } from "@/lib/billing/empresa-acesso";
 
 export async function GET(
   _req: NextRequest,
@@ -21,7 +22,7 @@ export async function GET(
               horario_abertura::text, horario_fechamento::text,
               COALESCE(caixa_obrigatorio, false) AS caixa_obrigatorio
        FROM empresas
-       WHERE slug = $1 AND deleted_at IS NULL AND status = 'ativo'`,
+       WHERE slug = $1 AND deleted_at IS NULL AND ${EMPRESA_OPERACIONAL_SQL}`,
       [params.slug]
     );
 

@@ -10,6 +10,7 @@
 import { NextRequest } from "next/server";
 import { queryOne } from "@/lib/db/client";
 import { ok, badRequest, notFound, serverError } from "@/lib/utils/response";
+import { EMPRESA_OPERACIONAL_SQL } from "@/lib/billing/empresa-acesso";
 
 interface CupomDb {
   id:                  string;
@@ -48,7 +49,7 @@ export async function GET(
 
   try {
     const empresa = await queryOne<{ id: string }>(
-      `SELECT id FROM empresas WHERE slug = $1 AND deleted_at IS NULL AND status = 'ativo'`,
+      `SELECT id FROM empresas WHERE slug = $1 AND deleted_at IS NULL AND ${EMPRESA_OPERACIONAL_SQL}`,
       [params.slug]
     );
     if (!empresa) return notFound("Empresa não encontrada");
