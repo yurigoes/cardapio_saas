@@ -14,7 +14,9 @@ function getRedis(): Redis {
       maxRetriesPerRequest: isBuild ? 0 : 3,
       lazyConnect:          true,
       enableReadyCheck:     !isBuild,
-      enableOfflineQueue:   false,
+      // true = enfileira comandos durante reconexão (não derruba o request)
+      // Redis aqui é só cache + rate-limit, perda temporária é aceitável
+      enableOfflineQueue:   !isBuild,
       retryStrategy(times) {
         if (isBuild)    return null;  // não tenta reconectar durante build
         if (times > 5)  return null;  // desiste após 5 tentativas

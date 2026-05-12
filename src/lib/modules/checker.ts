@@ -21,9 +21,14 @@ interface EmpresaModulos {
 async function getModulosAtivos(empresaId: string): Promise<ModuloId[]> {
   const cacheKey = `empresa:${empresaId}:modulos`;
 
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    return JSON.parse(cached) as ModuloId[];
+  // Cache é otimização — falha de Redis não pode quebrar o app inteiro
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached) as ModuloId[];
+    }
+  } catch (err) {
+    console.warn("[ModuleChecker] Redis indisponível, indo direto ao DB:", (err as Error).message);
   }
 
   const empresa = await queryOne<EmpresaModulos>(
@@ -46,7 +51,11 @@ async function getModulosAtivos(empresaId: string): Promise<ModuloId[]> {
 
   // Trial = acesso completo; assinante pagante = o que está em modulos_ativos
   const modulos = trialAtivo ? TODOS_MODULOS_TRIAL : (empresa.modulos_ativos ?? []);
-  await redis.set(cacheKey, JSON.stringify(modulos), "EX", CACHE_TTL);
+
+  // Best-effort: cacheia mas não quebra se Redis falhar
+  try {
+    await redis.set(cacheKey, JSON.stringify(modulos), "EX", CACHE_TTL);
+  } catch { /* ignora */ }
 
   return modulos;
 }

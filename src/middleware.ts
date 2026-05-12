@@ -72,16 +72,23 @@ export async function middleware(req: NextRequest) {
   response.headers.set("Permissions-Policy",         "camera=(), microphone=(), geolocation=()");
   response.headers.set("Strict-Transport-Security",  "max-age=31536000; includeSubDomains; preload");
 
-  // Content-Security-Policy básico (ajuste conforme necessário)
+  // Content-Security-Policy
+  // Permite MinIO local (http://127.0.0.1:9010, http://minio:*) para imagens/vídeos,
+  // gateways de pagamento, Mercado Pago, Stripe, Evolution API e WebSockets.
+  // Mantém sincronizado com next.config.js para evitar divergências.
   response.headers.set(
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",  // Next.js requer unsafe-inline em dev
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sdk.mercadopago.com https://js.stripe.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "img-src 'self' data: https:",
+      "img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:* http://minio:*",
+      "media-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:* http://minio:*",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "connect-src 'self' https:",
+      "connect-src 'self' wss: ws: https: http://127.0.0.1:* http://localhost:* http://evolution:* http://minio:*",
+      "frame-src 'self' https://www.mercadopago.com.br https://www.mercadolibre.com https://js.stripe.com",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
       "frame-ancestors 'none'",
     ].join("; ")
   );
