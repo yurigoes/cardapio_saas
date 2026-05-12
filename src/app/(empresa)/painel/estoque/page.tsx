@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   Package, AlertTriangle, CheckCircle, MinusCircle, Edit3,
-  Loader2, X, History, ArrowUpCircle, ArrowDownCircle, Settings,
+  Loader2, X, History, ArrowUpCircle, ArrowDownCircle, Settings, Download,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -111,6 +111,36 @@ export default function EstoquePage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading]   = useState(true);
   const [filtro, setFiltro]     = useState<Filtro>("todos");
+
+  // Dropdown de exportação
+  const [exportOpen, setExportOpen] = useState(false);
+
+  async function exportarCSV(tipo: "inventario" | "movimentos") {
+    setExportOpen(false);
+    try {
+      const sp = new URLSearchParams({ tipo });
+      if (tipo === "movimentos") {
+        // Últimos 30 dias por padrão
+        const to   = new Date().toISOString().slice(0, 10);
+        const fromD = new Date(); fromD.setDate(fromD.getDate() - 29);
+        sp.set("from", fromD.toISOString().slice(0, 10));
+        sp.set("to",   to);
+      }
+      const res = await fetch(`/api/painel/estoque/csv?${sp}`, { headers: authHeader() });
+      if (!res.ok) { setToast({ type: "err", msg: "Erro ao gerar CSV" }); return; }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = tipo === "inventario" ? "inventario.csv" : "estoque_movimentos.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      setToast({ type: "err", msg: "Erro ao baixar CSV" });
+    }
+  }
 
   // Modal de movimento
   const [movProd, setMovProd]     = useState<Produto | null>(null);
@@ -250,8 +280,47 @@ export default function EstoquePage() {
             Clique nos valores de estoque para editar inline
           </p>
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/15">
-          <Package className="h-5 w-5 text-brand" />
+        <div className="flex items-center gap-2">
+          {/* Dropdown export CSV */}
+          <div className="relative">
+            <button
+              onClick={() => setExportOpen(o => !o)}
+              className="flex items-center gap-2 rounded-xl bg-brand px-3 py-2 text-xs font-bold text-white hover:brightness-110 transition"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exportar CSV
+            </button>
+            {exportOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setExportOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-40 w-56 rounded-xl border border-white/10 bg-slate-900 shadow-2xl overflow-hidden">
+                  <button
+                    onClick={() => exportarCSV("inventario")}
+                    className="flex w-full items-start gap-3 px-3 py-3 text-left hover:bg-white/5 transition"
+                  >
+                    <Package className="h-4 w-4 mt-0.5 text-brand" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">Inventário atual</p>
+                      <p className="text-[11px] text-slate-400">Snapshot dos produtos com estoque</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => exportarCSV("movimentos")}
+                    className="flex w-full items-start gap-3 px-3 py-3 text-left hover:bg-white/5 transition border-t border-white/5"
+                  >
+                    <History className="h-4 w-4 mt-0.5 text-brand" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">Movimentos (30 dias)</p>
+                      <p className="text-[11px] text-slate-400">Saídas, entradas, perdas, ajustes</p>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/15">
+            <Package className="h-5 w-5 text-brand" />
+          </div>
         </div>
       </div>
 
