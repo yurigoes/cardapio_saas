@@ -1,113 +1,60 @@
 "use client";
 
+/**
+ * /painel/financeiro — Dashboard financeiro consolidado
+ *
+ * Consome /api/painel/relatorio/financeiro (agregação no servidor).
+ * Mostra KPIs, breakdown por forma/tipo, gráfico de pico por hora,
+ * caixas do período, top produtos e top clientes.
+ *
+ * Filtros de período: hoje, 7 dias, 30 dias, custom.
+ */
 import { useEffect, useState, useCallback } from "react";
 import {
-  DollarSign, TrendingUp, CalendarDays, Receipt, RefreshCw, ShoppingBag,
+  DollarSign, TrendingUp, ShoppingBag, Users, Receipt, RefreshCw,
+  Banknote, QrCode, CreditCard, Wallet, Package, Trophy, Clock,
+  Calendar, ChevronDown, RotateCcw, AlertCircle,
 } from "lucide-react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Pedido {
-  id:          string;
-  numero:      number;
-  tipo:        string;
-  status:      string;
-  total:       number;
-  created_at:  string;
-  cliente_nome: string | null;
-  mesa_numero: number | null;
-  comanda:     string | null;
+interface RelatorioFinanceiro {
+  periodo: { from: string; to: string };
+  kpis: {
+    total_pedidos:    number;
+    total_vendas:     number;
+    ticket_medio:     number;
+    total_descontos:  number;
+    total_estornos:   number;
+    clientes_unicos:  number;
+  };
+  por_forma:  { forma: string;  total: number; qtd: number }[];
+  por_tipo:   { tipo:  string;  total: number; qtd: number }[];
+  por_hora:   { hora:  number;  total: number; qtd: number }[];
+  caixas: {
+    qtd:               number;
+    total_diferencas:  number;
+    com_diferenca:     number;
+  };
+  top_produtos: { produto_id: string | null; nome: string; qtd_vendida: number; receita: number }[];
+  top_clientes: { cliente_id: string; nome: string; pedidos: number; total_gasto: number }[];
 }
 
-interface Stats {
-  pedidos_hoje:      number;
-  pedidos_pendentes: number;
-  vendas_hoje:       number;
-  ticket_medio:      number;
-  clientes_novos:    number;
-  tempo_medio_min:   number;
-}
+const FORMA_LABEL: Record<string, string> = {
+  dinheiro: "Dinheiro",
+  pix:      "PIX",
+  credito:  "Crédito",
+  debito:   "Débito",
+  outro:    "Outro",
+};
 
-type DateRange = "hoje" | "semana" | "mes" | "custom";
+const FORMA_ICON: Record<string, React.ElementType> = {
+  dinheiro: Banknote,
+  pix:      QrCode,
+  credito:  CreditCard,
+  debito:   CreditCard,
+  outro:    DollarSign,
+};
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getToken() {
-  return typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-}
-
-function formatBRL(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v ?? 0);
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("pt-BR", {
-    day:    "2-digit",
-    month:  "2-digit",
-    year:   "2-digit",
-    hour:   "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function startOf(daysAgo: number) {
-  const d = startOfToday();
-  d.setDate(d.getDate() - daysAgo);
-  return d;
-}
-
-function startOfMonth() {
-  const d = new Date();
-  d.setDate(1);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function filterByRange(pedidos: Pedido[], range: DateRange, customFrom: string, customTo: string): Pedido[] {
-  let from: Date;
-  let to = new Date();
-
-  switch (range) {
-    case "hoje":
-      from = startOfToday();
-      break;
-    case "semana":
-      from = startOf(6);
-      break;
-    case "mes":
-      from = startOfMonth();
-      break;
-    case "custom":
-      from = customFrom ? new Date(customFrom) : startOfToday();
-      to   = customTo   ? new Date(customTo + "T23:59:59") : new Date();
-      break;
-  }
-
-  return pedidos.filter((p) => {
-    const d = new Date(p.created_at);
-    return d >= from && d <= to;
-  });
-}
-
-function calcRevenue(pedidos: Pedido[]) {
-  return pedidos
-    .filter((p) => p.status !== "cancelado")
-    .reduce((acc, p) => acc + (p.total ?? 0), 0);
-}
-
-function calcTicket(pedidos: Pedido[]) {
-  const valid = pedidos.filter((p) => p.status !== "cancelado");
-  if (valid.length === 0) return 0;
-  return valid.reduce((acc, p) => acc + (p.total ?? 0), 0) / valid.length;
-}
-
-const TIPO_LABELS: Record<string, string> = {
+const TIPO_LABEL: Record<string, string> = {
   mesa:     "Mesa",
   balcao:   "Balcão",
   delivery: "Delivery",
@@ -116,383 +63,343 @@ const TIPO_LABELS: Record<string, string> = {
   app:      "App",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pendente:   "Pendente",
-  confirmado: "Confirmado",
-  preparando: "Preparando",
-  pronto:     "Pronto",
-  entregue:   "Entregue",
-  cancelado:  "Cancelado",
-  pago:       "Pago",
-};
+function getToken() { return localStorage.getItem("access_token") ?? ""; }
+function authHeader(): HeadersInit { return { Authorization: `Bearer ${getToken()}` }; }
 
-const STATUS_COLORS: Record<string, string> = {
-  pendente:   "text-yellow-400",
-  confirmado: "text-blue-400",
-  preparando: "text-orange-400",
-  pronto:     "text-brand",
-  entregue:   "text-green-400",
-  cancelado:  "text-red-400",
-  pago:       "text-purple-400",
-};
-
-// ─── Revenue Bar ──────────────────────────────────────────────────────────────
-
-function RevenueBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  return (
-    <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
-      <div
-        className={`h-full rounded-full transition-all duration-700 ${color}`}
-        style={{ width: `${pct}%` }}
-      />
-    </div>
-  );
+function fmtBRL(v: number) {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-// ─── Summary Card ─────────────────────────────────────────────────────────────
-
-function SummaryCard({
-  label,
-  value,
-  icon: Icon,
-  sub,
-  accent,
-}: {
-  label:  string;
-  value:  string;
-  icon:   React.ElementType;
-  sub?:   string;
-  accent: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/5 bg-slate-900 p-5">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
-        <div className={`flex h-8 w-8 items-center justify-center rounded-xl bg-opacity-10 ${accent.replace("text-", "bg-").replace("-400", "-400/10")}`}>
-          <Icon className={`h-4 w-4 ${accent}`} />
-        </div>
-      </div>
-      <p className={`text-2xl font-bold tabular-nums ${accent}`}>{value}</p>
-      {sub && <p className="text-xs text-slate-600 mt-1">{sub}</p>}
-    </div>
-  );
+function isoToday(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+function fmtDateBR(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y.slice(2)}`;
+}
+
+type Periodo = "hoje" | "7d" | "30d" | "custom";
 
 export default function FinanceiroPage() {
-  const [allPedidos, setAllPedidos] = useState<Pedido[]>([]);
-  const [stats, setStats]           = useState<Stats | null>(null);
-  const [loading, setLoading]       = useState(true);
-  const [range, setRange]           = useState<DateRange>("hoje");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo]     = useState("");
-  const [page, setPage]             = useState(1);
-  const PAGE_SIZE = 15;
+  const [periodo, setPeriodo] = useState<Periodo>("hoje");
+  const [from, setFrom] = useState<string>(isoToday());
+  const [to,   setTo]   = useState<string>(isoToday());
+  const [customOpen, setCustomOpen] = useState(false);
 
-  const fetchAll = useCallback(async () => {
+  const [data, setData]       = useState<RelatorioFinanceiro | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Aplica preset de período
+  function aplicarPreset(p: Periodo) {
+    setPeriodo(p);
+    if (p === "hoje")  { setFrom(isoToday(0));   setTo(isoToday(0)); }
+    if (p === "7d")    { setFrom(isoToday(-6));  setTo(isoToday(0)); }
+    if (p === "30d")   { setFrom(isoToday(-29)); setTo(isoToday(0)); }
+    if (p === "custom") setCustomOpen(true);
+  }
+
+  const fetchRelatorio = useCallback(async () => {
     setLoading(true);
     try {
-      const token = getToken();
-      const headers = { Authorization: `Bearer ${token}` };
-
-      const [statsRes, pedidosRes] = await Promise.all([
-        fetch("/api/painel/stats", { headers }),
-        fetch("/api/pedidos?limit=200&status=entregue", { headers }),
-      ]);
-
-      const [statsData, pedidosData] = await Promise.all([
-        statsRes.json(),
-        pedidosRes.json(),
-      ]);
-
-      // Also fetch non-entregue (pago, pronto, etc.) to get broader picture
-      const [pedidosPago, pedidosTodos] = await Promise.all([
-        fetch("/api/pedidos?limit=200&status=pago",      { headers }).then((r) => r.json()),
-        fetch("/api/pedidos?limit=200",                  { headers }).then((r) => r.json()),
-      ]);
-
-      const entregues = pedidosData.success  ? (pedidosData.data as Pedido[])  : [];
-      const pagos     = pedidosPago.success  ? (pedidosPago.data as Pedido[])  : [];
-      const todos     = pedidosTodos.success ? (pedidosTodos.data as Pedido[]) : [];
-
-      // Merge, deduplicate
-      const map = new Map<string, Pedido>();
-      [...entregues, ...pagos, ...todos].forEach((p) => map.set(p.id, p));
-      setAllPedidos(Array.from(map.values()));
-
-      if (statsData.success) setStats(statsData.data as Stats);
-    } catch (err) {
-      console.error("[Financeiro] fetch error", err);
+      const sp = new URLSearchParams({ from, to });
+      const res  = await fetch(`/api/painel/relatorio/financeiro?${sp}`, {
+        headers: authHeader(),
+      });
+      const json = await res.json();
+      if (json.success) setData(json.data);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [from, to]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-  useEffect(() => { setPage(1); }, [range, customFrom, customTo]);
+  useEffect(() => { fetchRelatorio(); }, [fetchRelatorio]);
 
-  const filtered     = filterByRange(allPedidos, range, customFrom, customTo);
-  const revenue      = calcRevenue(filtered);
-  const ticket       = calcTicket(filtered);
-  const totalOrders  = filtered.filter((p) => p.status !== "cancelado").length;
-  const cancelled    = filtered.filter((p) => p.status === "cancelado").length;
+  // ── Render ─────────────────────────────────────────────────────────────────
 
-  // Revenue for week and month for summary cards (always computed from allPedidos)
-  const revenueHoje   = calcRevenue(filterByRange(allPedidos, "hoje",   "", ""));
-  const revenueSemana = calcRevenue(filterByRange(allPedidos, "semana", "", ""));
-  const revenueMes    = calcRevenue(filterByRange(allPedidos, "mes",    "", ""));
-  const ticketMedio   = stats?.ticket_medio ?? calcTicket(filterByRange(allPedidos, "hoje", "", ""));
+  if (loading && !data) {
+    return (
+      <div className="flex h-60 items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+      </div>
+    );
+  }
 
-  // Revenue by tipo
-  const tipoBreakdown = Object.entries(TIPO_LABELS).map(([tipo, label]) => {
-    const sub     = filtered.filter((p) => p.tipo === tipo && p.status !== "cancelado");
-    const val     = sub.reduce((acc, p) => acc + (p.total ?? 0), 0);
-    return { tipo, label, value: val, count: sub.length };
-  }).filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
+  if (!data) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-500">
+        <AlertCircle className="h-10 w-10 opacity-30" />
+        <p className="text-sm">Não foi possível carregar o relatório</p>
+      </div>
+    );
+  }
 
-  const maxTipo = tipoBreakdown.length > 0 ? tipoBreakdown[0].value : 1;
-
-  // Recent orders table
-  const sorted   = [...filtered].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
-  const paged    = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // Pico do gráfico de horas (para normalizar barras)
+  const maxHora = Math.max(1, ...data.por_hora.map((h) => h.total));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <DollarSign className="h-6 w-6 text-brand" />
-          <div>
-            <h1 className="text-2xl font-bold">Financeiro</h1>
-            <p className="text-sm text-slate-400">Faturamento e análise de receitas</p>
-          </div>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
+            <TrendingUp className="h-6 w-6 text-brand" />
+            Relatório Financeiro
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            {fmtDateBR(data.periodo.from)} a {fmtDateBR(data.periodo.to)}
+            {data.kpis.total_pedidos > 0 && ` · ${data.kpis.total_pedidos} pedidos`}
+          </p>
         </div>
         <button
-          onClick={fetchAll}
+          onClick={fetchRelatorio}
           disabled={loading}
-          className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-400 hover:text-white transition disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/5 transition disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           Atualizar
         </button>
       </div>
 
-      {/* Summary cards (always show totals regardless of date filter) */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <SummaryCard
-          label="Hoje"
-          value={formatBRL(revenueHoje)}
-          icon={DollarSign}
-          sub={`${filterByRange(allPedidos, "hoje", "", "").filter((p) => p.status !== "cancelado").length} pedidos`}
-          accent="text-brand"
-        />
-        <SummaryCard
-          label="Últimos 7 dias"
-          value={formatBRL(revenueSemana)}
-          icon={TrendingUp}
-          sub="Faturamento da semana"
-          accent="text-blue-400"
-        />
-        <SummaryCard
-          label="Mês atual"
-          value={formatBRL(revenueMes)}
-          icon={CalendarDays}
-          sub="Desde o início do mês"
-          accent="text-purple-400"
-        />
-        <SummaryCard
-          label="Ticket Médio"
-          value={formatBRL(ticketMedio)}
-          icon={Receipt}
-          sub="Hoje (média por pedido)"
-          accent="text-orange-400"
-        />
-      </div>
+      {/* Filtros de período */}
+      <div className="flex flex-wrap items-center gap-2">
+        {([["hoje", "Hoje"], ["7d", "7 dias"], ["30d", "30 dias"], ["custom", "Período"]] as const).map(([key, label]) => {
+          const active = periodo === key;
+          return (
+            <button
+              key={key}
+              onClick={() => aplicarPreset(key)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                active
+                  ? "bg-brand/15 text-brand"
+                  : "border border-white/10 text-slate-400 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
 
-      {/* Date range filter */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/5 bg-slate-900 p-4">
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Período:</span>
-        {(["hoje", "semana", "mes", "custom"] as DateRange[]).map((r) => (
-          <button
-            key={r}
-            onClick={() => setRange(r)}
-            className={`rounded-xl px-3 py-1.5 text-xs font-medium transition ${
-              range === r
-                ? "bg-brand text-white"
-                : "border border-white/10 text-slate-400 hover:text-white hover:border-white/20"
-            }`}
-          >
-            {r === "hoje" ? "Hoje" : r === "semana" ? "7 dias" : r === "mes" ? "Mês" : "Personalizado"}
-          </button>
-        ))}
-
-        {range === "custom" && (
-          <div className="flex items-center gap-2 ml-2">
+        {periodo === "custom" && customOpen && (
+          <div className="flex items-center gap-2">
             <input
               type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="rounded-xl bg-slate-800 border border-white/10 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand/50"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="rounded-lg border border-white/10 bg-slate-800 px-2 py-1 text-xs text-white focus:border-brand/50 focus:outline-none"
             />
-            <span className="text-slate-500 text-xs">até</span>
+            <span className="text-xs text-slate-500">até</span>
             <input
               type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="rounded-xl bg-slate-800 border border-white/10 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand/50"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="rounded-lg border border-white/10 bg-slate-800 px-2 py-1 text-xs text-white focus:border-brand/50 focus:outline-none"
             />
+            <button
+              onClick={fetchRelatorio}
+              className="rounded-lg bg-brand px-3 py-1 text-xs font-bold text-white hover:brightness-110 transition"
+            >
+              Aplicar
+            </button>
           </div>
         )}
-
-        {/* Filtered summary */}
-        <div className="ml-auto flex items-center gap-4 text-xs text-slate-400">
-          <span><span className="text-white font-bold">{totalOrders}</span> pedidos</span>
-          <span><span className="text-brand font-bold">{formatBRL(revenue)}</span> receita</span>
-          {cancelled > 0 && (
-            <span><span className="text-red-400 font-bold">{cancelled}</span> cancelados</span>
-          )}
-        </div>
       </div>
 
-      {/* Revenue by type */}
-      {tipoBreakdown.length > 0 && (
-        <div className="rounded-2xl border border-white/5 bg-slate-900 p-5">
-          <h2 className="text-sm font-semibold mb-4 text-slate-300">Receita por Canal</h2>
-          <div className="space-y-4">
-            {tipoBreakdown.map(({ tipo, label, value, count }) => (
-              <div key={tipo}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{label}</span>
-                    <span className="text-xs text-slate-500">{count} pedido{count !== 1 ? "s" : ""}</span>
+      {/* ── KPIs ──────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiCard icon={DollarSign} label="Vendas"        value={fmtBRL(data.kpis.total_vendas)}  color="text-brand"      hero />
+        <KpiCard icon={ShoppingBag} label="Pedidos"       value={String(data.kpis.total_pedidos)} color="text-blue-400"  />
+        <KpiCard icon={Receipt}    label="Ticket médio"  value={fmtBRL(data.kpis.ticket_medio)}  color="text-violet-400" />
+        <KpiCard icon={Users}      label="Clientes"      value={String(data.kpis.clientes_unicos)} color="text-amber-400" />
+        <KpiCard icon={RotateCcw}  label="Estornos"      value={fmtBRL(data.kpis.total_estornos)} color="text-red-400" />
+        <KpiCard icon={DollarSign} label="Descontos"     value={fmtBRL(data.kpis.total_descontos)} color="text-orange-400" />
+        <KpiCard
+          icon={Wallet}
+          label="Caixas fechados"
+          value={String(data.caixas.qtd)}
+          color="text-slate-300"
+          subtitle={data.caixas.com_diferenca > 0
+            ? `${data.caixas.com_diferenca} com diferença`
+            : "todos OK"}
+        />
+        <KpiCard
+          icon={AlertCircle}
+          label="Diferenças de caixa"
+          value={fmtBRL(data.caixas.total_diferencas)}
+          color={Math.abs(data.caixas.total_diferencas) < 0.01 ? "text-brand"
+              : data.caixas.total_diferencas > 0 ? "text-amber-300" : "text-red-400"}
+        />
+      </div>
+
+      {/* ── Vendas por forma de pagamento ────────────────────────────────── */}
+      {data.por_forma.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
+            Vendas por forma de pagamento
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+            {data.por_forma.map((f) => {
+              const Icon = FORMA_ICON[f.forma] ?? DollarSign;
+              return (
+                <div key={f.forma} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <Icon className="h-4 w-4" />
+                    <span className="text-xs font-medium">{FORMA_LABEL[f.forma] ?? f.forma}</span>
                   </div>
-                  <span className="text-sm font-bold text-brand tabular-nums">{formatBRL(value)}</span>
+                  <p className="mt-2 text-lg font-bold text-white">{fmtBRL(f.total)}</p>
+                  <p className="text-xs text-slate-500">{f.qtd} {f.qtd === 1 ? "venda" : "vendas"}</p>
                 </div>
-                <RevenueBar value={value} max={maxTipo} color="bg-brand" />
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Vendas por tipo de pedido ────────────────────────────────────── */}
+      {data.por_tipo.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
+            Vendas por canal
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            {data.por_tipo.map((t) => (
+              <div key={t.tipo} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs font-medium text-slate-400">{TIPO_LABEL[t.tipo] ?? t.tipo}</p>
+                <p className="mt-2 text-lg font-bold text-white">{fmtBRL(t.total)}</p>
+                <p className="text-xs text-slate-500">{t.qtd} {t.qtd === 1 ? "pedido" : "pedidos"}</p>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Payment breakdown note */}
-      <div className="rounded-2xl border border-white/5 bg-slate-900 p-5">
-        <h2 className="text-sm font-semibold mb-4 text-slate-300">Formas de Pagamento</h2>
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: "Dinheiro",  accent: "text-yellow-400", bg: "bg-yellow-400" },
-            { label: "PIX",       accent: "text-brand", bg: "bg-brand" },
-            { label: "Cartão",    accent: "text-blue-400", bg: "bg-blue-500" },
-          ].map(({ label, accent, bg }) => (
-            <div key={label} className="rounded-xl border border-white/5 p-4 text-center">
-              <p className={`text-lg font-bold ${accent}`}>N/A</p>
-              <p className="text-xs text-slate-500 mt-1">{label}</p>
-              <div className="mt-2 h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
-                <div className={`h-full w-0 rounded-full ${bg}`} />
-              </div>
+      {/* ── Pico por hora (gráfico de barras) ────────────────────────────── */}
+      {data.por_hora.length > 0 && (
+        <section>
+          <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+            <Clock className="h-3.5 w-3.5" />
+            Pico de vendas por hora
+          </h2>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="flex h-32 items-end gap-1">
+              {Array.from({ length: 24 }, (_, h) => {
+                const item = data.por_hora.find((x) => x.hora === h);
+                const v    = item?.total ?? 0;
+                const pct  = (v / maxHora) * 100;
+                return (
+                  <div
+                    key={h}
+                    className="flex-1 group relative flex flex-col items-center justify-end"
+                    title={`${h}h: ${fmtBRL(v)} (${item?.qtd ?? 0} pedidos)`}
+                  >
+                    <div
+                      className="w-full rounded-t transition-all hover:brightness-125"
+                      style={{
+                        height: `${Math.max(2, pct)}%`,
+                        background: v > 0 ? "var(--color-primary, #10b981)" : "rgba(148,163,184,0.1)",
+                      }}
+                    />
+                    <span className="mt-1 text-[9px] text-slate-500">
+                      {h % 3 === 0 ? `${h}h` : ""}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
-        <p className="text-xs text-slate-600 mt-3 text-center">
-          Detalhamento por forma de pagamento disponível após integração com gateways
-        </p>
-      </div>
+          </div>
+        </section>
+      )}
 
-      {/* Recent orders table */}
-      <div className="rounded-2xl border border-white/5 bg-slate-900 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-semibold">Pedidos do Período</h2>
-          </div>
-          <span className="text-xs text-slate-500">{sorted.length} registros</span>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
-          </div>
-        ) : paged.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-12 text-slate-500">
-            <ShoppingBag className="h-10 w-10" />
-            <p className="text-sm">Nenhum pedido no período selecionado</p>
-          </div>
-        ) : (
-          <>
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/5 text-xs text-slate-500">
-                  <th className="px-6 py-3 text-left font-medium">#</th>
-                  <th className="px-6 py-3 text-left font-medium hidden sm:table-cell">Data</th>
-                  <th className="px-6 py-3 text-left font-medium hidden md:table-cell">Canal</th>
-                  <th className="px-6 py-3 text-left font-medium hidden lg:table-cell">Cliente</th>
-                  <th className="px-6 py-3 text-left font-medium">Status</th>
-                  <th className="px-6 py-3 text-right font-medium">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {paged.map((p) => (
-                  <tr key={p.id} className="hover:bg-white/2 transition">
-                    <td className="px-6 py-3">
-                      <span className="font-mono text-sm font-bold">#{p.numero}</span>
-                    </td>
-                    <td className="px-6 py-3 hidden sm:table-cell">
-                      <span className="text-xs text-slate-400">{formatDate(p.created_at)}</span>
-                    </td>
-                    <td className="px-6 py-3 hidden md:table-cell">
-                      <span className="text-xs text-slate-400">{TIPO_LABELS[p.tipo] ?? p.tipo}</span>
-                      {p.mesa_numero && (
-                        <span className="text-xs text-slate-600 ml-1">· Mesa {p.mesa_numero}</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-3 hidden lg:table-cell">
-                      <span className="text-xs text-slate-400">{p.cliente_nome ?? "—"}</span>
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className={`text-xs font-medium ${STATUS_COLORS[p.status] ?? "text-slate-400"}`}>
-                        {STATUS_LABELS[p.status] ?? p.status}
+      {/* ── Top produtos & clientes ──────────────────────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Top produtos */}
+        <section>
+          <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+            <Package className="h-3.5 w-3.5" />
+            Top 5 produtos
+          </h2>
+          <div className="rounded-2xl border border-white/10 bg-white/5">
+            {data.top_produtos.length === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-500">Sem vendas no período</p>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {data.top_produtos.map((p, i) => (
+                  <div key={(p.produto_id ?? "") + i} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-bold text-brand">
+                        {i + 1}
                       </span>
-                    </td>
-                    <td className="px-6 py-3 text-right">
-                      <span className={`text-sm font-bold tabular-nums ${p.status === "cancelado" ? "text-red-400/60 line-through" : "text-brand"}`}>
-                        {formatBRL(p.total)}
-                      </span>
-                    </td>
-                  </tr>
+                      <p className="truncate text-sm font-medium text-white">{p.nome}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-white">{fmtBRL(p.receita)}</p>
+                      <p className="text-xs text-slate-500">{p.qtd_vendida} un.</p>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-white/5 px-6 py-3 text-xs text-slate-400">
-                <span>
-                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)} de {sorted.length}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    disabled={page === 1}
-                    onClick={() => setPage(page - 1)}
-                    className="rounded-lg border border-white/10 px-3 py-1 hover:border-white/20 hover:text-white transition disabled:opacity-30"
-                  >
-                    Anterior
-                  </button>
-                  <button
-                    disabled={page >= totalPages}
-                    onClick={() => setPage(page + 1)}
-                    className="rounded-lg border border-white/10 px-3 py-1 hover:border-white/20 hover:text-white transition disabled:opacity-30"
-                  >
-                    Próxima
-                  </button>
-                </div>
               </div>
             )}
-          </>
-        )}
+          </div>
+        </section>
+
+        {/* Top clientes */}
+        <section>
+          <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+            <Trophy className="h-3.5 w-3.5" />
+            Top 5 clientes
+          </h2>
+          <div className="rounded-2xl border border-white/10 bg-white/5">
+            {data.top_clientes.length === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-500">Sem clientes identificados no período</p>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {data.top_clientes.map((c, i) => (
+                  <div key={c.cliente_id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-bold text-brand">
+                        {i + 1}
+                      </span>
+                      <p className="truncate text-sm font-medium text-white">{c.nome}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-white">{fmtBRL(c.total_gasto)}</p>
+                      <p className="text-xs text-slate-500">{c.pedidos} pedido{c.pedidos !== 1 ? "s" : ""}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
+    </div>
+  );
+}
+
+// ─── KPI Card ──────────────────────────────────────────────────────────────────
+
+function KpiCard({
+  icon: Icon, label, value, color, subtitle, hero,
+}: {
+  icon:     React.ElementType;
+  label:    string;
+  value:    string;
+  color:    string;
+  subtitle?: string;
+  hero?:     boolean;
+}) {
+  return (
+    <div className={`rounded-2xl border border-white/10 bg-white/5 p-4 ${hero ? "lg:col-span-1" : ""}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-slate-500">{label}</span>
+        <Icon className={`h-4 w-4 ${color}`} />
+      </div>
+      <p className={`text-xl font-bold ${color}`}>{value}</p>
+      {subtitle && (
+        <p className="mt-0.5 text-[10px] text-slate-500 truncate">{subtitle}</p>
+      )}
     </div>
   );
 }
