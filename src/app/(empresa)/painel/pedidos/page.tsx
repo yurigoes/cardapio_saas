@@ -19,6 +19,14 @@ interface Pedido {
   atendente_nome: string | null;
 }
 
+interface AdicionalItem {
+  grupo_id?:    string;
+  grupo_nome?:  string;
+  opcao_id?:    string;
+  opcao_nome?:  string;
+  preco_extra?: number;
+}
+
 interface PedidoDetalhe extends Pedido {
   subtotal:          number;
   desconto:          number;
@@ -32,6 +40,7 @@ interface PedidoDetalhe extends Pedido {
     preco_unitario: number;
     subtotal:       number;
     observacoes:    string | null;
+    adicionais?:    AdicionalItem[] | null;
   }[];
 }
 
@@ -190,21 +199,51 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
           {/* Itens */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Itens</p>
-            <div className="space-y-2">
-              {pedido.itens.map((item) => (
-                <div key={item.id} className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      <span className="text-brand mr-2">{item.quantidade}×</span>
-                      {item.nome}
-                    </p>
-                    {item.observacoes && (
-                      <p className="text-xs text-slate-500 mt-0.5">{item.observacoes}</p>
-                    )}
+            <div className="space-y-3">
+              {pedido.itens.map((item) => {
+                // Agrupa adicionais por grupo (ex: Tamanho, Adicionais)
+                const adicionaisPorGrupo: Record<string, string[]> = {};
+                let extrasTotal = 0;
+                (item.adicionais ?? []).forEach((ad) => {
+                  const key = ad.grupo_nome ?? "Opções";
+                  if (!adicionaisPorGrupo[key]) adicionaisPorGrupo[key] = [];
+                  if (ad.opcao_nome) adicionaisPorGrupo[key].push(ad.opcao_nome);
+                  extrasTotal += Number(ad.preco_extra ?? 0);
+                });
+                const grupos = Object.entries(adicionaisPorGrupo);
+                return (
+                  <div key={item.id} className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">
+                        <span className="text-brand mr-2">{item.quantidade}×</span>
+                        {item.nome}
+                      </p>
+                      {/* Variações em destaque */}
+                      {grupos.length > 0 && (
+                        <ul className="ml-6 mt-1 space-y-0.5">
+                          {grupos.map(([grupo, opcoes]) => (
+                            <li key={grupo} className="text-xs leading-tight">
+                              <span className="text-slate-500">{grupo}:</span>{" "}
+                              <span className="font-semibold text-amber-300">{opcoes.join(", ")}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {item.observacoes && (
+                        <p className="ml-6 mt-1 text-xs italic text-orange-300">⚠ {item.observacoes}</p>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-medium">{formatBRL(item.subtotal)}</p>
+                      {extrasTotal > 0 && (
+                        <p className="text-[10px] text-slate-500">
+                          (inclui +{formatBRL(extrasTotal)} de extras)
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm font-medium">{formatBRL(item.subtotal)}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
