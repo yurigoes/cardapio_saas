@@ -16,6 +16,23 @@ interface Categoria {
   total_produtos: number;
 }
 
+interface OpcaoVariacao {
+  id:           string;
+  nome:         string;
+  preco_extra:  number;
+  disponivel?:  boolean;
+}
+interface GrupoVariacao {
+  id:           string;
+  nome:         string;
+  tipo:         "single" | "multiple";
+  obrigatorio?: boolean;
+  min?:         number;
+  max?:         number;
+  opcoes:       OpcaoVariacao[];
+}
+interface Variacoes { grupos: GrupoVariacao[]; }
+
 interface Produto {
   id:                string;
   nome:              string;
@@ -30,7 +47,30 @@ interface Produto {
   categoria_id:      string | null;
   categoria_nome:    string | null;
   pontos_fidelidade: number | null;
+  variacoes?:        Variacoes | null;
 }
+
+const VARIACOES_VAZIA: Variacoes = { grupos: [] };
+
+const VARIACOES_EXEMPLO: Variacoes = {
+  grupos: [
+    {
+      id: "tamanho", nome: "Tamanho", tipo: "single", obrigatorio: true, min: 1, max: 1,
+      opcoes: [
+        { id: "p", nome: "Pequeno", preco_extra: 0 },
+        { id: "m", nome: "Médio",   preco_extra: 5 },
+        { id: "g", nome: "Grande",  preco_extra: 10 },
+      ],
+    },
+    {
+      id: "adicionais", nome: "Adicionais", tipo: "multiple", obrigatorio: false, min: 0, max: 3,
+      opcoes: [
+        { id: "bacon",  nome: "Bacon extra",  preco_extra: 4 },
+        { id: "queijo", nome: "Queijo extra", preco_extra: 3 },
+      ],
+    },
+  ],
+};
 
 type Tab = "produtos" | "categorias";
 
@@ -68,6 +108,8 @@ export default function CardapioPage() {
     disponivel: true, destaque: false, tempo_preparo: "",
     imagem_url: "", tipo: "produto", categoria_id: "",
     pontos_fidelidade: "",
+    variacoes_json: "",        // JSON string editável; vazio = sem variações
+    variacoes_erro: "",        // mensagem de erro de parse
   });
 
   const fetchCategorias = useCallback(async () => {
@@ -143,13 +185,19 @@ export default function CardapioPage() {
   // ── Produto CRUD ─────────────────────────────────────────────────
   function openNewProd() {
     setEditProd(null);
-    setFormProd({ nome: "", descricao: "", preco: 0, preco_custo: "", disponivel: true, destaque: false, tempo_preparo: "", imagem_url: "", tipo: "produto", categoria_id: "", pontos_fidelidade: "" });
+    setFormProd({
+      nome: "", descricao: "", preco: 0, preco_custo: "",
+      disponivel: true, destaque: false, tempo_preparo: "",
+      imagem_url: "", tipo: "produto", categoria_id: "",
+      pontos_fidelidade: "", variacoes_json: "", variacoes_erro: "",
+    });
     setError("");
     setModalProd(true);
   }
 
   function openEditProd(prod: Produto) {
     setEditProd(prod);
+    const tem = prod.variacoes && prod.variacoes.grupos && prod.variacoes.grupos.length > 0;
     setFormProd({
       nome:              prod.nome,
       descricao:         prod.descricao  ?? "",
@@ -162,6 +210,8 @@ export default function CardapioPage() {
       tipo:              prod.tipo,
       categoria_id:      prod.categoria_id ?? "",
       pontos_fidelidade: prod.pontos_fidelidade != null ? String(prod.pontos_fidelidade) : "",
+      variacoes_json:    tem ? JSON.stringify(prod.variacoes, null, 2) : "",
+      variacoes_erro:    "",
     });
     setError("");
     setModalProd(true);
@@ -170,6 +220,27 @@ export default function CardapioPage() {
   async function saveProd(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true); setError("");
+
+    // Valida JSON de variações antes de enviar
+    let variacoes: Variacoes | undefined = undefined;
+    if (formProd.variacoes_json.trim()) {
+      try {
+        const parsed = JSON.parse(formProd.variacoes_json);
+        if (!parsed || !Array.isArray(parsed.grupos)) {
+          setError("Variações: estrutura inválida (esperado { grupos: [...] })");
+          setSaving(false);
+          return;
+        }
+        variacoes = parsed;
+      } catch (e: unknown) {
+        setError(`Variações: JSON inválido — ${e instanceof Error ? e.message : "erro de parse"}`);
+        setSaving(false);
+        return;
+      }
+    } else {
+      variacoes = VARIACOES_VAZIA;
+    }
+
     try {
       const body = {
         ...formProd,
@@ -180,6 +251,10 @@ export default function CardapioPage() {
         imagem_url:        formProd.imagem_url        || undefined,
         categoria_id:      formProd.categoria_id      || undefined,
         descricao:         formProd.descricao         || undefined,
+        variacoes,
+        // Campos só do form, remove antes de mandar
+        variacoes_json:    undefined,
+        variacoes_erro:    undefined,
       };
       const url    = editProd ? `/api/painel/produtos/${editProd.id}` : "/api/painel/produtos";
       const method = editProd ? "PATCH" : "POST";
@@ -647,6 +722,47 @@ export default function CardapioPage() {
                       className="h-4 w-4 rounded border-white/20 bg-white/10 text-brand" />
                     <span className="text-sm text-slate-300">Destaque</span>
                   </label>
+                </div>
+
+                {/* ── Variações (JSON editor) ──────────────────────────────── */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-300">Variações &amp; Adicionais</p>
+                      <p className="text-[11px] text-slate-500">
+                        Tamanhos, sabores, adicionais. Deixe vazio se não tiver.
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setFormProd(f => ({
+                          ...f,
+                          variacoes_json: JSON.stringify(VARIACOES_EXEMPLO, null, 2),
+                        }))}
+                        className="rounded-md border border-white/10 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/5 transition"
+                      >
+                        + Exemplo
+                      </button>
+                      {formProd.variacoes_json && (
+                        <button
+                          type="button"
+                          onClick={() => setFormProd(f => ({ ...f, variacoes_json: "" }))}
+                          className="rounded-md border border-white/10 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/5 transition"
+                        >
+                          Limpar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <textarea
+                    value={formProd.variacoes_json}
+                    onChange={e => setFormProd(f => ({ ...f, variacoes_json: e.target.value, variacoes_erro: "" }))}
+                    placeholder='Ex: { "grupos": [{ "id":"size","nome":"Tamanho","tipo":"single","obrigatorio":true,"opcoes":[...] }] }'
+                    rows={6}
+                    spellCheck={false}
+                    className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-[11px] text-slate-300 placeholder-slate-600 focus:border-brand/50 focus:outline-none font-mono leading-relaxed"
+                  />
                 </div>
 
                 <div className="flex gap-3 pt-2">

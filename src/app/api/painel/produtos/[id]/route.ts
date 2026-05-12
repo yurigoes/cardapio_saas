@@ -39,6 +39,7 @@ export async function PATCH(
     if (body.tipo              !== undefined) fields.tipo              = body.tipo;
     if (body.categoria_id      !== undefined) fields.categoria_id      = body.categoria_id;
     if (body.pontos_fidelidade !== undefined) fields.pontos_fidelidade = body.pontos_fidelidade;
+    if (body.variacoes         !== undefined) fields.variacoes         = JSON.stringify(body.variacoes);
 
     const entries  = Object.entries(fields);
     const sets     = entries.map(([k], i) => `${k} = $${i + 1}`);

@@ -82,6 +82,28 @@ export const empresaUpdateSchema = empresaCreateSchema.partial().omit({ slug: tr
 // ─────────────────────────────────────────────
 // Produto
 // ─────────────────────────────────────────────
+// Variações de produto (tamanhos, adicionais, complementos)
+export const opcaoVariacaoSchema = z.object({
+  id:           z.string().min(1).max(50),
+  nome:         z.string().min(1).max(100),
+  preco_extra:  z.number().min(-99999.99).max(99999.99).default(0),
+  disponivel:   z.boolean().optional().default(true),
+});
+
+export const grupoVariacaoSchema = z.object({
+  id:           z.string().min(1).max(50),
+  nome:         z.string().min(1).max(100),
+  tipo:         z.enum(["single", "multiple"]).default("single"),
+  obrigatorio:  z.boolean().optional().default(false),
+  min:          z.number().int().min(0).max(50).optional().default(0),
+  max:          z.number().int().min(1).max(50).optional().default(1),
+  opcoes:       z.array(opcaoVariacaoSchema).min(1, "Grupo precisa de ao menos 1 opção"),
+});
+
+export const variacoesSchema = z.object({
+  grupos: z.array(grupoVariacaoSchema).default([]),
+}).default({ grupos: [] });
+
 export const produtoCreateSchema = z.object({
   categoria_id:      uuidSchema.optional(),
   nome:              z.string().min(2).max(255).trim(),
@@ -94,6 +116,7 @@ export const produtoCreateSchema = z.object({
   imagem_url:        z.string().url().optional(),
   tipo:              z.enum(["produto","combo","bebida","sobremesa","porcao"]).default("produto"),
   pontos_fidelidade: z.number().int().min(0).max(99999).optional().default(0),
+  variacoes:         variacoesSchema.optional(),
 });
 
 export const produtoUpdateSchema = produtoCreateSchema.partial();

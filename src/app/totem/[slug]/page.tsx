@@ -154,17 +154,50 @@ interface Categoria {
   imagem_url: string | null; ordem: number;
 }
 
+interface OpcaoVariacao {
+  id:          string;
+  nome:        string;
+  preco_extra: number;
+  disponivel?: boolean;
+}
+
+interface GrupoVariacao {
+  id:          string;
+  nome:        string;
+  tipo:        "single" | "multiple";
+  obrigatorio?: boolean;
+  min?:        number;
+  max?:        number;
+  opcoes:      OpcaoVariacao[];
+}
+
+interface Variacoes {
+  grupos: GrupoVariacao[];
+}
+
 interface Produto {
   id: string; categoria_id: string | null; nome: string;
   descricao: string | null; preco: number; imagem_url: string | null;
   tempo_preparo: number | null; tipo: string; destaque: boolean;
   pontos_fidelidade?: number | null;
+  variacoes?: Variacoes | null;
+}
+
+/** Seleção de uma opção em um grupo de variação (vai para pedido_itens.adicionais) */
+interface OpcaoSelecionada {
+  grupo_id:    string;
+  grupo_nome:  string;
+  opcao_id:    string;
+  opcao_nome:  string;
+  preco_extra: number;
 }
 
 interface CartItem {
   produto:    Produto;
   quantidade: number;
   obs:        string;
+  variacoes?: OpcaoSelecionada[];   // opções escolhidas
+  uid?:       string;                // chave única para diferenciar mesmas produto+variações
 }
 
 interface ClienteIdentificado {
@@ -797,12 +830,71 @@ interface ProductDetailProps {
   produto:     Produto;
   idioma:      Idioma;
   onClose:     () => void;
-  onAddToCart: (produto: Produto, qty: number, obs: string) => void;
+  onAddToCart: (produto: Produto, qty: number, obs: string, variacoes: OpcaoSelecionada[]) => void;
 }
 
 function ProductDetail({ produto, idioma, onClose, onAddToCart }: ProductDetailProps) {
   const [qty, setQty] = useState(1);
   const [obs, setObs] = useState("");
+  // Estado das opções selecionadas: { [grupo_id]: Set<opcao_id> }
+  const [selecoes, setSelecoes] = useState<Record<string, Set<string>>>({});
+
+  const grupos = produto.variacoes?.grupos ?? [];
+
+  function toggleOpcao(grupo: GrupoVariacao, opcaoId: string) {
+    setSelecoes((prev) => {
+      const atual = new Set(prev[grupo.id] ?? []);
+      const max = grupo.max ?? (grupo.tipo === "single" ? 1 : 99);
+
+      if (grupo.tipo === "single") {
+        // single: substitui sempre
+        return { ...prev, [grupo.id]: new Set([opcaoId]) };
+      }
+
+      // multiple: toggle
+      if (atual.has(opcaoId)) {
+        atual.delete(opcaoId);
+      } else if (atual.size < max) {
+        atual.add(opcaoId);
+      }
+      return { ...prev, [grupo.id]: atual };
+    });
+  }
+
+  // Computa opções escolhidas e preço extra total
+  const variacoesEscolhidas: OpcaoSelecionada[] = grupos.flatMap((g) => {
+    const ids = Array.from(selecoes[g.id] ?? []);
+    return ids
+      .map((opId) => {
+        const op = g.opcoes.find((o) => o.id === opId);
+        if (!op) return null;
+        return {
+          grupo_id:    g.id,
+          grupo_nome:  g.nome,
+          opcao_id:    op.id,
+          opcao_nome:  op.nome,
+          preco_extra: Number(op.preco_extra ?? 0),
+        };
+      })
+      .filter((x): x is OpcaoSelecionada => x !== null);
+  });
+
+  const precoExtra = variacoesEscolhidas.reduce((acc, v) => acc + v.preco_extra, 0);
+  const precoUnitario = Number(produto.preco) + precoExtra;
+  const precoTotal = precoUnitario * qty;
+
+  // Validação: todos os grupos obrigatórios precisam ter min satisfeito
+  const erroValidacao = (() => {
+    for (const g of grupos) {
+      if (!g.obrigatorio) continue;
+      const qtdEscolhida = (selecoes[g.id]?.size ?? 0);
+      const min = g.min ?? 1;
+      if (qtdEscolhida < min) {
+        return `Escolha ${min === 1 ? "uma opção" : `${min} opções`} em "${g.nome}"`;
+      }
+    }
+    return null;
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
@@ -821,7 +913,7 @@ function ProductDetail({ produto, idioma, onClose, onAddToCart }: ProductDetailP
         )}
       </div>
 
-      <div className="flex flex-1 flex-col overflow-auto p-5">
+      <div className="flex flex-1 flex-col overflow-auto p-5 pb-32">
         <h2 className="text-2xl font-bold text-white">{produto.nome}</h2>
         {produto.descricao && (
           <p className="mt-2 text-sm leading-relaxed text-slate-400">{produto.descricao}</p>
@@ -831,7 +923,82 @@ function ProductDetail({ produto, idioma, onClose, onAddToCart }: ProductDetailP
             <Clock className="h-3.5 w-3.5" /> ~{produto.tempo_preparo} min
           </p>
         )}
-        <p className="mt-4 text-2xl font-bold text-emerald-400">{formatBRL(produto.preco)}</p>
+        <p className="mt-4 text-2xl font-bold text-brand">{formatBRL(produto.preco)}</p>
+
+        {/* ── Grupos de variações ───────────────────────────────────────────── */}
+        {grupos.map((grupo) => {
+          const escolhidos = selecoes[grupo.id] ?? new Set();
+          const max = grupo.max ?? (grupo.tipo === "single" ? 1 : 99);
+          return (
+            <section key={grupo.id} className="mt-6">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-bold text-white">{grupo.nome}</h3>
+                  <p className="text-xs text-slate-500">
+                    {grupo.tipo === "single"
+                      ? "Escolha 1"
+                      : `Escolha até ${max}`}
+                    {grupo.obrigatorio && (
+                      <span className="ml-1.5 rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-400">
+                        OBRIGATÓRIO
+                      </span>
+                    )}
+                  </p>
+                </div>
+                {grupo.tipo === "multiple" && (
+                  <span className="text-xs text-slate-500">
+                    {escolhidos.size}/{max}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                {grupo.opcoes.map((op) => {
+                  const ativo = escolhidos.has(op.id);
+                  const cheio = grupo.tipo === "multiple" && escolhidos.size >= max && !ativo;
+                  return (
+                    <button
+                      key={op.id}
+                      onClick={() => !cheio && toggleOpcao(grupo, op.id)}
+                      disabled={cheio || op.disponivel === false}
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border bg-white/5 px-4 py-3 text-left transition disabled:opacity-40"
+                      style={ativo ? {
+                        borderColor: "var(--color-primary-50, rgba(16,185,129,0.5))",
+                        background:  "var(--color-primary-15, rgba(16,185,129,0.12))",
+                      } : {
+                        borderColor: "rgba(255,255,255,0.10)",
+                      }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* radio/check indicator */}
+                        <div
+                          className={`flex h-5 w-5 flex-shrink-0 items-center justify-center ${
+                            grupo.tipo === "single" ? "rounded-full" : "rounded"
+                          } border-2`}
+                          style={ativo ? {
+                            borderColor: "var(--color-primary, #10b981)",
+                            background:  "var(--color-primary, #10b981)",
+                          } : { borderColor: "rgba(148,163,184,0.5)" }}
+                        >
+                          {ativo && (grupo.tipo === "single"
+                            ? <span className="h-2 w-2 rounded-full bg-white" />
+                            : <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                          )}
+                        </div>
+                        <span className="text-sm font-medium text-white truncate">{op.nome}</span>
+                      </div>
+                      {Number(op.preco_extra) !== 0 && (
+                        <span className="flex-shrink-0 text-sm font-semibold text-slate-400">
+                          {Number(op.preco_extra) > 0 ? "+" : ""}{formatBRL(Number(op.preco_extra))}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
 
         <div className="mt-6">
           <label className="block text-sm text-slate-400 mb-2">{t(idioma, "obs_item")}</label>
@@ -839,11 +1006,17 @@ function ProductDetail({ produto, idioma, onClose, onAddToCart }: ProductDetailP
             value={obs} onChange={(e) => setObs(e.target.value)}
             placeholder="Ex: sem cebola, bem passado..."
             rows={3}
-            className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50 resize-none"
+            className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-brand/50 resize-none"
           />
         </div>
+      </div>
 
-        <div className="mt-4 flex items-center gap-4">
+      {/* Footer fixo */}
+      <div className="sticky bottom-0 border-t border-white/10 bg-slate-950 p-4">
+        {erroValidacao && (
+          <p className="mb-2 text-center text-xs text-red-400">{erroValidacao}</p>
+        )}
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-3 rounded-xl bg-slate-800 px-4 py-2">
             <button onClick={() => setQty(Math.max(1, qty - 1))} className="text-slate-400 hover:text-white transition">
               <Minus className="h-4 w-4" />
@@ -854,10 +1027,16 @@ function ProductDetail({ produto, idioma, onClose, onAddToCart }: ProductDetailP
             </button>
           </div>
           <button
-            onClick={() => { onAddToCart(produto, qty, obs); onClose(); }}
-            className="flex-1 rounded-xl bg-emerald-500 py-3 font-semibold text-white hover:bg-emerald-400 transition"
+            onClick={() => {
+              if (erroValidacao) return;
+              onAddToCart(produto, qty, obs, variacoesEscolhidas);
+              onClose();
+            }}
+            disabled={!!erroValidacao}
+            style={!erroValidacao ? { background: "var(--color-primary, #10b981)" } : undefined}
+            className="flex-1 rounded-xl py-3 font-semibold text-white transition hover:brightness-110 disabled:opacity-40 disabled:bg-slate-700 disabled:hover:brightness-100"
           >
-            {t(idioma, "adicionar")} · {formatBRL(produto.preco * qty)}
+            {t(idioma, "adicionar")} · {formatBRL(precoTotal)}
           </button>
         </div>
       </div>
@@ -945,7 +1124,7 @@ interface CartDrawerProps {
   slug:        string;
   idioma:      Idioma;
   onClose:     () => void;
-  onUpdate:    (produtoId: string, delta: number) => void;
+  onUpdate:    (uid: string, delta: number) => void;
   onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro", cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null) => Promise<void>;
 }
 
@@ -985,7 +1164,12 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate
       .catch(() => { /* silencioso — usa gateway padrão no servidor */ });
   }, [formaPag, gatewaysCarregados, slug]);
 
-  const subtotal = cart.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0);
+  // Preço unitário considerando variações
+  const precoComVariacoes = (i: CartItem) => {
+    const extras = (i.variacoes ?? []).reduce((acc, v) => acc + Number(v.preco_extra ?? 0), 0);
+    return Number(i.produto.preco) + extras;
+  };
+  const subtotal = cart.reduce((acc, i) => acc + precoComVariacoes(i) * i.quantidade, 0);
   const desconto = cupomAplicado?.desconto ?? 0;
   const total    = Math.max(0, subtotal - desconto);
 
@@ -1054,29 +1238,38 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate
       </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-3">
-        {cart.map((item) => (
-          <div key={item.produto.id} className="flex items-center gap-3 rounded-xl bg-slate-900 p-3">
-            <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg">
-              <ProductImage src={item.produto.imagem_url} alt={item.produto.nome} />
+        {cart.map((item) => {
+          const itemKey = item.uid ?? item.produto.id;
+          const precoUnit = precoComVariacoes(item);
+          return (
+            <div key={itemKey} className="flex items-start gap-3 rounded-xl bg-slate-900 p-3">
+              <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg">
+                <ProductImage src={item.produto.imagem_url} alt={item.produto.nome} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-sm font-medium text-white">{item.produto.nome}</p>
+                {item.variacoes && item.variacoes.length > 0 && (
+                  <p className="mt-0.5 truncate text-xs text-slate-400">
+                    {item.variacoes.map(v => v.opcao_nome).join(" · ")}
+                  </p>
+                )}
+                {item.obs && <p className="text-xs text-slate-500 truncate">{item.obs}</p>}
+                <p className="mt-1 text-sm font-bold text-brand">{formatBRL(precoUnit * item.quantidade)}</p>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button onClick={() => onUpdate(itemKey, -1)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:text-white transition">
+                  <Minus className="h-3 w-3" />
+                </button>
+                <span className="w-5 text-center text-sm font-bold text-white">{item.quantidade}</span>
+                <button onClick={() => onUpdate(itemKey, +1)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:text-white transition">
+                  <Plus className="h-3 w-3" />
+                </button>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium text-white">{item.produto.nome}</p>
-              {item.obs && <p className="text-xs text-slate-500 truncate">{item.obs}</p>}
-              <p className="text-sm font-bold text-emerald-400">{formatBRL(item.produto.preco * item.quantidade)}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => onUpdate(item.produto.id, -1)}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:text-white transition">
-                <Minus className="h-3 w-3" />
-              </button>
-              <span className="w-5 text-center text-sm font-bold text-white">{item.quantidade}</span>
-              <button onClick={() => onUpdate(item.produto.id, +1)}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:text-white transition">
-                <Plus className="h-3 w-3" />
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="border-t border-white/5 p-4 space-y-3">
@@ -1683,22 +1876,49 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
   // ── Cart ───────────────────────────────────────────────────────────────────
 
-  const addToCart = useCallback((produto: Produto, qty: number, obs: string) => {
+  /** Computa preço unitário de um item considerando variações */
+  function precoUnitarioItem(item: CartItem): number {
+    const extras = (item.variacoes ?? []).reduce((acc, v) => acc + Number(v.preco_extra ?? 0), 0);
+    return Number(item.produto.preco) + extras;
+  }
+
+  /** Gera UID único para combinar produto + variações
+   *  Mesma combinação → mesmo UID (permite agregação) */
+  function gerarUid(produto: Produto, variacoes: OpcaoSelecionada[], obs: string): string {
+    const opIds = (variacoes ?? [])
+      .map(v => `${v.grupo_id}:${v.opcao_id}`)
+      .sort()
+      .join("|");
+    // Inclui hash da observação para diferenciar mesmo produto com obs distintas
+    const obsHash = obs ? `_obs${obs.length}` : "";
+    return `${produto.id}__${opIds}${obsHash}`;
+  }
+
+  const addToCart = useCallback((
+    produto: Produto,
+    qty: number,
+    obs: string,
+    variacoes: OpcaoSelecionada[] = []
+  ) => {
+    const uid = gerarUid(produto, variacoes, obs);
     setCart(prev => {
-      const existing = prev.find(i => i.produto.id === produto.id);
-      if (existing) return prev.map(i => i.produto.id === produto.id ? { ...i, quantidade: i.quantidade + qty } : i);
-      return [...prev, { produto, quantidade: qty, obs }];
+      const existing = prev.find(i => i.uid === uid);
+      if (existing) {
+        return prev.map(i => i.uid === uid ? { ...i, quantidade: i.quantidade + qty } : i);
+      }
+      return [...prev, { produto, quantidade: qty, obs, variacoes, uid }];
     });
   }, []);
 
-  const updateCart = useCallback((produtoId: string, delta: number) => {
+  /** updateCart agora usa uid (não produto.id) para diferenciar variações */
+  const updateCart = useCallback((uid: string, delta: number) => {
     setCart(prev =>
-      prev.map(i => i.produto.id === produtoId ? { ...i, quantidade: i.quantidade + delta } : i)
+      prev.map(i => i.uid === uid ? { ...i, quantidade: i.quantidade + delta } : i)
           .filter(i => i.quantidade > 0)
     );
   }, []);
 
-  const cartTotal = cart.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0);
+  const cartTotal = cart.reduce((acc, i) => acc + precoUnitarioItem(i) * i.quantidade, 0);
   const cartCount = cart.reduce((acc, i) => acc + i.quantidade, 0);
 
   // Bebidas available
@@ -1727,7 +1947,8 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     cupom: { codigo: string; desconto: number } | null = null,
     gatewaySlug: string | null = null
   ) {
-    const subtotal  = cart.reduce((acc, i) => acc + Number(i.produto.preco) * i.quantidade, 0);
+    // Calcula subtotal considerando variações (preço extra de cada opção)
+    const subtotal  = cart.reduce((acc, i) => acc + precoUnitarioItem(i) * i.quantidade, 0);
     const desconto  = cupom?.desconto ?? 0;
     const cartTotal = Math.max(0, subtotal - desconto);
 
@@ -1747,9 +1968,12 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         itens: cart.map(i => ({
           produto_id:     i.produto.id,
           nome:           i.produto.nome,
-          preco_unitario: Number(i.produto.preco),
+          // preço unitário JÁ inclui as variações (preço extra somado)
+          preco_unitario: precoUnitarioItem(i),
           quantidade:     i.quantidade,
           observacoes:    i.obs || undefined,
+          // variações vão no adicionais do pedido_item
+          adicionais:     i.variacoes && i.variacoes.length > 0 ? i.variacoes : undefined,
         })),
       }),
     });

@@ -35,7 +35,9 @@ export async function GET(
       ),
       query(
         `SELECT id, categoria_id, nome, descricao, preco, imagem_url,
-                tempo_preparo, tipo, destaque
+                tempo_preparo, tipo, destaque,
+                COALESCE(pontos_fidelidade, 0)         AS pontos_fidelidade,
+                COALESCE(variacoes, '{"grupos":[]}'::jsonb) AS variacoes
          FROM produtos
          WHERE empresa_id = $1 AND deleted_at IS NULL AND disponivel = true
          ORDER BY nome ASC`,

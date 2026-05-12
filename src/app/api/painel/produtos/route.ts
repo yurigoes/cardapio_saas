@@ -76,8 +76,9 @@ export async function POST(req: NextRequest) {
     const produto = await queryOne<{ id: string }>(
       `INSERT INTO produtos
          (empresa_id, categoria_id, nome, descricao, preco, preco_custo,
-          disponivel, destaque, tempo_preparo, imagem_url, tipo, pontos_fidelidade)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+          disponivel, destaque, tempo_preparo, imagem_url, tipo, pontos_fidelidade,
+          variacoes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING id`,
       [
         empresaId,
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
         body.imagem_url        ?? null,
         body.tipo,
         body.pontos_fidelidade ?? 0,
+        JSON.stringify(body.variacoes ?? { grupos: [] }),
       ]
     );
 

@@ -41,12 +41,22 @@ const telefoneLenient = z
 
 // ── schemas ───────────────────────────────────────────────────────────────────
 
+/** Cada opção de variação escolhida pelo cliente */
+const adicionalSchema = z.object({
+  grupo_id:    z.string().max(50),
+  grupo_nome:  z.string().max(100),
+  opcao_id:    z.string().max(50),
+  opcao_nome:  z.string().max(100),
+  preco_extra: precoLenient,
+});
+
 const itemSchema = z.object({
   produto_id:     z.string().uuid("produto_id inválido").optional(),
   nome:           z.string().min(1).max(255).trim(),
   preco_unitario: precoLenient,
   quantidade:     intLenient,
   observacoes:    z.string().max(500).trim().optional().transform((v) => v || undefined),
+  adicionais:     z.array(adicionalSchema).optional(),
 });
 
 const pedidoPublicoSchema = z.object({
@@ -241,7 +251,7 @@ export async function POST(
           `INSERT INTO pedido_itens
              (pedido_id, produto_id, nome, preco_unitario, quantidade,
               subtotal, observacoes, adicionais, complementos)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,'[]','[]')`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'[]')`,
           [
             row.id,
             item.produto_id ?? null,
@@ -250,6 +260,7 @@ export async function POST(
             item.quantidade,
             itemSubtotal,
             item.observacoes ?? null,
+            JSON.stringify(item.adicionais ?? []),
           ]
         );
       }
