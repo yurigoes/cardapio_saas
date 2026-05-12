@@ -930,6 +930,13 @@ function DrinksModal({ bebidas, idioma, onAdd, onSkip }: DrinksModalProps) {
 
 // ─── CartDrawer ───────────────────────────────────────────────────────────────
 
+interface GatewayInfo {
+  slug:    string;
+  nome:    string;
+  padrao:  boolean;
+  metodos: string[];
+}
+
 interface CartDrawerProps {
   cart:        CartItem[];
   mesaNumero:  number | null;
@@ -938,7 +945,7 @@ interface CartDrawerProps {
   idioma:      Idioma;
   onClose:     () => void;
   onUpdate:    (produtoId: string, delta: number) => void;
-  onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro", cupom: { codigo: string; desconto: number } | null) => Promise<void>;
+  onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro", cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null) => Promise<void>;
 }
 
 function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate, onConfirm }: CartDrawerProps) {
@@ -948,11 +955,34 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate
   const [formaPag, setFormaPag]   = useState<"pix" | "dinheiro">("dinheiro");
   const [sending, setSending]     = useState(false);
 
+  // Gateways disponíveis (carregados na primeira vez que PIX é selecionado)
+  const [gateways, setGateways]               = useState<GatewayInfo[]>([]);
+  const [gatewaySelecionado, setGatewaySelecionado] = useState<string | null>(null);
+  const [gatewaysCarregados, setGatewaysCarregados] = useState(false);
+
   // Cupom
   const [cupomCodigo, setCupomCodigo]   = useState("");
   const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; desconto: number; tipo: string } | null>(null);
   const [cupomErro, setCupomErro]       = useState("");
   const [cupomLoading, setCupomLoading] = useState(false);
+
+  // Carrega gateways uma vez quando PIX é selecionado pela primeira vez
+  useEffect(() => {
+    if (formaPag !== "pix" || gatewaysCarregados) return;
+    setGatewaysCarregados(true);
+    fetch(`/api/pub/pagamentos/${slug}/gateways`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) return;
+        const pixGateways = (data.data.gateways as GatewayInfo[])
+          .filter(g => g.metodos.includes("pix"));
+        setGateways(pixGateways);
+        // Default = padrão; se nenhum padrão, primeiro
+        const padrao = pixGateways.find(g => g.padrao) ?? pixGateways[0];
+        if (padrao) setGatewaySelecionado(padrao.slug);
+      })
+      .catch(() => { /* silencioso — usa gateway padrão no servidor */ });
+  }, [formaPag, gatewaysCarregados, slug]);
 
   const subtotal = cart.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0);
   const desconto = cupomAplicado?.desconto ?? 0;
@@ -1000,7 +1030,8 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate
     try {
       await onConfirm(
         nome, tel, obs, formaPag,
-        cupomAplicado ? { codigo: cupomAplicado.codigo, desconto: cupomAplicado.desconto } : null
+        cupomAplicado ? { codigo: cupomAplicado.codigo, desconto: cupomAplicado.desconto } : null,
+        formaPag === "pix" ? gatewaySelecionado : null
       );
     } finally { setSending(false); }
   }
@@ -1157,11 +1188,16 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate
                   key={metodo}
                   type="button"
                   onClick={() => setFormaPag(metodo)}
-                  className={`flex flex-col items-center gap-1.5 rounded-xl border py-3 text-xs font-semibold transition ${
-                    ativo
-                      ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400"
-                      : "border-white/10 bg-slate-800 text-slate-400 hover:border-white/20 hover:text-white"
-                  }`}
+                  className="flex flex-col items-center gap-1.5 rounded-xl border py-3 text-xs font-semibold transition"
+                  style={ativo ? {
+                    borderColor: "var(--color-primary-50, rgba(16,185,129,0.5))",
+                    background:  "var(--color-primary-15, rgba(16,185,129,0.15))",
+                    color:       "var(--color-primary, #10b981)",
+                  } : {
+                    borderColor: "rgba(255,255,255,0.1)",
+                    background:  "rgb(30,41,59)",
+                    color:       "rgb(148,163,184)",
+                  }}
                 >
                   {metodo === "pix" ? <QrCode className="h-5 w-5" /> : <Banknote className="h-5 w-5" />}
                   {t(idioma, metodo === "pix" ? "pagamento_pix" : "pagamento_dinheiro")}
@@ -1169,6 +1205,37 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate
               );
             })}
           </div>
+
+          {/* Seletor de gateway PIX (só aparece se há 2+ gateways disponíveis) */}
+          {formaPag === "pix" && gateways.length > 1 && (
+            <div className="mt-2.5 space-y-1.5">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500">Pagar com</p>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                {gateways.map((g) => {
+                  const ativo = gatewaySelecionado === g.slug;
+                  return (
+                    <button
+                      key={g.slug}
+                      type="button"
+                      onClick={() => setGatewaySelecionado(g.slug)}
+                      className="flex-shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition"
+                      style={ativo ? {
+                        borderColor: "var(--color-primary-50, rgba(16,185,129,0.5))",
+                        background:  "var(--color-primary-15, rgba(16,185,129,0.15))",
+                        color:       "var(--color-primary, #10b981)",
+                      } : {
+                        borderColor: "rgba(255,255,255,0.1)",
+                        background:  "transparent",
+                        color:       "rgb(148,163,184)",
+                      }}
+                    >
+                      {g.nome}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <button
@@ -1659,7 +1726,8 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     clienteTel: string,
     obs: string,
     formaPagamento: "pix" | "dinheiro" = "dinheiro",
-    cupom: { codigo: string; desconto: number } | null = null
+    cupom: { codigo: string; desconto: number } | null = null,
+    gatewaySlug: string | null = null
   ) {
     const subtotal  = cart.reduce((acc, i) => acc + Number(i.produto.preco) * i.quantidade, 0);
     const desconto  = cupom?.desconto ?? 0;
@@ -1707,6 +1775,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           body:    JSON.stringify({
             pedido_id:     data.data.id,
             metodo:        "pix",
+            gateway:       gatewaySlug || undefined,  // null/undefined → backend usa o padrão
             cliente_nome:  nomeExibido || undefined,
             cliente_email: cliente?.cpf ? undefined : undefined,
           }),
