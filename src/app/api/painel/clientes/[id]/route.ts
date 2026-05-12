@@ -15,29 +15,68 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const { empresaId } = auth.payload;
 
   try {
-    const cliente = await queryOne<Record<string, unknown>>(
+    const clienteRaw = await queryOne<{
+      id:            string;
+      nome:          string;
+      telefone:      string | null;
+      email:         string | null;
+      cpf:           string | null;
+      pontos:        string | number;
+      total_pedidos: string | number;
+      total_gasto:   string | number;
+      ultimo_pedido: string | null;
+    }>(
       `SELECT id, nome, telefone, cpf, email,
-              pontos, total_pedidos, total_gasto, ultimo_pedido_em, created_at
-       FROM clientes WHERE id = $1 AND empresa_id = $2`,
+              pontos, total_pedidos, total_gasto,
+              ultimo_pedido_em AS ultimo_pedido
+       FROM clientes WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL`,
       [params.id, empresaId]
     );
-    if (!cliente) return notFound();
+    if (!clienteRaw) return notFound();
+
+    const cliente = {
+      ...clienteRaw,
+      pontos:        Number(clienteRaw.pontos),
+      total_pedidos: Number(clienteRaw.total_pedidos),
+      total_gasto:   Number(clienteRaw.total_gasto),
+    };
 
     // Últimos pedidos do cliente
-    const pedidos = await query<Record<string, unknown>>(
-      `SELECT id, numero, total, status, created_at
-       FROM pedidos WHERE cliente_id = $1 ORDER BY created_at DESC LIMIT 10`,
-      [params.id]
+    const pedidos = await query<{
+      id:        string;
+      numero:    number;
+      total:     string | number;
+      status:    string;
+      criado_em: string;
+    }>(
+      `SELECT id, numero, total, status, created_at AS criado_em
+       FROM pedidos
+       WHERE cliente_id = $1 AND empresa_id = $2
+       ORDER BY created_at DESC
+       LIMIT 10`,
+      [params.id, empresaId]
     );
 
-    // Cupons do cliente
-    const cupons = await query<Record<string, unknown>>(
-      `SELECT id, codigo, tipo, valor, valido_ate, uso_atual, ativo
-       FROM cupons WHERE cliente_id = $1 ORDER BY created_at DESC LIMIT 10`,
-      [params.id]
+    // Cupons do cliente — mapeia valido_ate → validade (campo esperado pelo frontend)
+    const cupons = await query<{
+      id:       string;
+      codigo:   string;
+      tipo:     string;
+      valor:    string | number;
+      validade: string | null;
+      ativo:    boolean;
+    }>(
+      `SELECT id, codigo, tipo, valor, valido_ate AS validade, ativo
+       FROM cupons
+       WHERE cliente_id = $1 AND empresa_id = $2 AND ativo = true
+       ORDER BY created_at DESC LIMIT 10`,
+      [params.id, empresaId]
     );
 
-    return ok({ ...cliente, pedidos, cupons });
+    const pedidosNorm = pedidos.map((p) => ({ ...p, total: Number(p.total) }));
+    const cuponsNorm  = cupons.map((c)  => ({ ...c, valor: Number(c.valor) }));
+
+    return ok({ ...cliente, pedidos: pedidosNorm, cupons: cuponsNorm });
   } catch (err) {
     console.error("[Clientes/GET/:id]", err);
     return serverError();

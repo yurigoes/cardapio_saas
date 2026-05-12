@@ -30,33 +30,62 @@ export async function GET(req: NextRequest) {
   };
   const orderClause = SAFE_ORDERS[orderBy] ?? "pontos DESC";
 
-  const whereExtra = q
-    ? `AND (nome ILIKE $3 OR telefone ILIKE $3 OR cpf ILIKE $3 OR email ILIKE $3)`
-    : "";
-  const params: unknown[] = [empresaId, limit];
-  if (q) params.push(`%${q}%`);
+  const conditions: string[] = ["empresa_id = $1", "deleted_at IS NULL"];
+  const countParams: unknown[] = [empresaId];
+  const listParams:  unknown[] = [empresaId];
+  let idx = 2;
+
+  if (q) {
+    const placeholder = `$${idx++}`;
+    conditions.push(
+      `(nome ILIKE ${placeholder} OR telefone ILIKE ${placeholder} OR cpf ILIKE ${placeholder} OR email ILIKE ${placeholder})`
+    );
+    countParams.push(`%${q}%`);
+    listParams.push(`%${q}%`);
+  }
+
+  const where = conditions.join(" AND ");
+
+  // LIMIT and OFFSET appended after the search param
+  listParams.push(limit, offset);
+  const limitIdx  = idx;
+  const offsetIdx = idx + 1;
 
   try {
-    const countParams: unknown[] = [empresaId];
-    if (q) countParams.push(`%${q}%`);
+    const [clientes, total] = await Promise.all([
+      query<{
+        id:            string;
+        nome:          string;
+        telefone:      string | null;
+        email:         string | null;
+        cpf:           string | null;
+        pontos:        string | number;
+        total_pedidos: string | number;
+        total_gasto:   string | number;
+        ultimo_pedido: string | null;
+      }>(
+        `SELECT
+           id, nome, telefone, cpf, email,
+           pontos, total_pedidos, total_gasto,
+           ultimo_pedido_em AS ultimo_pedido
+         FROM clientes
+         WHERE ${where}
+         ORDER BY ${orderClause}
+         LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+        listParams
+      ),
+      queryCount(`SELECT COUNT(*) FROM clientes WHERE ${where}`, countParams),
+    ]);
 
-    const total = await queryCount(
-      `SELECT COUNT(*) FROM clientes WHERE empresa_id = $1 ${whereExtra}`,
-      countParams
-    );
+    // Normaliza NUMERIC (pg retorna como string) → number
+    const data = clientes.map((c) => ({
+      ...c,
+      pontos:        Number(c.pontos),
+      total_pedidos: Number(c.total_pedidos),
+      total_gasto:   Number(c.total_gasto),
+    }));
 
-    const clientes = await query<Record<string, unknown>>(
-      `SELECT
-         id, nome, telefone, cpf, email,
-         pontos, total_pedidos, total_gasto, ultimo_pedido_em, created_at
-       FROM clientes
-       WHERE empresa_id = $1 ${whereExtra}
-       ORDER BY ${orderClause}
-       LIMIT $2 OFFSET ${offset}`,
-      params
-    );
-
-    return paginatedOk(clientes, { total, page, limit });
+    return paginatedOk(data, total, page, limit);
   } catch (err) {
     console.error("[Clientes/GET]", err);
     return serverError();

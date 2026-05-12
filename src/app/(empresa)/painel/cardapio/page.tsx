@@ -17,18 +17,19 @@ interface Categoria {
 }
 
 interface Produto {
-  id:            string;
-  nome:          string;
-  descricao:     string | null;
-  preco:         number;
-  preco_custo:   number | null;
-  disponivel:    boolean;
-  destaque:      boolean;
-  tempo_preparo: number | null;
-  imagem_url:    string | null;
-  tipo:          string;
-  categoria_id:  string | null;
-  categoria_nome: string | null;
+  id:                string;
+  nome:              string;
+  descricao:         string | null;
+  preco:             number;
+  preco_custo:       number | null;
+  disponivel:        boolean;
+  destaque:          boolean;
+  tempo_preparo:     number | null;
+  imagem_url:        string | null;
+  tipo:              string;
+  categoria_id:      string | null;
+  categoria_nome:    string | null;
+  pontos_fidelidade: number | null;
 }
 
 type Tab = "produtos" | "categorias";
@@ -66,6 +67,7 @@ export default function CardapioPage() {
     nome: "", descricao: "", preco: 0, preco_custo: "",
     disponivel: true, destaque: false, tempo_preparo: "",
     imagem_url: "", tipo: "produto", categoria_id: "",
+    pontos_fidelidade: "",
   });
 
   const fetchCategorias = useCallback(async () => {
@@ -141,7 +143,7 @@ export default function CardapioPage() {
   // ── Produto CRUD ─────────────────────────────────────────────────
   function openNewProd() {
     setEditProd(null);
-    setFormProd({ nome: "", descricao: "", preco: 0, preco_custo: "", disponivel: true, destaque: false, tempo_preparo: "", imagem_url: "", tipo: "produto", categoria_id: "" });
+    setFormProd({ nome: "", descricao: "", preco: 0, preco_custo: "", disponivel: true, destaque: false, tempo_preparo: "", imagem_url: "", tipo: "produto", categoria_id: "", pontos_fidelidade: "" });
     setError("");
     setModalProd(true);
   }
@@ -149,16 +151,17 @@ export default function CardapioPage() {
   function openEditProd(prod: Produto) {
     setEditProd(prod);
     setFormProd({
-      nome:          prod.nome,
-      descricao:     prod.descricao  ?? "",
-      preco:         prod.preco,
-      preco_custo:   prod.preco_custo != null ? String(prod.preco_custo) : "",
-      disponivel:    prod.disponivel,
-      destaque:      prod.destaque,
-      tempo_preparo: prod.tempo_preparo != null ? String(prod.tempo_preparo) : "",
-      imagem_url:    prod.imagem_url  ?? "",
-      tipo:          prod.tipo,
-      categoria_id:  prod.categoria_id ?? "",
+      nome:              prod.nome,
+      descricao:         prod.descricao  ?? "",
+      preco:             prod.preco,
+      preco_custo:       prod.preco_custo != null ? String(prod.preco_custo) : "",
+      disponivel:        prod.disponivel,
+      destaque:          prod.destaque,
+      tempo_preparo:     prod.tempo_preparo != null ? String(prod.tempo_preparo) : "",
+      imagem_url:        prod.imagem_url  ?? "",
+      tipo:              prod.tipo,
+      categoria_id:      prod.categoria_id ?? "",
+      pontos_fidelidade: prod.pontos_fidelidade != null ? String(prod.pontos_fidelidade) : "",
     });
     setError("");
     setModalProd(true);
@@ -170,12 +173,13 @@ export default function CardapioPage() {
     try {
       const body = {
         ...formProd,
-        preco:         Number(formProd.preco),
-        preco_custo:   formProd.preco_custo   ? Number(formProd.preco_custo)   : undefined,
-        tempo_preparo: formProd.tempo_preparo ? Number(formProd.tempo_preparo) : undefined,
-        imagem_url:    formProd.imagem_url    || undefined,
-        categoria_id:  formProd.categoria_id  || undefined,
-        descricao:     formProd.descricao     || undefined,
+        preco:             Number(formProd.preco),
+        preco_custo:       formProd.preco_custo       ? Number(formProd.preco_custo)       : undefined,
+        tempo_preparo:     formProd.tempo_preparo     ? Number(formProd.tempo_preparo)     : undefined,
+        pontos_fidelidade: formProd.pontos_fidelidade ? Number(formProd.pontos_fidelidade) : 0,
+        imagem_url:        formProd.imagem_url        || undefined,
+        categoria_id:      formProd.categoria_id      || undefined,
+        descricao:         formProd.descricao         || undefined,
       };
       const url    = editProd ? `/api/painel/produtos/${editProd.id}` : "/api/painel/produtos";
       const method = editProd ? "PATCH" : "POST";
@@ -342,12 +346,20 @@ export default function CardapioPage() {
                       <p className="text-lg font-bold text-white">
                         {Number(prod.preco).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                       </p>
-                      {prod.tempo_preparo && (
-                        <p className="flex items-center gap-1 text-xs text-slate-400">
-                          <Clock className="h-3 w-3" />
-                          {prod.tempo_preparo} min
-                        </p>
-                      )}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {prod.tempo_preparo != null && (
+                          <p className="flex items-center gap-1 text-xs text-slate-400">
+                            <Clock className="h-3 w-3" />
+                            {prod.tempo_preparo} min
+                          </p>
+                        )}
+                        {prod.pontos_fidelidade != null && prod.pontos_fidelidade > 0 && (
+                          <p className="flex items-center gap-1 text-xs text-amber-400">
+                            <Star className="h-3 w-3" />
+                            {prod.pontos_fidelidade} pts
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-1">
@@ -538,12 +550,24 @@ export default function CardapioPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Tempo de Preparo (min)</label>
-                  <input type="number" min={1} value={formProd.tempo_preparo}
-                    onChange={e => setFormProd(f => ({ ...f, tempo_preparo: e.target.value }))}
-                    placeholder="Ex: 15"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Tempo de Preparo (min)</label>
+                    <input type="number" min={1} value={formProd.tempo_preparo}
+                      onChange={e => setFormProd(f => ({ ...f, tempo_preparo: e.target.value }))}
+                      placeholder="Ex: 15"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1.5">
+                      Pontos Fidelidade
+                      <span className="ml-1 text-slate-500">(por compra)</span>
+                    </label>
+                    <input type="number" min={0} value={formProd.pontos_fidelidade}
+                      onChange={e => setFormProd(f => ({ ...f, pontos_fidelidade: e.target.value }))}
+                      placeholder="0"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                  </div>
                 </div>
 
                 {/* Image upload */}

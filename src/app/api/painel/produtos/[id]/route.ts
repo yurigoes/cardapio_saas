@@ -28,16 +28,17 @@ export async function PATCH(
 
   try {
     const fields: Record<string, unknown> = {};
-    if (body.nome          !== undefined) fields.nome          = body.nome;
-    if (body.descricao     !== undefined) fields.descricao     = body.descricao;
-    if (body.preco         !== undefined) fields.preco         = body.preco;
-    if (body.preco_custo   !== undefined) fields.preco_custo   = body.preco_custo;
-    if (body.disponivel    !== undefined) fields.disponivel    = body.disponivel;
-    if (body.destaque      !== undefined) fields.destaque      = body.destaque;
-    if (body.tempo_preparo !== undefined) fields.tempo_preparo = body.tempo_preparo;
-    if (body.imagem_url    !== undefined) fields.imagem_url    = body.imagem_url;
-    if (body.tipo          !== undefined) fields.tipo          = body.tipo;
-    if (body.categoria_id  !== undefined) fields.categoria_id  = body.categoria_id;
+    if (body.nome              !== undefined) fields.nome              = body.nome;
+    if (body.descricao         !== undefined) fields.descricao         = body.descricao;
+    if (body.preco             !== undefined) fields.preco             = body.preco;
+    if (body.preco_custo       !== undefined) fields.preco_custo       = body.preco_custo;
+    if (body.disponivel        !== undefined) fields.disponivel        = body.disponivel;
+    if (body.destaque          !== undefined) fields.destaque          = body.destaque;
+    if (body.tempo_preparo     !== undefined) fields.tempo_preparo     = body.tempo_preparo;
+    if (body.imagem_url        !== undefined) fields.imagem_url        = body.imagem_url;
+    if (body.tipo              !== undefined) fields.tipo              = body.tipo;
+    if (body.categoria_id      !== undefined) fields.categoria_id      = body.categoria_id;
+    if (body.pontos_fidelidade !== undefined) fields.pontos_fidelidade = body.pontos_fidelidade;
 
     const entries  = Object.entries(fields);
     const sets     = entries.map(([k], i) => `${k} = $${i + 1}`);

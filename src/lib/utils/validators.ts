@@ -83,16 +83,17 @@ export const empresaUpdateSchema = empresaCreateSchema.partial().omit({ slug: tr
 // Produto
 // ─────────────────────────────────────────────
 export const produtoCreateSchema = z.object({
-  categoria_id:  uuidSchema.optional(),
-  nome:          z.string().min(2).max(255).trim(),
-  descricao:     z.string().max(2000).trim().optional(),
-  preco:         precoSchema,
-  preco_custo:   precoSchema.optional(),
-  disponivel:    z.boolean().optional().default(true),
-  destaque:      z.boolean().optional().default(false),
-  tempo_preparo: z.number().int().min(1).max(999).optional(),
-  imagem_url:    z.string().url().optional(),
-  tipo:          z.enum(["produto","combo","bebida","sobremesa","porcao"]).default("produto"),
+  categoria_id:      uuidSchema.optional(),
+  nome:              z.string().min(2).max(255).trim(),
+  descricao:         z.string().max(2000).trim().optional(),
+  preco:             precoSchema,
+  preco_custo:       precoSchema.optional(),
+  disponivel:        z.boolean().optional().default(true),
+  destaque:          z.boolean().optional().default(false),
+  tempo_preparo:     z.number().int().min(1).max(999).optional(),
+  imagem_url:        z.string().url().optional(),
+  tipo:              z.enum(["produto","combo","bebida","sobremesa","porcao"]).default("produto"),
+  pontos_fidelidade: z.number().int().min(0).max(99999).optional().default(0),
 });
 
 export const produtoUpdateSchema = produtoCreateSchema.partial();
