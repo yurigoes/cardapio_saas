@@ -6,6 +6,7 @@ import {
   ShoppingBag, FolderOpen, Plus, Search, X, Edit2, Trash2,
   ToggleLeft, ToggleRight, Star, Clock, ChevronDown, Upload, ImageOff,
 } from "lucide-react";
+import VariacoesEditor, { Variacoes } from "./_VariacoesEditor";
 
 interface Categoria {
   id:            string;
@@ -15,23 +16,6 @@ interface Categoria {
   ativo:         boolean;
   total_produtos: number;
 }
-
-interface OpcaoVariacao {
-  id:           string;
-  nome:         string;
-  preco_extra:  number;
-  disponivel?:  boolean;
-}
-interface GrupoVariacao {
-  id:           string;
-  nome:         string;
-  tipo:         "single" | "multiple";
-  obrigatorio?: boolean;
-  min?:         number;
-  max?:         number;
-  opcoes:       OpcaoVariacao[];
-}
-interface Variacoes { grupos: GrupoVariacao[]; }
 
 interface Produto {
   id:                string;
@@ -103,13 +87,18 @@ export default function CardapioPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formCat, setFormCat] = useState({ nome: "", descricao: "", ordem: 0, ativo: true });
-  const [formProd, setFormProd] = useState({
+  const [formProd, setFormProd] = useState<{
+    nome: string; descricao: string; preco: number; preco_custo: string;
+    disponivel: boolean; destaque: boolean; tempo_preparo: string;
+    imagem_url: string; tipo: string; categoria_id: string;
+    pontos_fidelidade: string;
+    variacoes: Variacoes;
+  }>({
     nome: "", descricao: "", preco: 0, preco_custo: "",
     disponivel: true, destaque: false, tempo_preparo: "",
     imagem_url: "", tipo: "produto", categoria_id: "",
     pontos_fidelidade: "",
-    variacoes_json: "",        // JSON string editável; vazio = sem variações
-    variacoes_erro: "",        // mensagem de erro de parse
+    variacoes: VARIACOES_VAZIA,
   });
 
   const fetchCategorias = useCallback(async () => {
@@ -189,7 +178,8 @@ export default function CardapioPage() {
       nome: "", descricao: "", preco: 0, preco_custo: "",
       disponivel: true, destaque: false, tempo_preparo: "",
       imagem_url: "", tipo: "produto", categoria_id: "",
-      pontos_fidelidade: "", variacoes_json: "", variacoes_erro: "",
+      pontos_fidelidade: "",
+      variacoes: VARIACOES_VAZIA,
     });
     setError("");
     setModalProd(true);
@@ -197,7 +187,6 @@ export default function CardapioPage() {
 
   function openEditProd(prod: Produto) {
     setEditProd(prod);
-    const tem = prod.variacoes && prod.variacoes.grupos && prod.variacoes.grupos.length > 0;
     setFormProd({
       nome:              prod.nome,
       descricao:         prod.descricao  ?? "",
@@ -210,8 +199,9 @@ export default function CardapioPage() {
       tipo:              prod.tipo,
       categoria_id:      prod.categoria_id ?? "",
       pontos_fidelidade: prod.pontos_fidelidade != null ? String(prod.pontos_fidelidade) : "",
-      variacoes_json:    tem ? JSON.stringify(prod.variacoes, null, 2) : "",
-      variacoes_erro:    "",
+      variacoes:         prod.variacoes && prod.variacoes.grupos
+        ? prod.variacoes
+        : VARIACOES_VAZIA,
     });
     setError("");
     setModalProd(true);
@@ -221,24 +211,25 @@ export default function CardapioPage() {
     e.preventDefault();
     setSaving(true); setError("");
 
-    // Valida JSON de variações antes de enviar
-    let variacoes: Variacoes | undefined = undefined;
-    if (formProd.variacoes_json.trim()) {
-      try {
-        const parsed = JSON.parse(formProd.variacoes_json);
-        if (!parsed || !Array.isArray(parsed.grupos)) {
-          setError("Variações: estrutura inválida (esperado { grupos: [...] })");
-          setSaving(false);
-          return;
-        }
-        variacoes = parsed;
-      } catch (e: unknown) {
-        setError(`Variações: JSON inválido — ${e instanceof Error ? e.message : "erro de parse"}`);
+    // Validação leve: se há grupos, cada um precisa de pelo menos 1 opção com nome
+    for (const g of formProd.variacoes.grupos) {
+      if (!g.nome.trim()) {
+        setError(`Variações: grupo sem nome`);
         setSaving(false);
         return;
       }
-    } else {
-      variacoes = VARIACOES_VAZIA;
+      if (g.opcoes.length === 0) {
+        setError(`Variações: grupo "${g.nome}" sem opções`);
+        setSaving(false);
+        return;
+      }
+      for (const op of g.opcoes) {
+        if (!op.nome.trim()) {
+          setError(`Variações: opção sem nome no grupo "${g.nome}"`);
+          setSaving(false);
+          return;
+        }
+      }
     }
 
     try {
@@ -251,10 +242,7 @@ export default function CardapioPage() {
         imagem_url:        formProd.imagem_url        || undefined,
         categoria_id:      formProd.categoria_id      || undefined,
         descricao:         formProd.descricao         || undefined,
-        variacoes,
-        // Campos só do form, remove antes de mandar
-        variacoes_json:    undefined,
-        variacoes_erro:    undefined,
+        variacoes:         formProd.variacoes,
       };
       const url    = editProd ? `/api/painel/produtos/${editProd.id}` : "/api/painel/produtos";
       const method = editProd ? "PATCH" : "POST";
@@ -724,46 +712,22 @@ export default function CardapioPage() {
                   </label>
                 </div>
 
-                {/* ── Variações (JSON editor) ──────────────────────────────── */}
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-300">Variações &amp; Adicionais</p>
-                      <p className="text-[11px] text-slate-500">
-                        Tamanhos, sabores, adicionais. Deixe vazio se não tiver.
-                      </p>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setFormProd(f => ({
-                          ...f,
-                          variacoes_json: JSON.stringify(VARIACOES_EXEMPLO, null, 2),
-                        }))}
-                        className="rounded-md border border-white/10 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/5 transition"
-                      >
-                        + Exemplo
-                      </button>
-                      {formProd.variacoes_json && (
-                        <button
-                          type="button"
-                          onClick={() => setFormProd(f => ({ ...f, variacoes_json: "" }))}
-                          className="rounded-md border border-white/10 px-2 py-1 text-[10px] text-slate-400 hover:bg-white/5 transition"
-                        >
-                          Limpar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <textarea
-                    value={formProd.variacoes_json}
-                    onChange={e => setFormProd(f => ({ ...f, variacoes_json: e.target.value, variacoes_erro: "" }))}
-                    placeholder='Ex: { "grupos": [{ "id":"size","nome":"Tamanho","tipo":"single","obrigatorio":true,"opcoes":[...] }] }'
-                    rows={6}
-                    spellCheck={false}
-                    className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-[11px] text-slate-300 placeholder-slate-600 focus:border-brand/50 focus:outline-none font-mono leading-relaxed"
-                  />
-                </div>
+                {/* ── Variações (editor visual) ────────────────────────────── */}
+                <VariacoesEditor
+                  value={formProd.variacoes}
+                  onChange={(v) => setFormProd(f => ({ ...f, variacoes: v }))}
+                />
+
+                {/* Botão para inserir exemplo se ainda não há grupos */}
+                {formProd.variacoes.grupos.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFormProd(f => ({ ...f, variacoes: VARIACOES_EXEMPLO }))}
+                    className="text-xs text-slate-500 hover:text-brand transition underline underline-offset-2"
+                  >
+                    Inserir exemplo (Tamanho + Adicionais)
+                  </button>
+                )}
 
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setModalProd(false)}
