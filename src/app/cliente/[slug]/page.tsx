@@ -14,7 +14,8 @@
 import { useEffect, useState } from "react";
 import {
   Trophy, ShoppingBag, Tag, Phone, FileText, ChefHat,
-  Sparkles, ArrowLeft, Clock, TrendingUp, LogOut,
+  Sparkles, Clock, TrendingUp, LogOut,
+  Gift, Check, X, Copy,
 } from "lucide-react";
 
 interface EmpresaPub {
@@ -127,6 +128,13 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
   const [erro,  setErro]    = useState("");
   const [searching, setSearching] = useState(false);
 
+  // Resgate
+  const [resgateAlvo,  setResgateAlvo]  = useState<Cupom | null>(null);
+  const [resgateLoad,  setResgateLoad]  = useState(false);
+  const [resgateErro,  setResgateErro]  = useState("");
+  const [resgateOk,    setResgateOk]    = useState<{ codigo: string; pontos: number } | null>(null);
+  const [copiado, setCopiado] = useState(false);
+
   // ── Apply brand color ──────────────────────────────────────────────────────
   useEffect(() => {
     fetch(`/api/pub/cardapio/${params.slug}`)
@@ -199,6 +207,48 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
   function handleLogout() {
     localStorage.removeItem(STORAGE_KEY(params.slug));
     setPerfil(null);
+  }
+
+  // ── Resgate ────────────────────────────────────────────────────────────────
+  async function confirmarResgate() {
+    if (!resgateAlvo || !perfil) return;
+    setResgateLoad(true); setResgateErro("");
+    try {
+      const res  = await fetch(`/api/pub/cliente/${perfil.cliente.id}/resgatar`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ cupom_id: resgateAlvo.id, slug: params.slug }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setResgateErro(data.error || "Erro ao resgatar");
+        return;
+      }
+      setResgateOk({
+        codigo: data.data.cupom.codigo,
+        pontos: data.data.pontos_debitados,
+      });
+      // Recarrega o perfil para refletir saldo e novo cupom
+      await loadPerfil(perfil.cliente.id);
+    } catch {
+      setResgateErro("Erro de conexão");
+    } finally {
+      setResgateLoad(false);
+    }
+  }
+
+  function fecharResgate() {
+    setResgateAlvo(null);
+    setResgateErro("");
+    setResgateOk(null);
+    setCopiado(false);
+  }
+
+  function copiarCodigo(codigo: string) {
+    navigator.clipboard.writeText(codigo).then(() => {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    });
   }
 
   // ── Loading ────────────────────────────────────────────────────────────────
@@ -421,23 +471,30 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
 
             <div className="space-y-2">
               {cupons.slice(0, 6).map((c) => {
-                const podeResgatar = c.pontos_resgate == null
-                  || cliente.pontos >= c.pontos_resgate;
+                const eResgate     = c.pontos_resgate != null && c.pontos_resgate > 0;
+                const podeResgatar = eResgate && cliente.pontos >= (c.pontos_resgate ?? 0);
+                const meuPersonal  = !eResgate && c.codigo.startsWith("RGT-");
+
                 return (
                   <div
                     key={c.id}
                     className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3"
-                    style={podeResgatar ? {
+                    style={podeResgatar || meuPersonal ? {
                       borderColor: "var(--color-primary-50, rgba(16,185,129,0.4))",
                     } : undefined}
                   >
                     <div className="min-w-0 flex-1">
-                      <code
-                        className="rounded-md bg-white/10 px-2 py-0.5 text-xs font-bold tracking-widest"
-                        style={{ color: "var(--color-primary, #10b981)" }}
-                      >
-                        {c.codigo}
-                      </code>
+                      <div className="flex items-center gap-1.5">
+                        {meuPersonal && (
+                          <Gift className="h-3.5 w-3.5 flex-shrink-0" style={{ color: "var(--color-primary, #10b981)" }} />
+                        )}
+                        <code
+                          className="rounded-md bg-white/10 px-2 py-0.5 text-xs font-bold tracking-widest"
+                          style={{ color: "var(--color-primary, #10b981)" }}
+                        >
+                          {c.codigo}
+                        </code>
+                      </div>
                       <p className="mt-1 text-xs text-slate-400 capitalize">
                         {c.tipo === "percentual"
                           ? `${c.valor}% off`
@@ -447,19 +504,34 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
                         {c.validade && ` · até ${formatDate(c.validade)}`}
                       </p>
                     </div>
-                    {c.pontos_resgate != null && (
-                      <div className="flex-shrink-0 text-right">
-                        <p className="text-xs text-slate-400">Pontos</p>
-                        <p
-                          className="text-sm font-bold"
-                          style={{ color: podeResgatar
-                            ? "var(--color-primary, #10b981)"
-                            : "rgb(100,116,139)" }}
-                        >
-                          {c.pontos_resgate}
-                        </p>
-                      </div>
-                    )}
+
+                    {eResgate ? (
+                      <button
+                        onClick={() => podeResgatar && setResgateAlvo(c)}
+                        disabled={!podeResgatar}
+                        className="flex-shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed"
+                        style={podeResgatar ? {
+                          background: "var(--color-primary, #10b981)",
+                          color: "white",
+                        } : {
+                          background: "rgba(148,163,184,0.1)",
+                          color:      "rgb(100,116,139)",
+                        }}
+                      >
+                        <Gift className="h-3.5 w-3.5" />
+                        {podeResgatar
+                          ? `Resgatar · ${c.pontos_resgate} pts`
+                          : `Faltam ${(c.pontos_resgate ?? 0) - cliente.pontos} pts`}
+                      </button>
+                    ) : meuPersonal ? (
+                      <button
+                        onClick={() => copiarCodigo(c.codigo)}
+                        className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/5 transition"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        {copiado ? "Copiado!" : "Copiar"}
+                      </button>
+                    ) : null}
                   </div>
                 );
               })}
@@ -531,6 +603,133 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
           </div>
         </section>
       </main>
+
+      {/* ── Modal de resgate ─────────────────────────────────────────────────── */}
+      {resgateAlvo && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={fecharResgate} />
+          <div className="relative w-full max-w-sm rounded-3xl bg-slate-900 border border-white/10 p-6 shadow-2xl">
+            {resgateOk ? (
+              // ── Tela de sucesso ──────────────────────────────────────────────
+              <div className="text-center space-y-4">
+                <div
+                  className="mx-auto flex h-20 w-20 items-center justify-center rounded-full"
+                  style={{ background: "var(--color-primary-15, rgba(16,185,129,0.15))" }}
+                >
+                  <Check className="h-10 w-10" style={{ color: "var(--color-primary, #10b981)" }} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Cupom resgatado!</h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    −{resgateOk.pontos} pontos · use o código abaixo no seu próximo pedido
+                  </p>
+                </div>
+
+                <div
+                  className="rounded-2xl border-2 border-dashed p-4"
+                  style={{ borderColor: "var(--color-primary-50, rgba(16,185,129,0.4))" }}
+                >
+                  <code
+                    className="block text-2xl font-black tracking-widest"
+                    style={{ color: "var(--color-primary, #10b981)" }}
+                  >
+                    {resgateOk.codigo}
+                  </code>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => copiarCodigo(resgateOk.codigo)}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-white/10 py-3 text-sm font-medium text-white hover:bg-white/5 transition"
+                  >
+                    <Copy className="h-4 w-4" />
+                    {copiado ? "Copiado!" : "Copiar"}
+                  </button>
+                  <button
+                    onClick={fecharResgate}
+                    style={{ background: "var(--color-primary, #10b981)" }}
+                    className="flex-1 rounded-xl py-3 text-sm font-bold text-white transition hover:brightness-110"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // ── Tela de confirmação ──────────────────────────────────────────
+              <>
+                <div className="flex items-start justify-between mb-5">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Confirmar resgate</h3>
+                    <p className="mt-0.5 text-xs text-slate-400">Você está prestes a trocar pontos por um cupom</p>
+                  </div>
+                  <button onClick={fecharResgate} className="text-slate-400 hover:text-white transition">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {/* Cupom info */}
+                <div className="space-y-3 rounded-2xl bg-white/5 p-4 mb-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Benefício</span>
+                    <span className="text-sm font-semibold text-white capitalize">
+                      {resgateAlvo.tipo === "percentual"
+                        ? `${resgateAlvo.valor}% de desconto`
+                        : resgateAlvo.tipo === "frete_gratis"
+                          ? "Frete grátis"
+                          : `${formatBRL(resgateAlvo.valor)} de desconto`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Custo</span>
+                    <span
+                      className="text-sm font-bold"
+                      style={{ color: "var(--color-primary, #10b981)" }}
+                    >
+                      −{resgateAlvo.pontos_resgate} pts
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-white/5 pt-3">
+                    <span className="text-xs text-slate-400">Saldo após resgate</span>
+                    <span className="text-sm font-bold text-white">
+                      {(cliente.pontos - (resgateAlvo.pontos_resgate ?? 0)).toLocaleString("pt-BR")} pts
+                    </span>
+                  </div>
+                </div>
+
+                {resgateErro && (
+                  <p className="mb-3 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400">
+                    {resgateErro}
+                  </p>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={fecharResgate}
+                    className="flex-1 rounded-xl border border-white/10 py-3 text-sm font-medium text-slate-300 hover:bg-white/5 transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={confirmarResgate}
+                    disabled={resgateLoad}
+                    style={{ background: "var(--color-primary, #10b981)" }}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-3 text-sm font-bold text-white transition hover:brightness-110 disabled:opacity-50"
+                  >
+                    {resgateLoad ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                      <>
+                        <Gift className="h-4 w-4" />
+                        Resgatar
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
