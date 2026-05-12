@@ -30,7 +30,7 @@ const STATUS_LABELS: Record<string, { label: string; style: string }> = {
   pendente:             { label: "Pendente",   style: "bg-amber-500/15 text-amber-400"   },
   confirmado:           { label: "Confirmado", style: "bg-blue-500/15 text-blue-400"     },
   preparando:           { label: "Preparando", style: "bg-violet-500/15 text-violet-400" },
-  pronto:               { label: "Pronto",     style: "bg-emerald-500/15 text-emerald-400"},
+  pronto:               { label: "Pronto",     style: "bg-brand/15 text-brand"},
   entregue:             { label: "Entregue",   style: "bg-slate-500/15 text-slate-400"   },
   cancelado:            { label: "Cancelado",  style: "bg-red-500/15 text-red-400"       },
   aguardando_pagamento: { label: "Pagamento",  style: "bg-orange-500/15 text-orange-400" },
@@ -75,7 +75,7 @@ export default function PainelDashboard() {
   const COLOR_MAP: Record<string, string> = {
     blue:    "bg-blue-500/15 text-blue-400",
     amber:   "bg-amber-500/15 text-amber-400",
-    emerald: "bg-emerald-500/15 text-emerald-400",
+    emerald: "bg-brand/15 text-brand",
     violet:  "bg-violet-500/15 text-violet-400",
     pink:    "bg-pink-500/15 text-pink-400",
     cyan:    "bg-cyan-500/15 text-cyan-400",
@@ -90,7 +90,7 @@ export default function PainelDashboard() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
       </div>
     );
   }
@@ -132,7 +132,7 @@ export default function PainelDashboard() {
       <div className="rounded-2xl border border-white/10 bg-white/5">
         <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
           <h2 className="text-sm font-semibold text-white">Pedidos Recentes</h2>
-          <a href="/painel/pedidos" className="text-xs text-emerald-400 hover:underline">
+          <a href="/painel/pedidos" className="text-xs text-brand hover:underline">
             Ver todos
           </a>
         </div>

@@ -8,6 +8,7 @@ import {
   Package, Users, Settings, LogOut, ChefHat, Bell, Tag, BarChart3,
   MapPin, CreditCard, Zap, LayoutGrid, Tv2,
 } from "lucide-react";
+import { applyBrandColors } from "@/lib/theme";
 
 interface Empresa {
   nome_fantasia:  string;
@@ -54,13 +55,11 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         if (role === "master") { window.location.href = "/admin"; return; }
         setEmpresa(data.data?.empresa);
 
-        // Apply brand colors as CSS variables
-        const primary   = data.data?.empresa?.cor_primaria   || "#10b981";
-        const secondary = data.data?.empresa?.cor_secundaria || "#1e293b";
-        document.documentElement.style.setProperty("--color-primary",    primary);
-        document.documentElement.style.setProperty("--color-secondary",  secondary);
-        document.documentElement.style.setProperty("--color-primary-15", primary + "26"); // 15% opacity hex
-        document.documentElement.style.setProperty("--color-primary-50", primary + "80"); // 50% opacity hex
+        // Apply brand colors as CSS variables (incl. --color-primary-rgb p/ Tailwind brand)
+        applyBrandColors({
+          primary:   data.data?.empresa?.cor_primaria,
+          secondary: data.data?.empresa?.cor_secundaria,
+        });
 
         setLoading(false);
       })

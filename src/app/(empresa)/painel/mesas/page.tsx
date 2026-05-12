@@ -21,7 +21,7 @@ interface Mesa {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  livre:    { label: "Livre",    color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+  livre:    { label: "Livre",    color: "text-brand", bg: "bg-brand/10 border-brand/20" },
   ocupada:  { label: "Ocupada",  color: "text-orange-400",  bg: "bg-orange-500/10 border-orange-500/20"  },
   reservada:{ label: "Reservada",color: "text-blue-400",    bg: "bg-blue-500/10 border-blue-500/20"      },
   fechando: { label: "Fechando", color: "text-yellow-400",  bg: "bg-yellow-500/10 border-yellow-500/20"  },
@@ -94,7 +94,7 @@ function ModalCriarMesa({ onClose, onSaved }: ModalCriarMesaProps) {
               <input
                 required type="number" min="1" max="9999"
                 value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })}
-                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
                 placeholder="1"
               />
             </div>
@@ -103,7 +103,7 @@ function ModalCriarMesa({ onClose, onSaved }: ModalCriarMesaProps) {
               <input
                 type="number" min="1" max="100"
                 value={form.capacidade} onChange={(e) => setForm({ ...form, capacidade: e.target.value })}
-                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
               />
             </div>
           </div>
@@ -111,7 +111,7 @@ function ModalCriarMesa({ onClose, onSaved }: ModalCriarMesaProps) {
             <label className="block text-xs text-slate-400 mb-1">Nome (opcional)</label>
             <input
               value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })}
-              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
               placeholder="Ex: Varanda, Terraço..."
             />
           </div>
@@ -119,7 +119,7 @@ function ModalCriarMesa({ onClose, onSaved }: ModalCriarMesaProps) {
             <label className="block text-xs text-slate-400 mb-1">Setor (opcional)</label>
             <input
               value={form.setor} onChange={(e) => setForm({ ...form, setor: e.target.value })}
-              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
               placeholder="Ex: Salão, Área externa..."
             />
           </div>
@@ -132,7 +132,7 @@ function ModalCriarMesa({ onClose, onSaved }: ModalCriarMesaProps) {
             </button>
             <button
               type="submit" disabled={saving}
-              className="flex-1 rounded-xl bg-emerald-500 py-2 text-sm font-medium text-white hover:bg-emerald-400 transition disabled:opacity-50"
+              className="flex-1 rounded-xl bg-brand py-2 text-sm font-medium text-white hover:brightness-110 transition disabled:opacity-50"
             >
               {saving ? "Criando..." : "Criar mesa"}
             </button>
@@ -179,7 +179,7 @@ function MesaCard({ mesa, onVerPedido, onQrCode }: { mesa: Mesa; onVerPedido: (i
               <p className="text-xs text-slate-400">
                 Pedido #{mesa.pedido_numero}
               </p>
-              <p className="text-sm font-bold text-emerald-400">
+              <p className="text-sm font-bold text-brand">
                 {mesa.pedido_total != null ? formatBRL(mesa.pedido_total) : "—"}
               </p>
             </div>
@@ -202,7 +202,7 @@ function MesaCard({ mesa, onVerPedido, onQrCode }: { mesa: Mesa; onVerPedido: (i
       )}
 
       {mesa.status === "livre" && (
-        <div className="mt-3 flex items-center gap-1 text-xs text-emerald-400">
+        <div className="mt-3 flex items-center gap-1 text-xs text-brand">
           <CheckCircle className="h-3 w-3" />
           Disponível
         </div>
@@ -273,12 +273,12 @@ function ModalQrCode({ mesa, slug, onClose }: { mesa: Mesa; slug: string; onClos
             onClick={handleCopy}
             className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 py-2 text-sm text-slate-400 hover:text-white transition"
           >
-            {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+            {copied ? <Check className="h-4 w-4 text-brand" /> : <Copy className="h-4 w-4" />}
             {copied ? "Copiado!" : "Copiar link"}
           </button>
           <button
             onClick={handleDownload}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 py-2 text-sm font-medium text-white hover:bg-emerald-400 transition"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand py-2 text-sm font-medium text-white hover:brightness-110 transition"
           >
             <QrCode className="h-4 w-4" />
             Baixar SVG
@@ -362,7 +362,7 @@ export default function MesasPage() {
           </button>
           <button
             onClick={() => setShowCriar(true)}
-            className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-400 transition"
+            className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110 transition"
           >
             <Plus className="h-4 w-4" />
             Nova mesa
@@ -374,7 +374,7 @@ export default function MesasPage() {
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Total",   value: mesas.length, color: "text-white"        },
-          { label: "Livres",  value: livres,        color: "text-emerald-400"  },
+          { label: "Livres",  value: livres,        color: "text-brand"  },
           { label: "Ocupadas",value: ocupadas,      color: "text-orange-400"   },
         ].map(({ label, value, color }) => (
           <div key={label} className="rounded-2xl border border-white/5 bg-slate-900 p-4 text-center">
@@ -393,7 +393,7 @@ export default function MesasPage() {
               onClick={() => setSetor(s)}
               className={`flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition ${
                 setor === s
-                  ? "bg-emerald-500 text-white"
+                  ? "bg-brand text-white"
                   : "bg-slate-800 text-slate-400 hover:text-white"
               }`}
             >
@@ -406,7 +406,7 @@ export default function MesasPage() {
       {/* Grid de mesas */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
         </div>
       ) : filtradas.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-slate-500">
@@ -414,7 +414,7 @@ export default function MesasPage() {
           <p className="text-sm">Nenhuma mesa cadastrada</p>
           <button
             onClick={() => setShowCriar(true)}
-            className="text-sm text-emerald-400 hover:text-emerald-300 transition"
+            className="text-sm text-brand hover:text-brand transition"
           >
             Criar primeira mesa
           </button>
@@ -446,7 +446,7 @@ export default function MesasPage() {
           <div className="rounded-2xl bg-slate-900 border border-white/10 p-6 text-center">
             <p className="text-slate-400 text-sm">
               Ver detalhes do pedido na página de{" "}
-              <a href="/painel/pedidos" className="text-emerald-400 underline">Pedidos</a>
+              <a href="/painel/pedidos" className="text-brand underline">Pedidos</a>
             </p>
             <button
               onClick={() => setPedidoDetalhe(null)}

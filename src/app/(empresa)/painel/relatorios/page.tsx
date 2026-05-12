@@ -71,8 +71,8 @@ const STATUS_COLOR: Record<string, string> = {
   pendente:   "bg-yellow-500/15 text-yellow-400",
   confirmado: "bg-blue-500/15 text-blue-400",
   preparando: "bg-orange-500/15 text-orange-400",
-  pronto:     "bg-emerald-500/15 text-emerald-400",
-  entregue:   "bg-emerald-500/15 text-emerald-400",
+  pronto:     "bg-brand/15 text-brand",
+  entregue:   "bg-brand/15 text-brand",
   cancelado:  "bg-red-500/15 text-red-400",
 };
 
@@ -186,7 +186,7 @@ export default function RelatoriosPage() {
               key={p}
               onClick={() => setPeriodo(p)}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                periodo === p ? "bg-emerald-500/20 text-emerald-400" : "text-slate-400 hover:text-white"
+                periodo === p ? "bg-brand/20 text-brand" : "text-slate-400 hover:text-white"
               }`}
             >
               {p === "custom" && <Calendar className="h-3.5 w-3.5" />}
@@ -201,14 +201,14 @@ export default function RelatoriosPage() {
               type="date"
               value={custom.from}
               onChange={e => setCustom(c => ({ ...c, from: e.target.value }))}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-emerald-500/50 focus:outline-none"
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-brand/50 focus:outline-none"
             />
             <span className="text-slate-500 text-sm">até</span>
             <input
               type="date"
               value={custom.to}
               onChange={e => setCustom(c => ({ ...c, to: e.target.value }))}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-emerald-500/50 focus:outline-none"
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-brand/50 focus:outline-none"
             />
           </div>
         )}
@@ -226,7 +226,7 @@ export default function RelatoriosPage() {
           label="Faturamento"
           value={formatBRL(faturamento)}
           icon={DollarSign}
-          color="text-emerald-400"
+          color="text-brand"
           sub="pedidos entregues/prontos"
         />
         <MetricCard
@@ -256,7 +256,7 @@ export default function RelatoriosPage() {
       <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
           <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-emerald-400" />
+            <BarChart3 className="h-4 w-4 text-brand" />
             Pedidos no período
           </h2>
         </div>
@@ -272,7 +272,7 @@ export default function RelatoriosPage() {
 
         {loading ? (
           <div className="flex h-40 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
           </div>
         ) : pedidos.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-500">

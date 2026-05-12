@@ -26,7 +26,7 @@ export default function PainelTVRedirect() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
       </div>
     );
   }
@@ -67,7 +67,7 @@ export default function PainelTVRedirect() {
 
         <div className="rounded-xl border border-white/10 bg-slate-800 px-4 py-3">
           <p className="text-xs text-slate-500 mb-1">URL do painel</p>
-          <code className="text-sm text-emerald-400 break-all">{typeof window !== "undefined" ? window.location.origin : ""}{url}</code>
+          <code className="text-sm text-brand break-all">{typeof window !== "undefined" ? window.location.origin : ""}{url}</code>
         </div>
 
         <div className="rounded-xl border border-white/5 bg-slate-800/50 p-4 text-left space-y-2">

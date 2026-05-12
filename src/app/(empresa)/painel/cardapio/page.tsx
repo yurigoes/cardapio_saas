@@ -241,7 +241,7 @@ export default function CardapioPage() {
         </div>
         <button
           onClick={tab === "produtos" ? openNewProd : openNewCat}
-          className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 transition"
+          className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-medium text-white hover:brightness-110 transition"
         >
           <Plus className="h-4 w-4" />
           {tab === "produtos" ? "Novo Produto" : "Nova Categoria"}
@@ -255,7 +255,7 @@ export default function CardapioPage() {
             key={key}
             onClick={() => setTab(key)}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${
-              tab === key ? "bg-emerald-500/20 text-emerald-400" : "text-slate-400 hover:text-white"
+              tab === key ? "bg-brand/20 text-brand" : "text-slate-400 hover:text-white"
             }`}
           >
             <Icon className="h-4 w-4" />
@@ -275,14 +275,14 @@ export default function CardapioPage() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar produto..."
-                className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
               />
             </div>
             <div className="relative">
               <select
                 value={catFiltro}
                 onChange={e => setCatFiltro(e.target.value)}
-                className="appearance-none rounded-xl border border-white/10 bg-white/5 py-2.5 pl-4 pr-8 text-sm text-white focus:border-emerald-500/50 focus:outline-none"
+                className="appearance-none rounded-xl border border-white/10 bg-white/5 py-2.5 pl-4 pr-8 text-sm text-white focus:border-brand/50 focus:outline-none"
               >
                 <option value="">Todas as categorias</option>
                 {categorias.map(c => (
@@ -296,7 +296,7 @@ export default function CardapioPage() {
           {/* Grid de produtos */}
           {loading ? (
             <div className="flex h-40 items-center justify-center">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
             </div>
           ) : produtos.length === 0 ? (
             <div className="py-16 text-center text-slate-500">
@@ -369,7 +369,7 @@ export default function CardapioPage() {
                         title={prod.disponivel ? "Desativar" : "Ativar"}
                       >
                         {prod.disponivel
-                          ? <ToggleRight className="h-4 w-4 text-emerald-400" />
+                          ? <ToggleRight className="h-4 w-4 text-brand" />
                           : <ToggleLeft  className="h-4 w-4" />
                         }
                       </button>
@@ -421,7 +421,7 @@ export default function CardapioPage() {
 
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-400">{cat.total_produtos} produto{Number(cat.total_produtos) !== 1 ? "s" : ""}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cat.ativo ? "bg-emerald-500/15 text-emerald-400" : "bg-slate-500/15 text-slate-400"}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cat.ativo ? "bg-brand/15 text-brand" : "bg-slate-500/15 text-slate-400"}`}>
                       {cat.ativo ? "Ativa" : "Inativa"}
                     </span>
                     <button onClick={() => openEditCat(cat)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition">
@@ -456,29 +456,29 @@ export default function CardapioPage() {
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Nome *</label>
                   <input value={formCat.nome} onChange={e => setFormCat(f => ({ ...f, nome: e.target.value }))}
                     required placeholder="Ex: Entradas"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Descrição</label>
                   <input value={formCat.descricao} onChange={e => setFormCat(f => ({ ...f, descricao: e.target.value }))}
                     placeholder="Opcional"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Ordem</label>
                   <input type="number" min={0} value={formCat.ordem} onChange={e => setFormCat(f => ({ ...f, ordem: Number(e.target.value) }))}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-brand/50 focus:outline-none" />
                 </div>
                 <div className="flex items-center gap-3">
                   <input type="checkbox" id="cat-ativo" checked={formCat.ativo} onChange={e => setFormCat(f => ({ ...f, ativo: e.target.checked }))}
-                    className="h-4 w-4 rounded border-white/20 bg-white/10 text-emerald-500" />
+                    className="h-4 w-4 rounded border-white/20 bg-white/10 text-brand" />
                   <label htmlFor="cat-ativo" className="text-sm text-slate-300">Categoria ativa</label>
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setModalCat(false)}
                     className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition">Cancelar</button>
                   <button type="submit" disabled={saving}
-                    className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:opacity-50 transition">
+                    className="flex-1 rounded-xl bg-brand py-2.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50 transition">
                     {saving ? "Salvando..." : editCat ? "Salvar" : "Criar"}
                   </button>
                 </div>
@@ -506,14 +506,14 @@ export default function CardapioPage() {
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Nome *</label>
                   <input value={formProd.nome} onChange={e => setFormProd(f => ({ ...f, nome: e.target.value }))}
                     required placeholder="Ex: X-Burguer"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Descrição</label>
                   <textarea value={formProd.descricao} onChange={e => setFormProd(f => ({ ...f, descricao: e.target.value }))}
                     rows={2} placeholder="Ingredientes, detalhes..."
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none resize-none" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none resize-none" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -521,14 +521,14 @@ export default function CardapioPage() {
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">Preço de Venda (R$) *</label>
                     <input type="number" min={0} step={0.01} value={formProd.preco}
                       onChange={e => setFormProd(f => ({ ...f, preco: Number(e.target.value) }))} required
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 focus:outline-none" />
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-brand/50 focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">Preço de Custo (R$)</label>
                     <input type="number" min={0} step={0.01} value={formProd.preco_custo}
                       onChange={e => setFormProd(f => ({ ...f, preco_custo: e.target.value }))}
                       placeholder="Opcional"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                   </div>
                 </div>
 
@@ -536,7 +536,7 @@ export default function CardapioPage() {
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">Categoria</label>
                     <select value={formProd.categoria_id} onChange={e => setFormProd(f => ({ ...f, categoria_id: e.target.value }))}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 focus:outline-none">
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-brand/50 focus:outline-none">
                       <option value="">Sem categoria</option>
                       {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                     </select>
@@ -544,7 +544,7 @@ export default function CardapioPage() {
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">Tipo</label>
                     <select value={formProd.tipo} onChange={e => setFormProd(f => ({ ...f, tipo: e.target.value }))}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 focus:outline-none">
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-brand/50 focus:outline-none">
                       {TIPOS.map(t => <option key={t} value={t}>{TIPO_LABEL[t]}</option>)}
                     </select>
                   </div>
@@ -556,7 +556,7 @@ export default function CardapioPage() {
                     <input type="number" min={1} value={formProd.tempo_preparo}
                       onChange={e => setFormProd(f => ({ ...f, tempo_preparo: e.target.value }))}
                       placeholder="Ex: 15"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">
@@ -566,7 +566,7 @@ export default function CardapioPage() {
                     <input type="number" min={0} value={formProd.pontos_fidelidade}
                       onChange={e => setFormProd(f => ({ ...f, pontos_fidelidade: e.target.value }))}
                       placeholder="0"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                   </div>
                 </div>
 
@@ -612,10 +612,10 @@ export default function CardapioPage() {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingImg}
-                      className="flex h-28 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-white/5 text-slate-400 hover:border-emerald-500/40 hover:text-emerald-400 transition disabled:opacity-50"
+                      className="flex h-28 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/15 bg-white/5 text-slate-400 hover:border-brand/40 hover:text-brand transition disabled:opacity-50"
                     >
                       {uploadingImg ? (
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand border-t-transparent" />
                       ) : (
                         <>
                           <Upload className="h-5 w-5" />
@@ -630,7 +630,7 @@ export default function CardapioPage() {
                     value={formProd.imagem_url}
                     onChange={e => setFormProd(f => ({ ...f, imagem_url: e.target.value }))}
                     placeholder="Ou cole a URL da imagem aqui..."
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
                   />
                 </div>
 
@@ -638,13 +638,13 @@ export default function CardapioPage() {
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={formProd.disponivel}
                       onChange={e => setFormProd(f => ({ ...f, disponivel: e.target.checked }))}
-                      className="h-4 w-4 rounded border-white/20 bg-white/10 text-emerald-500" />
+                      className="h-4 w-4 rounded border-white/20 bg-white/10 text-brand" />
                     <span className="text-sm text-slate-300">Disponível</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={formProd.destaque}
                       onChange={e => setFormProd(f => ({ ...f, destaque: e.target.checked }))}
-                      className="h-4 w-4 rounded border-white/20 bg-white/10 text-emerald-500" />
+                      className="h-4 w-4 rounded border-white/20 bg-white/10 text-brand" />
                     <span className="text-sm text-slate-300">Destaque</span>
                   </label>
                 </div>
@@ -653,7 +653,7 @@ export default function CardapioPage() {
                   <button type="button" onClick={() => setModalProd(false)}
                     className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition">Cancelar</button>
                   <button type="submit" disabled={saving}
-                    className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:opacity-50 transition">
+                    className="flex-1 rounded-xl bg-brand py-2.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50 transition">
                     {saving ? "Salvando..." : editProd ? "Salvar" : "Criar"}
                   </button>
                 </div>

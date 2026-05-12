@@ -104,7 +104,7 @@ function ModalCriar({ onClose, onSaved }: ModalCriarProps) {
             <label className="block text-xs text-slate-400 mb-1">Nome completo</label>
             <input
               required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })}
-              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
               placeholder="Ex: João da Silva"
             />
           </div>
@@ -114,7 +114,7 @@ function ModalCriar({ onClose, onSaved }: ModalCriarProps) {
             <input
               required type="email" value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
               placeholder="joao@restaurante.com"
             />
           </div>
@@ -124,7 +124,7 @@ function ModalCriar({ onClose, onSaved }: ModalCriarProps) {
             <input
               required type="password" value={form.senha}
               onChange={(e) => setForm({ ...form, senha: e.target.value })}
-              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
               placeholder="Mínimo 8 caracteres"
             />
           </div>
@@ -133,7 +133,7 @@ function ModalCriar({ onClose, onSaved }: ModalCriarProps) {
             <label className="block text-xs text-slate-400 mb-1">Papel / Função</label>
             <select
               value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
-              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
             >
               {ROLES.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
@@ -145,7 +145,7 @@ function ModalCriar({ onClose, onSaved }: ModalCriarProps) {
             <label className="block text-xs text-slate-400 mb-1">Telefone (opcional)</label>
             <input
               value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })}
-              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
               placeholder="11999999999"
             />
           </div>
@@ -159,7 +159,7 @@ function ModalCriar({ onClose, onSaved }: ModalCriarProps) {
             </button>
             <button
               type="submit" disabled={saving}
-              className="flex-1 rounded-xl bg-emerald-500 py-2 text-sm font-medium text-white hover:bg-emerald-400 transition disabled:opacity-50"
+              className="flex-1 rounded-xl bg-brand py-2 text-sm font-medium text-white hover:brightness-110 transition disabled:opacity-50"
             >
               {saving ? "Criando..." : "Criar usuário"}
             </button>
@@ -262,7 +262,7 @@ function ModalEditar({ usuario, onClose, onSaved }: ModalEditarProps) {
           </div>
         )}
         {ok && (
-          <div className="mb-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400 flex items-center gap-2">
+          <div className="mb-4 rounded-xl bg-brand/10 border border-brand/20 px-4 py-3 text-sm text-brand flex items-center gap-2">
             <Check className="h-4 w-4" /> Salvo com sucesso!
           </div>
         )}
@@ -273,7 +273,7 @@ function ModalEditar({ usuario, onClose, onSaved }: ModalEditarProps) {
               <label className="block text-xs text-slate-400 mb-1">Nome</label>
               <input
                 required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })}
-                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
               />
             </div>
             <div>
@@ -281,14 +281,14 @@ function ModalEditar({ usuario, onClose, onSaved }: ModalEditarProps) {
               <input
                 required type="email" value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
               />
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1">Papel</label>
               <select
                 value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
               >
                 {ROLES.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>
@@ -299,7 +299,7 @@ function ModalEditar({ usuario, onClose, onSaved }: ModalEditarProps) {
               <label className="block text-xs text-slate-400 mb-1">Telefone</label>
               <input
                 value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })}
-                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
                 placeholder="11999999999"
               />
             </div>
@@ -307,7 +307,7 @@ function ModalEditar({ usuario, onClose, onSaved }: ModalEditarProps) {
               <input
                 type="checkbox" checked={form.ativo}
                 onChange={(e) => setForm({ ...form, ativo: e.target.checked })}
-                className="rounded border-white/10 bg-slate-800 text-emerald-500"
+                className="rounded border-white/10 bg-slate-800 text-brand"
               />
               <span className="text-sm text-slate-300">Conta ativa</span>
             </label>
@@ -320,7 +320,7 @@ function ModalEditar({ usuario, onClose, onSaved }: ModalEditarProps) {
               </button>
               <button
                 type="submit" disabled={saving}
-                className="flex-1 rounded-xl bg-emerald-500 py-2 text-sm font-medium text-white hover:bg-emerald-400 transition disabled:opacity-50"
+                className="flex-1 rounded-xl bg-brand py-2 text-sm font-medium text-white hover:brightness-110 transition disabled:opacity-50"
               >
                 {saving ? "Salvando..." : "Salvar"}
               </button>
@@ -333,7 +333,7 @@ function ModalEditar({ usuario, onClose, onSaved }: ModalEditarProps) {
               <input
                 required type="password" value={senha}
                 onChange={(e) => setSenha(e.target.value)}
-                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
                 placeholder="Mínimo 8 caracteres"
               />
             </div>
@@ -421,7 +421,7 @@ export default function UsuariosPage() {
         </div>
         <button
           onClick={() => setShowCriar(true)}
-          className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-400 transition"
+          className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110 transition"
         >
           <Plus className="h-4 w-4" />
           Novo usuário
@@ -435,12 +435,12 @@ export default function UsuariosPage() {
           <input
             value={q} onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar por nome ou e-mail..."
-            className="w-full rounded-xl bg-slate-800 border border-white/10 pl-9 pr-4 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
+            className="w-full rounded-xl bg-slate-800 border border-white/10 pl-9 pr-4 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-brand/50"
           />
         </div>
         <select
           value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
-          className="rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+          className="rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
         >
           <option value="">Todos os papéis</option>
           {ROLES.map((r) => (
@@ -453,7 +453,7 @@ export default function UsuariosPage() {
       <div className="rounded-2xl border border-white/5 bg-slate-900 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
           </div>
         ) : usuarios.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-500">
@@ -461,7 +461,7 @@ export default function UsuariosPage() {
             <p className="text-sm">Nenhum usuário encontrado</p>
             <button
               onClick={() => setShowCriar(true)}
-              className="mt-1 text-sm text-emerald-400 hover:text-emerald-300 transition"
+              className="mt-1 text-sm text-brand hover:text-brand transition"
             >
               Adicionar o primeiro usuário
             </button>
@@ -506,7 +506,7 @@ export default function UsuariosPage() {
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                       u.ativo
-                        ? "bg-emerald-500/10 text-emerald-400"
+                        ? "bg-brand/10 text-brand"
                         : "bg-slate-500/10 text-slate-400"
                     }`}>
                       {u.ativo ? "Ativo" : "Inativo"}

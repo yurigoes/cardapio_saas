@@ -41,13 +41,13 @@ function elapsedMinutes(iso: string): number {
 }
 
 function timerColor(minutes: number): string {
-  if (minutes < 10) return "text-emerald-400";
+  if (minutes < 10) return "text-brand";
   if (minutes < 20) return "text-yellow-400";
   return "text-red-400";
 }
 
 function timerBg(minutes: number): string {
-  if (minutes < 10) return "bg-emerald-400/10 border-emerald-400/20";
+  if (minutes < 10) return "bg-brand/10 border-brand/20";
   if (minutes < 20) return "bg-yellow-400/10 border-yellow-400/20";
   return "bg-red-400/10 border-red-400/20 animate-pulse";
 }
@@ -77,7 +77,7 @@ const TIPO_LABELS: Record<string, string> = {
 const NEXT_STATUS: Record<string, { label: string; status: string; color: string } | null> = {
   pendente:   { label: "Iniciar",  status: "confirmado", color: "bg-blue-500 hover:bg-blue-400 text-white" },
   confirmado: { label: "Preparar", status: "preparando", color: "bg-orange-500 hover:bg-orange-400 text-white" },
-  preparando: { label: "Pronto",   status: "pronto",     color: "bg-emerald-500 hover:bg-emerald-400 text-white" },
+  preparando: { label: "Pronto",   status: "pronto",     color: "bg-brand hover:brightness-110 text-white" },
   pronto:     { label: "Entregar", status: "entregue",   color: "bg-purple-500 hover:bg-purple-400 text-white" },
   entregue:   null,
   cancelado:  null,
@@ -89,7 +89,7 @@ const COLUMN_CONFIG: Record<string, { label: string; accent: string; border: str
   pendente:   { label: "Pendente",   accent: "text-yellow-400",  border: "border-yellow-400/30"  },
   confirmado: { label: "Confirmado", accent: "text-blue-400",    border: "border-blue-400/30"    },
   preparando: { label: "Em Preparo", accent: "text-orange-400",  border: "border-orange-400/30"  },
-  pronto:     { label: "Prontos 🔔", accent: "text-emerald-400", border: "border-emerald-400/30" },
+  pronto:     { label: "Prontos 🔔", accent: "text-brand", border: "border-brand/30" },
 };
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ function Toast({ toast }: { toast: ToastState }) {
   return (
     <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border px-5 py-4 shadow-2xl backdrop-blur-sm ${
       toast.type === "success"
-        ? "border-emerald-500/30 bg-slate-900/95 text-emerald-300"
+        ? "border-brand/30 bg-slate-900/95 text-brand"
         : "border-red-500/30 bg-slate-900/95 text-red-300"
     }`}>
       <Bell className="h-4 w-4 flex-shrink-0" />
@@ -168,7 +168,7 @@ function PedidoCard({ pedido, onUpdate, onChamar, updating, chamando }: CardProp
           pedido.itens.map((item) => (
             <div key={item.id}>
               <p className="text-sm font-medium">
-                <span className="text-emerald-400 font-bold mr-1">{item.quantidade}×</span>
+                <span className="text-brand font-bold mr-1">{item.quantidade}×</span>
                 {item.nome}
               </p>
               {item.observacoes && (
@@ -372,7 +372,7 @@ export default function CozinhaPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <ChefHat className="h-6 w-6 text-emerald-400" />
+          <ChefHat className="h-6 w-6 text-brand" />
           <div>
             <h1 className="text-2xl font-bold">Cozinha / KDS</h1>
             <p className="text-xs text-slate-500">
@@ -403,7 +403,7 @@ export default function CozinhaPage() {
             title={soundOn ? "Desligar som" : "Ligar som"}
             className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition ${
               soundOn
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                ? "border-brand/30 bg-brand/10 text-brand"
                 : "border-white/10 text-slate-400 hover:text-white"
             }`}
           >
@@ -438,7 +438,7 @@ export default function CozinhaPage() {
       {/* KDS Columns */}
       {loading && pedidos.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
         </div>
       ) : (
         <div className="grid grid-cols-4 gap-4 flex-1 min-h-0 overflow-auto pb-2">

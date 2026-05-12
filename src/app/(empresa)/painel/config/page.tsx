@@ -88,7 +88,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       role="switch"
     >
       {checked
-        ? <ToggleRight className="h-7 w-7 text-emerald-400" />
+        ? <ToggleRight className="h-7 w-7 text-brand" />
         : <ToggleLeft  className="h-7 w-7 text-slate-500" />
       }
     </button>
@@ -105,7 +105,7 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none transition ${props.className ?? ""}`}
+      className={`w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none transition ${props.className ?? ""}`}
     />
   );
 }
@@ -114,7 +114,7 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       {...props}
-      className={`w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none transition resize-none ${props.className ?? ""}`}
+      className={`w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none transition resize-none ${props.className ?? ""}`}
     />
   );
 }
@@ -380,7 +380,7 @@ export default function ConfigPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Settings className="h-6 w-6 text-emerald-400" />
+            <Settings className="h-6 w-6 text-brand" />
             Configurações
           </h1>
           <p className="mt-1 text-sm text-slate-400">
@@ -390,7 +390,7 @@ export default function ConfigPage() {
         <button
           onClick={handleSave}
           disabled={saving || loading}
-          className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:opacity-50 transition"
+          className="flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50 transition"
         >
           {saving
             ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -408,7 +408,7 @@ export default function ConfigPage() {
             onClick={() => setTab(key)}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${
               tab === key
-                ? "bg-emerald-500/20 text-emerald-400"
+                ? "bg-brand/20 text-brand"
                 : "text-slate-400 hover:text-white"
             }`}
           >
@@ -421,7 +421,7 @@ export default function ConfigPage() {
       {/* ── Loading skeleton ── */}
       {loading && (
         <div className="flex h-64 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
-          <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
+          <Loader2 className="h-6 w-6 animate-spin text-brand" />
         </div>
       )}
 
@@ -488,7 +488,7 @@ export default function ConfigPage() {
                       onClick={() => set("tema", t)}
                       className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium transition ${
                         form.tema === t
-                          ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
+                          ? "border-brand/50 bg-brand/10 text-brand"
                           : "border-white/10 bg-white/5 text-slate-400 hover:text-white"
                       }`}
                     >
@@ -658,7 +658,7 @@ export default function ConfigPage() {
                   onClick={() => set(key, !form[key] as EmpresaConfig[typeof key])}
                   className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition ${
                     form[key]
-                      ? "border-emerald-500/30 bg-emerald-500/5"
+                      ? "border-brand/30 bg-brand/5"
                       : "border-white/10 bg-white/5 opacity-60"
                   }`}
                 >
@@ -770,12 +770,12 @@ export default function ConfigPage() {
                 onClick={() => set("fidelidade_ativo", !form.fidelidade_ativo)}
                 className={`flex cursor-pointer items-center justify-between rounded-2xl border p-5 transition ${
                   form.fidelidade_ativo
-                    ? "border-emerald-500/30 bg-emerald-500/5"
+                    ? "border-brand/30 bg-brand/5"
                     : "border-white/10 bg-white/5"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Award className={`h-8 w-8 flex-shrink-0 ${form.fidelidade_ativo ? "text-emerald-400" : "text-slate-500"}`} />
+                  <Award className={`h-8 w-8 flex-shrink-0 ${form.fidelidade_ativo ? "text-brand" : "text-slate-500"}`} />
                   <div>
                     <p className="font-semibold text-white">Programa de fidelidade</p>
                     <p className="text-xs text-slate-400 mt-0.5">
@@ -855,13 +855,13 @@ export default function ConfigPage() {
                         <div className="border-t border-white/10 pt-2 space-y-1">
                           <div className="flex justify-between">
                             <span className="text-slate-400">Pontos ganhos</span>
-                            <span className="text-emerald-400 font-medium">
+                            <span className="text-brand font-medium">
                               +{pontos_ganhos} pts
                             </span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-slate-400">Valor em desconto</span>
-                            <span className="text-emerald-400 font-medium">
+                            <span className="text-brand font-medium">
                               R$ {valor_desconto}
                             </span>
                           </div>
@@ -881,15 +881,15 @@ export default function ConfigPage() {
                 <p className="text-sm font-semibold text-white mb-3">Dicas</p>
                 <ul className="space-y-2 text-xs text-slate-400 leading-relaxed">
                   <li className="flex gap-2">
-                    <span className="text-emerald-400 flex-shrink-0">•</span>
+                    <span className="text-brand flex-shrink-0">•</span>
                     <span>Um valor comum é <strong className="text-slate-300">1 ponto por R$ 1,00</strong>, onde cada ponto vale <strong className="text-slate-300">R$ 0,01</strong> (1% de cashback).</span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-emerald-400 flex-shrink-0">•</span>
+                    <span className="text-brand flex-shrink-0">•</span>
                     <span>Para cashback de 2%, use <strong className="text-slate-300">1 ponto/real</strong> e <strong className="text-slate-300">R$ 0,02/ponto</strong>.</span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-emerald-400 flex-shrink-0">•</span>
+                    <span className="text-brand flex-shrink-0">•</span>
                     <span>A fidelidade só funciona se o módulo estiver ativo no seu plano.</span>
                   </li>
                 </ul>
@@ -980,7 +980,7 @@ export default function ConfigPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:opacity-50 transition"
+            className="flex items-center gap-2 rounded-xl bg-brand px-6 py-2.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50 transition"
           >
             {saving
               ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -1000,12 +1000,12 @@ export default function ConfigPage() {
             exit={{   opacity: 0, y: 24,  scale: 0.95 }}
             className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border px-5 py-4 shadow-2xl backdrop-blur-sm ${
               toast.type === "success"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                ? "border-brand/30 bg-brand/10 text-brand"
                 : "border-red-500/30 bg-red-500/10 text-red-300"
             }`}
           >
             {toast.type === "success"
-              ? <CheckCircle className="h-5 w-5 flex-shrink-0 text-emerald-400" />
+              ? <CheckCircle className="h-5 w-5 flex-shrink-0 text-brand" />
               : <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-400" />
             }
             <span className="text-sm font-medium">{toast.msg}</span>

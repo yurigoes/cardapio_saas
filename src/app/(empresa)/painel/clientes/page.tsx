@@ -134,8 +134,8 @@ const STATUS_COLOR: Record<string, string> = {
   pendente:    "bg-yellow-500/15 text-yellow-400",
   confirmado:  "bg-blue-500/15 text-blue-400",
   preparando:  "bg-orange-500/15 text-orange-400",
-  pronto:      "bg-emerald-500/15 text-emerald-400",
-  entregue:    "bg-emerald-500/15 text-emerald-400",
+  pronto:      "bg-brand/15 text-brand",
+  entregue:    "bg-brand/15 text-brand",
   cancelado:   "bg-red-500/15 text-red-400",
 };
 
@@ -276,8 +276,8 @@ export default function ClientesPage() {
               : `${total.toLocaleString("pt-BR")} cliente${total !== 1 ? "s" : ""} cadastrado${total !== 1 ? "s" : ""}`}
           </p>
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15">
-          <Users className="h-5 w-5 text-emerald-400" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/15">
+          <Users className="h-5 w-5 text-brand" />
         </div>
       </div>
 
@@ -334,7 +334,7 @@ export default function ClientesPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por nome, telefone ou e-mail..."
-            className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+            className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
           />
           {search && (
             <button
@@ -350,7 +350,7 @@ export default function ClientesPage() {
           <select
             value={orderBy}
             onChange={e => setOrderBy(e.target.value as OrderBy)}
-            className="appearance-none rounded-xl border border-white/10 bg-white/5 py-2.5 pl-4 pr-9 text-sm text-white focus:border-emerald-500/50 focus:outline-none"
+            className="appearance-none rounded-xl border border-white/10 bg-white/5 py-2.5 pl-4 pr-9 text-sm text-white focus:border-brand/50 focus:outline-none"
           >
             {(Object.keys(ORDER_LABELS) as OrderBy[]).map(k => (
               <option key={k} value={k}>Ordenar: {ORDER_LABELS[k]}</option>
@@ -376,7 +376,7 @@ export default function ClientesPage() {
         {/* Loading */}
         {loading && (
           <div className="flex h-40 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
           </div>
         )}
 
@@ -424,7 +424,7 @@ export default function ClientesPage() {
 
                 {/* Mobile-only stats */}
                 <div className="mt-2 flex items-center gap-3 sm:hidden">
-                  <span className="flex items-center gap-1 text-xs text-emerald-400">
+                  <span className="flex items-center gap-1 text-xs text-brand">
                     <Trophy className="h-3 w-3" />
                     {c.pontos.toLocaleString("pt-BR")} pts
                   </span>
@@ -435,8 +435,8 @@ export default function ClientesPage() {
 
               {/* Points */}
               <div className="hidden sm:flex items-center justify-end gap-1">
-                <Trophy className="h-3.5 w-3.5 text-emerald-400" />
-                <span className="font-semibold text-emerald-400">
+                <Trophy className="h-3.5 w-3.5 text-brand" />
+                <span className="font-semibold text-brand">
                   {c.pontos.toLocaleString("pt-BR")}
                 </span>
               </div>
@@ -497,7 +497,7 @@ export default function ClientesPage() {
                   disabled={loading}
                   className={`h-8 w-8 rounded-lg text-sm font-medium transition ${
                     p === page
-                      ? "bg-emerald-500/20 text-emerald-400"
+                      ? "bg-brand/20 text-brand"
                       : "text-slate-400 hover:bg-white/10"
                   }`}
                 >
@@ -539,7 +539,7 @@ export default function ClientesPage() {
               {/* Loading state */}
               {modalLoading && !modalCliente && (
                 <div className="flex h-40 items-center justify-center">
-                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
                 </div>
               )}
 
@@ -573,13 +573,13 @@ export default function ClientesPage() {
                   </div>
 
                   {/* Points banner */}
-                  <div className="mb-5 flex items-center gap-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-5 py-4">
-                    <Trophy className="h-8 w-8 text-emerald-400 flex-shrink-0" />
+                  <div className="mb-5 flex items-center gap-4 rounded-2xl border border-brand/25 bg-brand/10 px-5 py-4">
+                    <Trophy className="h-8 w-8 text-brand flex-shrink-0" />
                     <div>
-                      <p className="text-3xl font-bold text-emerald-400 leading-none">
+                      <p className="text-3xl font-bold text-brand leading-none">
                         {modalCliente.pontos.toLocaleString("pt-BR")}
                       </p>
-                      <p className="mt-0.5 text-xs text-emerald-500">pontos de fidelidade</p>
+                      <p className="mt-0.5 text-xs text-brand">pontos de fidelidade</p>
                     </div>
                   </div>
 
@@ -603,13 +603,13 @@ export default function ClientesPage() {
                           value={ajusteValor}
                           onChange={e => { setAjusteValor(e.target.value); setAjusteOk(false); setAjusteErro(""); }}
                           placeholder="Ex: +50 ou -20"
-                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
                         />
                       </div>
                       <button
                         onClick={salvarAjuste}
                         disabled={ajusteSaving || !ajusteValor}
-                        className="flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:opacity-40 transition"
+                        className="flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-40 transition"
                       >
                         {ajusteSaving
                           ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -626,12 +626,12 @@ export default function ClientesPage() {
                         value={ajusteObs}
                         onChange={e => setAjusteObs(e.target.value)}
                         placeholder="Observação (opcional)"
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
                       />
                     </div>
 
                     {ajusteOk && (
-                      <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400">
+                      <p className="mt-2 flex items-center gap-1.5 text-xs text-brand">
                         <CheckCircle className="h-3.5 w-3.5" />
                         Pontos ajustados com sucesso.
                       </p>
@@ -687,10 +687,10 @@ export default function ClientesPage() {
                         {modalCliente.cupons.map(cupom => (
                           <div
                             key={cupom.id}
-                            className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3"
+                            className="flex items-center justify-between rounded-xl border border-brand/20 bg-brand/5 px-4 py-3"
                           >
                             <div className="flex items-center gap-3">
-                              <code className="rounded-md bg-white/10 px-2 py-0.5 text-xs font-bold tracking-widest text-emerald-300">
+                              <code className="rounded-md bg-white/10 px-2 py-0.5 text-xs font-bold tracking-widest text-brand">
                                 {cupom.codigo}
                               </code>
                               <span className="text-xs text-slate-400 capitalize">{cupom.tipo}</span>

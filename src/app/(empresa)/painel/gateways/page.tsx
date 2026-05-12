@@ -56,8 +56,8 @@ function Toggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors
-        focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500
-        ${checked ? "bg-emerald-500" : "bg-white/10"}
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-brand
+        ${checked ? "bg-brand" : "bg-white/10"}
         ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
     >
       <span
@@ -208,7 +208,7 @@ export default function GatewaysPage() {
   if (loading) {
     return (
       <div className="flex h-60 items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
       </div>
     );
   }
@@ -230,7 +230,7 @@ export default function GatewaysPage() {
         <div
           className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm transition
             ${toast.type === "ok"
-              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+              ? "border-brand/20 bg-brand/10 text-brand"
               : "border-red-500/20 bg-red-500/10 text-red-400"
             }`}
         >
@@ -258,8 +258,8 @@ export default function GatewaysPage() {
           <FieldRow>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10">
-                  <Banknote className="h-5 w-5 text-emerald-400" />
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand/10">
+                  <Banknote className="h-5 w-5 text-brand" />
                 </span>
                 <div>
                   <p className="text-sm font-medium text-white">Dinheiro</p>
@@ -315,7 +315,7 @@ export default function GatewaysPage() {
                   <select
                     value={pixTipo}
                     onChange={e => setPixTipo(e.target.value as PixTipo)}
-                    className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white focus:border-emerald-500/50 focus:outline-none"
+                    className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white focus:border-brand/50 focus:outline-none"
                   >
                     {PIX_TIPOS.map(p => (
                       <option key={p.value} value={p.value}>{p.label}</option>
@@ -332,7 +332,7 @@ export default function GatewaysPage() {
                     value={pixChave}
                     onChange={e => setPixChave(e.target.value)}
                     placeholder={pixTipoMeta.placeholder}
-                    className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                    className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
                   />
                 </div>
 
@@ -345,7 +345,7 @@ export default function GatewaysPage() {
                     value={pixFavorecido}
                     onChange={e => setPixFavorecido(e.target.value)}
                     placeholder="Nome exibido na tela de pagamento"
-                    className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                    className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
                   />
                 </div>
               </div>
@@ -495,7 +495,7 @@ export default function GatewaysPage() {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:opacity-50 transition"
+          className="flex items-center gap-2 rounded-xl bg-brand px-6 py-2.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50 transition"
         >
           {saving
             ? <Loader2 className="h-4 w-4 animate-spin" />

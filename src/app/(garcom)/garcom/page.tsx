@@ -21,7 +21,7 @@ interface Mesa {
 }
 
 const STATUS_CONFIG = {
-  livre:       { label: "Livre",       bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30" },
+  livre:       { label: "Livre",       bg: "bg-brand/15", text: "text-brand", border: "border-brand/30" },
   ocupada:     { label: "Ocupada",     bg: "bg-amber-500/15",   text: "text-amber-400",   border: "border-amber-500/30"  },
   reservada:   { label: "Reservada",   bg: "bg-blue-500/15",    text: "text-blue-400",    border: "border-blue-500/30"   },
   interditada: { label: "Interditada", bg: "bg-red-500/15",     text: "text-red-400",     border: "border-red-500/30"    },
@@ -104,7 +104,7 @@ export default function GarcomPage() {
               onClick={() => setSetor(null)}
               className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
                 setor === null
-                  ? "bg-emerald-500 text-white"
+                  ? "bg-brand text-white"
                   : "border border-white/10 text-slate-400 hover:border-white/20"
               }`}
             >
@@ -116,7 +116,7 @@ export default function GarcomPage() {
                 onClick={() => setSetor(s)}
                 className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
                   setor === s
-                    ? "bg-emerald-500 text-white"
+                    ? "bg-brand text-white"
                     : "border border-white/10 text-slate-400 hover:border-white/20"
                 }`}
               >
@@ -131,7 +131,7 @@ export default function GarcomPage() {
       <div className="p-4">
         {loading ? (
           <div className="flex h-48 items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
@@ -196,7 +196,7 @@ export default function GarcomPage() {
       {/* FAB — Novo pedido avulso */}
       <button
         onClick={() => (window.location.href = "/garcom/pedido/novo")}
-        className="fixed bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30 transition hover:bg-emerald-400 active:scale-95"
+        className="fixed bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-brand shadow-lg shadow-brand/30 transition hover:brightness-110 active:scale-95"
       >
         <Plus className="h-6 w-6 text-white" />
       </button>

@@ -39,7 +39,7 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; co
   pendente:   { label: "Pendente",    icon: Clock,         color: "text-yellow-400 bg-yellow-400/10 border-yellow-400/20" },
   confirmado: { label: "Confirmado",  icon: CheckCircle,   color: "text-blue-400 bg-blue-400/10 border-blue-400/20"       },
   preparo:    { label: "Em preparo",  icon: ChefHat,       color: "text-orange-400 bg-orange-400/10 border-orange-400/20" },
-  pronto:     { label: "Pronto",      icon: CheckCircle,   color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" },
+  pronto:     { label: "Pronto",      icon: CheckCircle,   color: "text-brand bg-brand/10 border-brand/20" },
   entregue:   { label: "Entregue",    icon: Truck,         color: "text-green-400 bg-green-400/10 border-green-400/20"    },
   cancelado:  { label: "Cancelado",   icon: XCircle,       color: "text-red-400 bg-red-400/10 border-red-400/20"          },
 };
@@ -123,7 +123,7 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
   if (!pedido) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
       </div>
     );
   }
@@ -195,7 +195,7 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
                 <div key={item.id} className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <p className="text-sm font-medium">
-                      <span className="text-emerald-400 mr-2">{item.quantidade}×</span>
+                      <span className="text-brand mr-2">{item.quantidade}×</span>
                       {item.nome}
                     </p>
                     {item.observacoes && (
@@ -228,7 +228,7 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
             )}
             <div className="flex justify-between font-bold text-base pt-1">
               <span>Total</span>
-              <span className="text-emerald-400">{formatBRL(pedido.total)}</span>
+              <span className="text-brand">{formatBRL(pedido.total)}</span>
             </div>
           </div>
         </div>
@@ -247,7 +247,7 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
                   className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition disabled:opacity-50 ${
                     isCancelamento
                       ? "border border-red-500/30 text-red-400 hover:bg-red-500/10"
-                      : "bg-emerald-500 text-white hover:bg-emerald-400"
+                      : "bg-brand text-white hover:brightness-110"
                   }`}
                 >
                   {cfg?.label ?? s}
@@ -321,7 +321,7 @@ export default function PedidosPage() {
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition ${
               autoRefresh
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                ? "border-brand/30 bg-brand/10 text-brand"
                 : "border-white/10 text-slate-400 hover:text-white"
             }`}
           >
@@ -347,7 +347,7 @@ export default function PedidosPage() {
           {
             label: "Receita",
             value: formatBRL(pedidos.filter((p) => p.status !== "cancelado").reduce((acc, p) => acc + p.total, 0)),
-            color: "text-emerald-400",
+            color: "text-brand",
             icon:  CheckCircle,
           },
         ].map(({ label, value, color, icon: Icon }) => (
@@ -368,7 +368,7 @@ export default function PedidosPage() {
         </div>
         <select
           value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+          className="rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
         >
           <option value="">Todos os status</option>
           {Object.entries(STATUS_CONFIG).map(([k, v]) => (
@@ -377,7 +377,7 @@ export default function PedidosPage() {
         </select>
         <select
           value={tipoFilter} onChange={(e) => setTipoFilter(e.target.value)}
-          className="rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+          className="rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white focus:outline-none focus:border-brand/50"
         >
           <option value="">Todos os tipos</option>
           {Object.entries(TIPO_LABELS).map(([k, v]) => (
@@ -390,7 +390,7 @@ export default function PedidosPage() {
       <div className="rounded-2xl border border-white/5 bg-slate-900 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
           </div>
         ) : pedidos.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-16 text-slate-500">
@@ -437,7 +437,7 @@ export default function PedidosPage() {
                     <span className="text-xs text-slate-500">{formatTime(p.created_at)}</span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <span className="text-sm font-bold text-emerald-400">{formatBRL(p.total)}</span>
+                    <span className="text-sm font-bold text-brand">{formatBRL(p.total)}</span>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button

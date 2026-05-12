@@ -9,6 +9,7 @@ import {
   UtensilsCrossed, PackageCheck, Bike,
   Copy, Banknote, QrCode, Tag, CheckCircle2,
 } from "lucide-react";
+import { applyBrandColors } from "@/lib/theme";
 
 // ─── Translations ─────────────────────────────────────────────────────────────
 
@@ -1607,11 +1608,8 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         setEmpresa(emp);
         setCategorias(data.data.categorias);
         setProdutos(data.data.produtos);
-        // Apply brand colors as CSS variables
-        const primary   = emp.cor_primaria   || "#10b981";
-        document.documentElement.style.setProperty("--color-primary",    primary);
-        document.documentElement.style.setProperty("--color-primary-15", primary + "26");
-        document.documentElement.style.setProperty("--color-primary-50", primary + "80");
+        // Apply brand colors (incl. --color-primary-rgb p/ Tailwind brand)
+        applyBrandColors({ primary: emp.cor_primaria });
       } catch {
         setNotFound(true);
       } finally {

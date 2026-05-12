@@ -254,14 +254,14 @@ export default function CuponsPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setSaveError(""); setModalResgate(true); }}
-            className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20 transition"
+            className="flex items-center gap-2 rounded-xl border border-brand/30 bg-brand/10 px-4 py-2.5 text-sm font-medium text-brand hover:bg-brand/20 transition"
           >
             <Gift className="h-4 w-4" />
             Resgatar pontos
           </button>
           <button
             onClick={openCreate}
-            className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 transition"
+            className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-medium text-white hover:brightness-110 transition"
           >
             <Plus className="h-4 w-4" />
             Novo cupom
@@ -277,7 +277,7 @@ export default function CuponsPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por código ou descrição..."
-            className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+            className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
           />
           {search && (
             <button
@@ -296,7 +296,7 @@ export default function CuponsPage() {
               onClick={() => setFiltro(f.key)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 filtro === f.key
-                  ? "bg-emerald-500/20 text-emerald-400"
+                  ? "bg-brand/20 text-brand"
                   : "text-slate-400 hover:text-white"
               }`}
             >
@@ -324,7 +324,7 @@ export default function CuponsPage() {
         {/* Loading */}
         {loading && (
           <div className="flex h-40 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+            <Loader2 className="h-6 w-6 animate-spin text-brand" />
           </div>
         )}
 
@@ -384,7 +384,7 @@ export default function CuponsPage() {
                   disabled={loading}
                   className={`h-8 w-8 rounded-lg text-sm font-medium transition ${
                     p === page
-                      ? "bg-emerald-500/20 text-emerald-400"
+                      ? "bg-brand/20 text-brand"
                       : "text-slate-400 hover:bg-white/10"
                   }`}
                 >
@@ -431,7 +431,7 @@ export default function CuponsPage() {
                     value={form.codigo}
                     onChange={e => setForm(f => ({ ...f, codigo: e.target.value.toUpperCase() }))}
                     placeholder="Ex: PROMO20"
-                    className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-mono text-sm uppercase text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                    className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-mono text-sm uppercase text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
                   />
                   <button
                     type="button"
@@ -452,7 +452,7 @@ export default function CuponsPage() {
                   value={form.descricao}
                   onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
                   placeholder="Ex: Desconto de lançamento"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
                 />
               </div>
 
@@ -464,7 +464,7 @@ export default function CuponsPage() {
                     <select
                       value={form.tipo}
                       onChange={e => setForm(f => ({ ...f, tipo: e.target.value as CupomTipo, valor: "" }))}
-                      className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-2.5 pl-4 pr-9 text-sm text-white focus:border-emerald-500/50 focus:outline-none"
+                      className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-2.5 pl-4 pr-9 text-sm text-white focus:border-brand/50 focus:outline-none"
                     >
                       <option value="percentual">Percentual (%)</option>
                       <option value="fixo">Valor fixo (R$)</option>
@@ -487,7 +487,7 @@ export default function CuponsPage() {
                     onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
                     disabled={form.tipo === "frete_gratis"}
                     placeholder={form.tipo === "frete_gratis" ? "—" : form.tipo === "percentual" ? "10" : "15,00"}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none disabled:opacity-40"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none disabled:opacity-40"
                   />
                 </div>
               </div>
@@ -502,7 +502,7 @@ export default function CuponsPage() {
                     type="date"
                     value={form.valido_ate}
                     onChange={e => setForm(f => ({ ...f, valido_ate: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 focus:outline-none [color-scheme:dark]"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-brand/50 focus:outline-none [color-scheme:dark]"
                   />
                 </div>
 
@@ -516,7 +516,7 @@ export default function CuponsPage() {
                     value={form.uso_maximo}
                     onChange={e => setForm(f => ({ ...f, uso_maximo: e.target.value }))}
                     placeholder="∞ ilimitado"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
                   />
                 </div>
               </div>
@@ -533,7 +533,7 @@ export default function CuponsPage() {
                   value={form.valor_minimo_pedido}
                   onChange={e => setForm(f => ({ ...f, valor_minimo_pedido: e.target.value }))}
                   placeholder="Ex: 30,00"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
                 />
               </div>
 
@@ -554,7 +554,7 @@ export default function CuponsPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:opacity-50 transition"
+                  className="flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50 transition"
                 >
                   {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                   Criar cupom
@@ -599,7 +599,7 @@ function CupomRow({
 
   const tipoBadge = {
     percentual:   { label: "%",     cls: "bg-blue-500/15 text-blue-400"     },
-    fixo:         { label: "R$",    cls: "bg-emerald-500/15 text-emerald-400" },
+    fixo:         { label: "R$",    cls: "bg-brand/15 text-brand" },
     frete_gratis: { label: "Frete", cls: "bg-purple-500/15 text-purple-400"  },
   }[cupom.tipo] ?? { label: cupom.tipo, cls: "bg-slate-500/15 text-slate-400" };
 
@@ -632,7 +632,7 @@ function CupomRow({
       <div className="hidden lg:grid grid-cols-[130px_1fr_80px_90px_90px_110px_1fr_100px_80px] gap-x-3 items-center">
         {/* Código */}
         <div className="flex items-center gap-1.5">
-          <code className="truncate rounded-md bg-white/10 px-2 py-0.5 text-xs font-bold tracking-widest text-emerald-300">
+          <code className="truncate rounded-md bg-white/10 px-2 py-0.5 text-xs font-bold tracking-widest text-brand">
             {cupom.codigo}
           </code>
           <button
@@ -640,7 +640,7 @@ function CupomRow({
             className="flex-shrink-0 rounded p-0.5 text-slate-500 hover:text-white transition"
             title="Copiar código"
           >
-            {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+            {isCopied ? <Check className="h-3.5 w-3.5 text-brand" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
         </div>
 
@@ -673,7 +673,7 @@ function CupomRow({
         {/* Origem */}
         <div className="flex items-center gap-1.5 min-w-0">
           {cupom.cliente_nome ? (
-            <Award className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
+            <Award className="h-3.5 w-3.5 text-brand flex-shrink-0" />
           ) : (
             <Tag className="h-3.5 w-3.5 text-slate-500 flex-shrink-0" />
           )}
@@ -692,8 +692,8 @@ function CupomRow({
               <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
             ) : cupom.ativo ? (
               <>
-                <ToggleRight className="h-5 w-5 text-emerald-400" />
-                <span className="text-emerald-400">Ativo</span>
+                <ToggleRight className="h-5 w-5 text-brand" />
+                <span className="text-brand">Ativo</span>
               </>
             ) : (
               <>
@@ -725,11 +725,11 @@ function CupomRow({
       <div className="flex flex-col gap-2 lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
-            <code className="rounded-md bg-white/10 px-2 py-0.5 text-xs font-bold tracking-widest text-emerald-300">
+            <code className="rounded-md bg-white/10 px-2 py-0.5 text-xs font-bold tracking-widest text-brand">
               {cupom.codigo}
             </code>
             <button onClick={() => onCopy(cupom.id, cupom.codigo)} className="text-slate-500 hover:text-white">
-              {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+              {isCopied ? <Check className="h-3.5 w-3.5 text-brand" /> : <Copy className="h-3.5 w-3.5" />}
             </button>
             <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${tipoBadge.cls}`}>
               {tipoBadge.label}
@@ -743,7 +743,7 @@ function CupomRow({
             {isToggling ? (
               <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
             ) : cupom.ativo ? (
-              <ToggleRight className="h-6 w-6 text-emerald-400" />
+              <ToggleRight className="h-6 w-6 text-brand" />
             ) : (
               <ToggleLeft className="h-6 w-6 text-slate-500" />
             )}
@@ -763,7 +763,7 @@ function CupomRow({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             {cupom.cliente_nome
-              ? <Award className="h-3 w-3 text-emerald-400" />
+              ? <Award className="h-3 w-3 text-brand" />
               : <Tag className="h-3 w-3 text-slate-500" />}
             <span className="text-xs text-slate-400">{origemText}</span>
           </div>
@@ -925,8 +925,8 @@ function ResgateModal({
       {success ? (
         /* ── Success state ──────────────────────────────────────────────────── */
         <div className="flex flex-col items-center gap-5 py-6 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/15">
-            <Check className="h-8 w-8 text-emerald-400" />
+          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-brand/30 bg-brand/15">
+            <Check className="h-8 w-8 text-brand" />
           </div>
           <div>
             <p className="text-lg font-bold text-white">Cupom gerado!</p>
@@ -935,14 +935,14 @@ function ResgateModal({
             </p>
           </div>
           {geradoCodigo && (
-            <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-8 py-4">
-              <code className="text-2xl font-bold tracking-[0.25em] text-emerald-300">{geradoCodigo}</code>
-              <p className="mt-1 text-xs text-emerald-600">Código do cupom</p>
+            <div className="rounded-2xl border border-brand/25 bg-brand/10 px-8 py-4">
+              <code className="text-2xl font-bold tracking-[0.25em] text-brand">{geradoCodigo}</code>
+              <p className="mt-1 text-xs text-brand">Código do cupom</p>
             </div>
           )}
           <button
             onClick={onSuccess}
-            className="rounded-xl bg-emerald-500 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 transition"
+            className="rounded-xl bg-brand px-6 py-2.5 text-sm font-medium text-white hover:brightness-110 transition"
           >
             Fechar
           </button>
@@ -961,7 +961,7 @@ function ResgateModal({
                 value={searchQ}
                 onChange={e => handleSearch(e.target.value)}
                 placeholder="Ex: 11999887766"
-                className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
               />
               {searchLoading && (
                 <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
@@ -984,8 +984,8 @@ function ResgateModal({
                       )}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0 ml-3">
-                      <Award className="h-3.5 w-3.5 text-emerald-400" />
-                      <span className="text-sm font-semibold text-emerald-400">
+                      <Award className="h-3.5 w-3.5 text-brand" />
+                      <span className="text-sm font-semibold text-brand">
                         {c.pontos.toLocaleString("pt-BR")}
                       </span>
                       <span className="text-xs text-slate-500">pts</span>
@@ -998,16 +998,16 @@ function ResgateModal({
 
           {/* Cliente selecionado */}
           {cliente && (
-            <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 flex items-center justify-between px-5 py-4">
+            <div className="rounded-2xl border border-brand/25 bg-brand/10 flex items-center justify-between px-5 py-4">
               <div>
                 <p className="font-semibold text-white">{cliente.nome}</p>
                 <p className="mt-0.5 text-xs text-slate-400">{cliente.telefone ?? "Sem telefone"}</p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-emerald-400 leading-none">
+                <p className="text-2xl font-bold text-brand leading-none">
                   {cliente.pontos.toLocaleString("pt-BR")}
                 </p>
-                <p className="mt-0.5 text-xs text-emerald-600">pontos disponíveis</p>
+                <p className="mt-0.5 text-xs text-brand">pontos disponíveis</p>
               </div>
             </div>
           )}
@@ -1025,7 +1025,7 @@ function ResgateModal({
                 value={pontosResgate}
                 onChange={e => { setPontosResgate(e.target.value); setError(""); }}
                 placeholder={`Máx. ${cliente.pontos}`}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
               />
 
               {/* Preview */}
@@ -1036,7 +1036,7 @@ function ResgateModal({
                     <span>
                       <span className="font-medium text-white">{pontosNum.toLocaleString("pt-BR")} pts</span>
                       {" "}&rarr;{" "}
-                      <span className="font-bold text-emerald-400">{formatBRL(valorGerado)}</span> de desconto
+                      <span className="font-bold text-brand">{formatBRL(valorGerado)}</span> de desconto
                     </span>
                   </div>
                   {pontosNum > cliente.pontos && (
@@ -1064,7 +1064,7 @@ function ResgateModal({
             <button
               onClick={handleGerar}
               disabled={!podeGerar}
-              className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:opacity-40 transition"
+              className="flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-40 transition"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               <Gift className="h-4 w-4" />

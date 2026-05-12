@@ -130,7 +130,7 @@ const STATUS_COLORS: Record<string, string> = {
   pendente:   "text-yellow-400",
   confirmado: "text-blue-400",
   preparando: "text-orange-400",
-  pronto:     "text-emerald-400",
+  pronto:     "text-brand",
   entregue:   "text-green-400",
   cancelado:  "text-red-400",
   pago:       "text-purple-400",
@@ -264,7 +264,7 @@ export default function FinanceiroPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <DollarSign className="h-6 w-6 text-emerald-400" />
+          <DollarSign className="h-6 w-6 text-brand" />
           <div>
             <h1 className="text-2xl font-bold">Financeiro</h1>
             <p className="text-sm text-slate-400">Faturamento e análise de receitas</p>
@@ -287,7 +287,7 @@ export default function FinanceiroPage() {
           value={formatBRL(revenueHoje)}
           icon={DollarSign}
           sub={`${filterByRange(allPedidos, "hoje", "", "").filter((p) => p.status !== "cancelado").length} pedidos`}
-          accent="text-emerald-400"
+          accent="text-brand"
         />
         <SummaryCard
           label="Últimos 7 dias"
@@ -321,7 +321,7 @@ export default function FinanceiroPage() {
             onClick={() => setRange(r)}
             className={`rounded-xl px-3 py-1.5 text-xs font-medium transition ${
               range === r
-                ? "bg-emerald-500 text-white"
+                ? "bg-brand text-white"
                 : "border border-white/10 text-slate-400 hover:text-white hover:border-white/20"
             }`}
           >
@@ -335,14 +335,14 @@ export default function FinanceiroPage() {
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="rounded-xl bg-slate-800 border border-white/10 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/50"
+              className="rounded-xl bg-slate-800 border border-white/10 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand/50"
             />
             <span className="text-slate-500 text-xs">até</span>
             <input
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="rounded-xl bg-slate-800 border border-white/10 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500/50"
+              className="rounded-xl bg-slate-800 border border-white/10 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand/50"
             />
           </div>
         )}
@@ -350,7 +350,7 @@ export default function FinanceiroPage() {
         {/* Filtered summary */}
         <div className="ml-auto flex items-center gap-4 text-xs text-slate-400">
           <span><span className="text-white font-bold">{totalOrders}</span> pedidos</span>
-          <span><span className="text-emerald-400 font-bold">{formatBRL(revenue)}</span> receita</span>
+          <span><span className="text-brand font-bold">{formatBRL(revenue)}</span> receita</span>
           {cancelled > 0 && (
             <span><span className="text-red-400 font-bold">{cancelled}</span> cancelados</span>
           )}
@@ -369,9 +369,9 @@ export default function FinanceiroPage() {
                     <span className="text-sm font-medium">{label}</span>
                     <span className="text-xs text-slate-500">{count} pedido{count !== 1 ? "s" : ""}</span>
                   </div>
-                  <span className="text-sm font-bold text-emerald-400 tabular-nums">{formatBRL(value)}</span>
+                  <span className="text-sm font-bold text-brand tabular-nums">{formatBRL(value)}</span>
                 </div>
-                <RevenueBar value={value} max={maxTipo} color="bg-emerald-500" />
+                <RevenueBar value={value} max={maxTipo} color="bg-brand" />
               </div>
             ))}
           </div>
@@ -384,7 +384,7 @@ export default function FinanceiroPage() {
         <div className="grid grid-cols-3 gap-4">
           {[
             { label: "Dinheiro",  accent: "text-yellow-400", bg: "bg-yellow-400" },
-            { label: "PIX",       accent: "text-emerald-400", bg: "bg-emerald-500" },
+            { label: "PIX",       accent: "text-brand", bg: "bg-brand" },
             { label: "Cartão",    accent: "text-blue-400", bg: "bg-blue-500" },
           ].map(({ label, accent, bg }) => (
             <div key={label} className="rounded-xl border border-white/5 p-4 text-center">
@@ -413,7 +413,7 @@ export default function FinanceiroPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
           </div>
         ) : paged.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-12 text-slate-500">
@@ -457,7 +457,7 @@ export default function FinanceiroPage() {
                       </span>
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <span className={`text-sm font-bold tabular-nums ${p.status === "cancelado" ? "text-red-400/60 line-through" : "text-emerald-400"}`}>
+                      <span className={`text-sm font-bold tabular-nums ${p.status === "cancelado" ? "text-red-400/60 line-through" : "text-brand"}`}>
                         {formatBRL(p.total)}
                       </span>
                     </td>

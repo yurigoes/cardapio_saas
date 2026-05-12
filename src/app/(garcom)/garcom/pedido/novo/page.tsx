@@ -38,7 +38,7 @@ function ProdutoCard({
         {produto.descricao && (
           <p className="text-xs text-slate-500 line-clamp-1">{produto.descricao}</p>
         )}
-        <p className="text-sm font-bold text-emerald-400">{fmt(produto.preco)}</p>
+        <p className="text-sm font-bold text-brand">{fmt(produto.preco)}</p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         {qty > 0 ? (
@@ -54,7 +54,7 @@ function ProdutoCard({
         ) : null}
         <button
           onClick={onAdd}
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white hover:bg-emerald-400 transition"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-white hover:brightness-110 transition"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -77,7 +77,7 @@ function ObsModal({
           value={obs} onChange={(e) => setObs(e.target.value)}
           placeholder="Ex: sem cebola, bem passado..."
           rows={3}
-          className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50 resize-none"
+          className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-brand/50 resize-none"
           autoFocus
         />
         <div className="flex gap-3 mt-3">
@@ -86,7 +86,7 @@ function ObsModal({
             Cancelar
           </button>
           <button onClick={() => { onConfirm(obs); onClose(); }}
-            className="flex-1 rounded-xl bg-emerald-500 py-2 text-sm font-semibold text-white hover:bg-emerald-400 transition">
+            className="flex-1 rounded-xl bg-brand py-2 text-sm font-semibold text-white hover:brightness-110 transition">
             Adicionar
           </button>
         </div>
@@ -156,7 +156,7 @@ function CartDrawer({
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white">{item.produto.nome}</p>
                 {item.obs && <p className="text-xs text-slate-500 truncate">{item.obs}</p>}
-                <p className="text-sm font-bold text-emerald-400">{fmt(item.produto.preco * item.qty)}</p>
+                <p className="text-sm font-bold text-brand">{fmt(item.produto.preco * item.qty)}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={() => onUpdate(item.produto.id, -1)}
@@ -177,16 +177,16 @@ function CartDrawer({
       <div className="border-t border-white/5 p-4 space-y-3">
         <div className="flex justify-between">
           <span className="text-sm text-slate-400">Total</span>
-          <span className="text-lg font-bold text-emerald-400">{fmt(total)}</span>
+          <span className="text-lg font-bold text-brand">{fmt(total)}</span>
         </div>
         <input
           value={obs} onChange={(e) => setObs(e.target.value)}
           placeholder="Observação geral do pedido (opcional)"
-          className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
+          className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-brand/50"
         />
         <button
           onClick={handle} disabled={sending || cart.length === 0}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 font-semibold text-white hover:bg-emerald-400 transition disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand py-3 font-semibold text-white hover:brightness-110 transition disabled:opacity-50"
         >
           <Send className="h-4 w-4" />
           {sending ? "Enviando..." : "Enviar para cozinha"}
@@ -303,8 +303,8 @@ export default function PedidoNovoPage() {
   if (enviado) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-6 text-center">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 mb-6">
-          <CheckCircle className="h-10 w-10 text-emerald-400" />
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand/10 mb-6">
+          <CheckCircle className="h-10 w-10 text-brand" />
         </div>
         <h2 className="text-2xl font-bold text-white mb-1">Pedido enviado!</h2>
         {numeroPedido && (
@@ -313,7 +313,7 @@ export default function PedidoNovoPage() {
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <button
             onClick={novosPedido}
-            className="w-full rounded-xl bg-emerald-500 py-3 font-semibold text-white hover:bg-emerald-400 transition"
+            className="w-full rounded-xl bg-brand py-3 font-semibold text-white hover:brightness-110 transition"
           >
             Novo pedido
           </button>
@@ -332,7 +332,7 @@ export default function PedidoNovoPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
       </div>
     );
   }
@@ -351,7 +351,7 @@ export default function PedidoNovoPage() {
           </div>
           <button
             onClick={() => setCartOpen(true)}
-            className="relative flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-medium"
+            className="relative flex items-center gap-1.5 rounded-xl bg-brand px-3 py-2 text-sm font-medium"
           >
             <ShoppingCart className="h-4 w-4" />
             {cartCount > 0 && (
@@ -393,7 +393,7 @@ export default function PedidoNovoPage() {
             <button
               onClick={() => setCatAtiva("todos")}
               className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
-                catAtiva === "todos" ? "bg-emerald-500 text-white" : "bg-slate-800 text-slate-400"
+                catAtiva === "todos" ? "bg-brand text-white" : "bg-slate-800 text-slate-400"
               }`}
             >
               Todos
@@ -402,7 +402,7 @@ export default function PedidoNovoPage() {
               <button
                 key={c.id} onClick={() => setCatAtiva(c.id)}
                 className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
-                  catAtiva === c.id ? "bg-emerald-500 text-white" : "bg-slate-800 text-slate-400"
+                  catAtiva === c.id ? "bg-brand text-white" : "bg-slate-800 text-slate-400"
                 }`}
               >
                 {c.nome}
@@ -437,7 +437,7 @@ export default function PedidoNovoPage() {
         <div className="fixed bottom-0 left-0 right-0 p-4 z-20 bg-gradient-to-t from-slate-950 to-transparent">
           <button
             onClick={() => setCartOpen(true)}
-            className="w-full flex items-center justify-between rounded-2xl bg-emerald-500 px-5 py-4 font-semibold text-white shadow-xl shadow-emerald-500/20 hover:bg-emerald-400 transition"
+            className="w-full flex items-center justify-between rounded-2xl bg-brand px-5 py-4 font-semibold text-white shadow-xl shadow-brand/20 hover:brightness-110 transition"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-xs font-bold">
               {cartCount}

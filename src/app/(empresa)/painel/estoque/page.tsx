@@ -84,7 +84,7 @@ function InlineNumber({
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={onKeyDown}
-        className="w-20 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-2 py-1 text-sm text-white text-center focus:outline-none"
+        className="w-20 rounded-lg border border-brand/50 bg-brand/10 px-2 py-1 text-sm text-white text-center focus:outline-none"
         autoFocus
       />
     );
@@ -174,8 +174,8 @@ export default function EstoquePage() {
             Clique nos valores de estoque para editar inline
           </p>
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15">
-          <Package className="h-5 w-5 text-emerald-400" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/15">
+          <Package className="h-5 w-5 text-brand" />
         </div>
       </div>
 
@@ -192,9 +192,9 @@ export default function EstoquePage() {
           label="Em estoque normal"
           value={String(emEstoqueNormal)}
           icon={CheckCircle}
-          color="text-emerald-400"
-          bg="bg-emerald-500/5"
-          border="border-emerald-500/10"
+          color="text-brand"
+          bg="bg-brand/5"
+          border="border-brand/10"
         />
         <SummaryCard
           label="Estoque baixo"
@@ -213,7 +213,7 @@ export default function EstoquePage() {
             key={f}
             onClick={() => setFiltro(f)}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-              filtro === f ? "bg-emerald-500/20 text-emerald-400" : "text-slate-400 hover:text-white"
+              filtro === f ? "bg-brand/20 text-brand" : "text-slate-400 hover:text-white"
             }`}
           >
             {FILTRO_LABELS[f]}
@@ -236,7 +236,7 @@ export default function EstoquePage() {
 
         {loading ? (
           <div className="flex h-40 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-500">
@@ -305,7 +305,7 @@ export default function EstoquePage() {
                       type="checkbox"
                       checked={p.controla_estoque}
                       onChange={() => toggleControla(p)}
-                      className="h-4 w-4 rounded border-white/20 bg-white/10 text-emerald-500 cursor-pointer"
+                      className="h-4 w-4 rounded border-white/20 bg-white/10 text-brand cursor-pointer"
                       title={p.controla_estoque ? "Desativar controle de estoque" : "Ativar controle de estoque"}
                     />
                   </div>
@@ -324,7 +324,7 @@ export default function EstoquePage() {
 function StatusBadge({ status }: { status: "ok" | "baixo" | "na" }) {
   if (status === "ok") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+      <span className="inline-flex items-center gap-1 rounded-full bg-brand/15 px-2.5 py-0.5 text-xs font-medium text-brand">
         <CheckCircle className="h-3 w-3" /> OK
       </span>
     );

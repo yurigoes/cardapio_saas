@@ -45,7 +45,7 @@ const STATUS_LABEL: Record<Motoboy["status"], string> = {
 };
 
 const STATUS_COLOR: Record<Motoboy["status"], string> = {
-  disponivel: "bg-emerald-500/15 text-emerald-400",
+  disponivel: "bg-brand/15 text-brand",
   em_rota:    "bg-yellow-500/15 text-yellow-400",
   inativo:    "bg-slate-500/15 text-slate-400",
 };
@@ -217,7 +217,7 @@ export default function DeliveryPage() {
         </div>
         <button
           onClick={tab === "motoboys" ? openNewMotoboy : openNewZona}
-          className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 transition"
+          className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-medium text-white hover:brightness-110 transition"
         >
           <Plus className="h-4 w-4" />
           {tab === "motoboys" ? "Novo Motoboy" : "Nova Zona"}
@@ -239,7 +239,7 @@ export default function DeliveryPage() {
             key={key}
             onClick={() => setTab(key)}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${
-              tab === key ? "bg-emerald-500/20 text-emerald-400" : "text-slate-400 hover:text-white"
+              tab === key ? "bg-brand/20 text-brand" : "text-slate-400 hover:text-white"
             }`}
           >
             <Icon className="h-4 w-4" />
@@ -250,7 +250,7 @@ export default function DeliveryPage() {
 
       {loading ? (
         <div className="flex h-40 items-center justify-center">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
         </div>
       ) : (
         <>
@@ -312,7 +312,7 @@ export default function DeliveryPage() {
                           title={m.status === "inativo" ? "Ativar" : "Desativar"}
                         >
                           {m.status !== "inativo"
-                            ? <ToggleRight className="h-4 w-4 text-emerald-400" />
+                            ? <ToggleRight className="h-4 w-4 text-brand" />
                             : <ToggleLeft  className="h-4 w-4" />
                           }
                         </button>
@@ -370,7 +370,7 @@ export default function DeliveryPage() {
                       <p className="hidden sm:block text-right text-sm text-slate-400">
                         {z.tempo_min ? `${z.tempo_min} min` : "—"}
                       </p>
-                      <span className={`hidden sm:inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${z.ativo ? "bg-emerald-500/15 text-emerald-400" : "bg-slate-500/15 text-slate-400"}`}>
+                      <span className={`hidden sm:inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${z.ativo ? "bg-brand/15 text-brand" : "bg-slate-500/15 text-slate-400"}`}>
                         {z.ativo ? "Ativa" : "Inativa"}
                       </span>
                       <div className="flex justify-end">
@@ -407,32 +407,32 @@ export default function DeliveryPage() {
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Nome *</label>
                   <input value={formMotoboy.nome} onChange={e => setFormMotoboy(f => ({ ...f, nome: e.target.value }))}
                     required placeholder="Nome completo"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Telefone</label>
                   <input value={formMotoboy.telefone} onChange={e => setFormMotoboy(f => ({ ...f, telefone: e.target.value }))}
                     placeholder="(00) 00000-0000"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">Veículo</label>
                     <input value={formMotoboy.veiculo} onChange={e => setFormMotoboy(f => ({ ...f, veiculo: e.target.value }))}
                       placeholder="Moto, Bicicleta..."
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">Placa</label>
                     <input value={formMotoboy.placa} onChange={e => setFormMotoboy(f => ({ ...f, placa: e.target.value }))}
                       placeholder="ABC-1234"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Status</label>
                   <select value={formMotoboy.status} onChange={e => setFormMotoboy(f => ({ ...f, status: e.target.value as Motoboy["status"] }))}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 focus:outline-none">
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-brand/50 focus:outline-none">
                     <option value="disponivel">Disponível</option>
                     <option value="em_rota">Em rota</option>
                     <option value="inativo">Inativo</option>
@@ -442,7 +442,7 @@ export default function DeliveryPage() {
                   <button type="button" onClick={() => setModalMotoboy(false)}
                     className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition">Cancelar</button>
                   <button type="submit" disabled={saving}
-                    className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:opacity-50 transition">
+                    className="flex-1 rounded-xl bg-brand py-2.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50 transition">
                     {saving ? "Salvando..." : editMotoboy ? "Salvar" : "Criar"}
                   </button>
                 </div>
@@ -472,13 +472,13 @@ export default function DeliveryPage() {
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Nome *</label>
                   <input value={formZona.nome} onChange={e => setFormZona(f => ({ ...f, nome: e.target.value }))}
                     required placeholder="Ex: Centro, Bairro Norte..."
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Descrição</label>
                   <input value={formZona.descricao} onChange={e => setFormZona(f => ({ ...f, descricao: e.target.value }))}
                     placeholder="Ruas, bairros incluídos..."
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -486,27 +486,27 @@ export default function DeliveryPage() {
                     <input type="number" min={0} step={0.01} value={formZona.taxa}
                       onChange={e => setFormZona(f => ({ ...f, taxa: e.target.value }))} required
                       placeholder="0,00"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">Tempo estimado (min)</label>
                     <input type="number" min={1} value={formZona.tempo_min}
                       onChange={e => setFormZona(f => ({ ...f, tempo_min: e.target.value }))}
                       placeholder="Ex: 30"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none" />
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <input type="checkbox" id="zona-ativo" checked={formZona.ativo}
                     onChange={e => setFormZona(f => ({ ...f, ativo: e.target.checked }))}
-                    className="h-4 w-4 rounded border-white/20 bg-white/10 text-emerald-500" />
+                    className="h-4 w-4 rounded border-white/20 bg-white/10 text-brand" />
                   <label htmlFor="zona-ativo" className="text-sm text-slate-300">Zona ativa</label>
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setModalZona(false)}
                     className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition">Cancelar</button>
                   <button type="submit" disabled={saving}
-                    className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 disabled:opacity-50 transition">
+                    className="flex-1 rounded-xl bg-brand py-2.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50 transition">
                     {saving ? "Salvando..." : "Criar Zona"}
                   </button>
                 </div>

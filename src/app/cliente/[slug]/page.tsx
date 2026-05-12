@@ -17,6 +17,7 @@ import {
   Sparkles, Clock, TrendingUp, LogOut,
   Gift, Check, X, Copy,
 } from "lucide-react";
+import { applyBrandColors } from "@/lib/theme";
 
 interface EmpresaPub {
   nome_fantasia: string;
@@ -85,8 +86,8 @@ const STATUS_COLOR: Record<string, string> = {
   pendente:   "bg-yellow-500/15 text-yellow-400",
   confirmado: "bg-blue-500/15 text-blue-400",
   preparando: "bg-orange-500/15 text-orange-400",
-  pronto:     "bg-emerald-500/15 text-emerald-400",
-  entregue:   "bg-emerald-500/15 text-emerald-400",
+  pronto:     "bg-brand/15 text-brand",
+  entregue:   "bg-brand/15 text-brand",
   cancelado:  "bg-red-500/15 text-red-400",
 };
 
@@ -143,10 +144,7 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
         if (!d.success) return;
         const emp = d.data.empresa as EmpresaPub;
         setEmpresa(emp);
-        const primary = emp.cor_primaria || "#10b981";
-        document.documentElement.style.setProperty("--color-primary", primary);
-        document.documentElement.style.setProperty("--color-primary-15", primary + "26");
-        document.documentElement.style.setProperty("--color-primary-50", primary + "80");
+        applyBrandColors({ primary: emp.cor_primaria });
       })
       .catch(() => {});
   }, [params.slug]);
