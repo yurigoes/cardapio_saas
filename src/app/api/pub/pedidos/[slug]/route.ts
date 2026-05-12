@@ -102,18 +102,36 @@ export async function POST(
   try {
     // Busca empresa
     const empresa = await queryOne<{
-      id:               string;
-      pontos_por_real:  number;
-      fidelidade_ativo: boolean;
+      id:                 string;
+      pontos_por_real:    number;
+      fidelidade_ativo:   boolean;
+      caixa_obrigatorio:  boolean;
     }>(
       `SELECT id,
-              COALESCE(pontos_por_real, 0)   AS pontos_por_real,
-              COALESCE(fidelidade_ativo, false) AS fidelidade_ativo
+              COALESCE(pontos_por_real, 0)        AS pontos_por_real,
+              COALESCE(fidelidade_ativo, false)   AS fidelidade_ativo,
+              COALESCE(caixa_obrigatorio, false)  AS caixa_obrigatorio
        FROM empresas
        WHERE slug = $1 AND deleted_at IS NULL AND status = 'ativo'`,
       [params.slug]
     );
     if (!empresa) return notFound("Empresa não encontrada");
+
+    // ── Bloqueio de caixa obrigatório ──────────────────────────────────────
+    // Política: se caixa_obrigatorio=true, exige caixa aberto para pedidos
+    // presenciais (mesa, balcão, totem). Delivery escapa pois não passa
+    // por caixa físico (paga online ou direto ao entregador).
+    const exigeCaixa = empresa.caixa_obrigatorio
+      && body.tipo_consumo !== "delivery";
+    if (exigeCaixa) {
+      const caixaAberto = await queryOne<{ id: string }>(
+        `SELECT id FROM caixas WHERE empresa_id = $1 AND status = 'aberto' LIMIT 1`,
+        [empresa.id]
+      ).catch(() => null);
+      if (!caixaAberto) {
+        return badRequest("Caixa fechado. Aguarde a abertura do caixa para fazer pedidos.");
+      }
+    }
 
     const pedido = await transaction(async (client: PoolClient) => {
       // Subtotal — preco_unitario já é number após preprocess

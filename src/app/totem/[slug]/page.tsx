@@ -8,7 +8,7 @@ import {
   Search, MapPin, User, Phone, RotateCcw, Clock, Star, Gift,
   UtensilsCrossed, PackageCheck, Bike,
   Copy, Banknote, QrCode, Tag, CheckCircle2,
-  WifiOff, CloudUpload,
+  WifiOff, CloudUpload, Lock,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
 
@@ -148,6 +148,8 @@ interface EmpresaInfo {
   totem_slogan: string | null;
   horario_abertura: string | null;
   horario_fechamento: string | null;
+  caixa_obrigatorio?: boolean;
+  caixa_aberto?:      boolean;
 }
 
 interface Categoria {
@@ -2145,6 +2147,16 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
+
+      {/* ── Caixa fechado (só se exigido e for tipo presencial) ─────────── */}
+      {empresa?.caixa_obrigatorio && empresa?.caixa_aberto === false && fase !== "start" && (
+        <div className="fixed top-3 left-1/2 z-[60] -translate-x-1/2">
+          <div className="flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/20 px-3.5 py-1.5 text-xs font-bold text-amber-300 backdrop-blur-md shadow-2xl">
+            <Lock className="h-3.5 w-3.5" />
+            Caixa fechado — aguarde abertura
+          </div>
+        </div>
+      )}
 
       {/* ── Offline / Queue indicator (sempre visível quando relevante) ─ */}
       {(!isOnline || queueCount > 0) && (

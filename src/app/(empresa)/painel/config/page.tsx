@@ -27,6 +27,7 @@ interface EmpresaConfig {
   aceita_dinheiro:   boolean;
   aceita_pix:        boolean;
   aceita_cartao:     boolean;
+  caixa_obrigatorio: boolean;
   taxa_entrega:      number;
   pedido_minimo:     number;
   tempo_entrega_min: number;
@@ -64,6 +65,7 @@ const DEFAULT_CONFIG: EmpresaConfig = {
   aceita_dinheiro:    true,
   aceita_pix:         true,
   aceita_cartao:      true,
+  caixa_obrigatorio:  false,
   taxa_entrega:       0,
   pedido_minimo:      0,
   tempo_entrega_min:  30,
@@ -672,6 +674,28 @@ export default function ConfigPage() {
                   />
                 </div>
               ))}
+
+              {/* Caixa obrigatório */}
+              <div
+                onClick={() => set("caixa_obrigatorio", !form.caixa_obrigatorio)}
+                className={`mt-2 flex cursor-pointer items-center justify-between rounded-xl border p-4 transition ${
+                  form.caixa_obrigatorio
+                    ? "border-amber-400/30 bg-amber-500/5"
+                    : "border-white/10 bg-white/5"
+                }`}
+              >
+                <div>
+                  <p className="text-sm font-medium text-white">Exigir caixa aberto</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Bloqueia pedidos no totem/balcão se nenhum caixa estiver aberto.
+                    Delivery sempre é aceito.
+                  </p>
+                </div>
+                <Toggle
+                  checked={form.caixa_obrigatorio}
+                  onChange={v => set("caixa_obrigatorio", v)}
+                />
+              </div>
             </div>
 
             {/* Delivery settings */}
