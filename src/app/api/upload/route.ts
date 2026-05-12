@@ -11,11 +11,14 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { ok, badRequest, forbidden, serverError } from "@/lib/utils/response";
 import * as Minio from "minio";
 import crypto from "crypto";
+import sharp from "sharp";
 
 // Tipos de arquivo permitidos
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-const MAX_SIZE_MB   = 5;
+const MAX_SIZE_MB   = 10;                    // raw upload (antes de compressão)
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+const MAX_DIMENSION = 1600;                   // px (lado maior)
+const WEBP_QUALITY  = 80;
 
 function getMinioClient(): Minio.Client {
   return new Minio.Client({
@@ -66,21 +69,47 @@ export async function POST(req: NextRequest) {
     return badRequest(`Arquivo muito grande. Máximo: ${MAX_SIZE_MB}MB`);
   }
 
-  // Gera nome único
-  const ext       = file.type.split("/")[1].replace("jpeg", "jpg");
   const hash      = crypto.randomBytes(8).toString("hex");
   const folder    = empresaId ? `empresa/${empresaId}` : "public";
-  const objectName = `${folder}/${Date.now()}-${hash}.${ext}`;
   const bucket    = process.env.MINIO_BUCKET || "cardapio";
 
   try {
+    // Converte File para Buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const inputBuffer = Buffer.from(arrayBuffer);
+
+    // ── Compressão e conversão para WebP ────────────────────────────────────
+    // GIFs animados não são convertidos (perderiam animação) — só comprimidos.
+    let outputBuffer: Buffer;
+    let outputType:   string;
+    let outputExt:    string;
+
+    if (file.type === "image/gif") {
+      // GIF preserva (pode ser animado); só limita tamanho lateral
+      outputBuffer = await sharp(inputBuffer, { animated: true })
+        .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
+        .gif()
+        .toBuffer();
+      outputType = "image/gif";
+      outputExt  = "gif";
+    } else {
+      // JPEG/PNG/WebP → WebP otimizado
+      outputBuffer = await sharp(inputBuffer)
+        .rotate()                    // respeita EXIF orientation
+        .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: WEBP_QUALITY })
+        .toBuffer();
+      outputType = "image/webp";
+      outputExt  = "webp";
+    }
+
+    const objectName = `${folder}/${Date.now()}-${hash}.${outputExt}`;
     const client = getMinioClient();
 
     // Garante que o bucket existe
     const exists = await client.bucketExists(bucket).catch(() => false);
     if (!exists) {
       await client.makeBucket(bucket, "us-east-1");
-      // Torna o bucket público para leitura
       await client.setBucketPolicy(bucket, JSON.stringify({
         Version: "2012-10-17",
         Statement: [{
@@ -92,29 +121,31 @@ export async function POST(req: NextRequest) {
       }));
     }
 
-    // Converte File para Buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Upload
-    await client.putObject(bucket, objectName, buffer, buffer.length, {
-      "Content-Type": file.type,
-      "x-amz-acl":   "public-read",
+    // Upload do buffer já comprimido
+    await client.putObject(bucket, objectName, outputBuffer, outputBuffer.length, {
+      "Content-Type":  outputType,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "x-amz-acl":     "public-read",
     });
 
     const url = getPublicUrl(objectName);
+    const economiaPct = Math.round((1 - outputBuffer.length / inputBuffer.length) * 100);
 
     return ok({
       url,
       objectName,
-      size:     file.size,
-      mimeType: file.type,
+      size_original:    inputBuffer.length,
+      size_otimizado:   outputBuffer.length,
+      economia_pct:     Math.max(0, economiaPct),
+      mime_type:        outputType,
     });
   } catch (err) {
     console.error("[Upload/POST]", err);
-    // Se MinIO não está configurado, retorna erro amigável
     if ((err as NodeJS.ErrnoException).code === "ECONNREFUSED") {
       return serverError("Serviço de armazenamento indisponível");
+    }
+    if (err instanceof Error && err.message.includes("unsupported")) {
+      return badRequest("Formato de imagem não suportado ou arquivo corrompido");
     }
     return serverError("Falha no upload da imagem");
   }
