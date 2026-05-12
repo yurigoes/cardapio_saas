@@ -8,6 +8,7 @@ import {
   Search, MapPin, User, Phone, RotateCcw, Clock, Star, Gift,
   UtensilsCrossed, PackageCheck, Bike,
   Copy, Banknote, QrCode, Tag, CheckCircle2,
+  WifiOff, CloudUpload,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
 
@@ -1634,9 +1635,18 @@ function SuccessScreen({
 
       <div className="space-y-2">
         <p className="text-sm font-semibold uppercase tracking-widest text-emerald-400">
-          {t(idioma, "sucesso")}
+          {numero === 0 ? "PEDIDO ENFILEIRADO" : t(idioma, "sucesso")}
         </p>
-        <h2 className="text-4xl font-black text-white">#{numero}</h2>
+        {numero > 0 ? (
+          <h2 className="text-4xl font-black text-white">#{numero}</h2>
+        ) : (
+          <div className="space-y-1">
+            <p className="text-base font-semibold text-amber-300">Sem conexão no momento</p>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto">
+              Seu pedido será enviado automaticamente assim que a internet voltar.
+            </p>
+          </div>
+        )}
 
         {mesaNumero && (
           <p className="text-emerald-400 font-semibold flex items-center justify-center gap-1">
@@ -1756,6 +1766,46 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     pixQrcodeUrl?: string;
     total:        number;
   } | null>(null);
+
+  // Offline-first state
+  const [isOnline, setIsOnline] = useState(true);
+  const [queueCount, setQueueCount] = useState(0);
+
+  // Detecta online/offline + escuta mensagens do SW (fila)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setIsOnline(navigator.onLine);
+    const onOnline  = () => {
+      setIsOnline(true);
+      // Pede ao SW para drenar a fila
+      navigator.serviceWorker?.controller?.postMessage("DRAIN_QUEUE");
+    };
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener("online",  onOnline);
+    window.addEventListener("offline", onOffline);
+
+    // Mensagens do SW
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data;
+      if (data?.type === "QUEUE_STATUS")  setQueueCount(data.count ?? 0);
+      if (data?.type === "QUEUE_DRAINED") {
+        setQueueCount(data.remaining ?? 0);
+        if (data.ok > 0) {
+          // Pequeno feedback — no totem o usuário já está em outra tela
+          console.info(`[OFFLINE] ${data.ok} pedido(s) sincronizado(s)`);
+        }
+      }
+    };
+    navigator.serviceWorker?.addEventListener("message", onMessage);
+    // Pede status inicial
+    navigator.serviceWorker?.controller?.postMessage("QUEUE_STATUS");
+
+    return () => {
+      window.removeEventListener("online",  onOnline);
+      window.removeEventListener("offline", onOffline);
+      navigator.serviceWorker?.removeEventListener("message", onMessage);
+    };
+  }, []);
 
   // Menu nav
   const [catSelecionada, setCatSelecionada] = useState<string>("todos");
@@ -1988,6 +2038,18 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     setCart([]);
     setCartOpen(false);
 
+    // Pedido enfileirado offline (SW interceptou)
+    if (data.queued || data.data?.queued) {
+      setQueueCount((c) => c + 1);
+      setPedidoFeito({
+        numero:      data.data.numero ?? 0,    // 0 = será atribuído ao sincronizar
+        clienteNome: nomeExibido,
+        pontosGanhos: undefined,
+        totalPontos: undefined,
+      });
+      return;
+    }
+
     // Se PIX, cria cobrança e mostra tela de QR
     if (formaPagamento === "pix") {
       try {
@@ -2069,6 +2131,33 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
+
+      {/* ── Offline / Queue indicator (sempre visível quando relevante) ─ */}
+      {(!isOnline || queueCount > 0) && (
+        <div className="fixed top-3 left-1/2 z-[60] -translate-x-1/2">
+          <div
+            className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-bold backdrop-blur-md shadow-2xl ${
+              !isOnline
+                ? "border-red-400/40 bg-red-500/20 text-red-300"
+                : "border-amber-400/40 bg-amber-500/20 text-amber-300"
+            }`}
+          >
+            {!isOnline ? (
+              <>
+                <WifiOff className="h-3.5 w-3.5" />
+                Sem conexão
+                {queueCount > 0 && <span className="opacity-80">· {queueCount} na fila</span>}
+              </>
+            ) : (
+              <>
+                <CloudUpload className="h-3.5 w-3.5 animate-pulse" />
+                Sincronizando {queueCount} pedido{queueCount !== 1 ? "s" : ""}…
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
 
       {/* ── Animated phase container ─────────────────────────────────────────── */}
       <AnimatePresence mode="wait">
