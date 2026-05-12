@@ -38,7 +38,10 @@ export async function GET(
     if (!pedido) return notFound("Pedido não encontrado");
 
     const itens = await query(
-      `SELECT pi.id, pi.nome, pi.quantidade, pi.preco_unitario, pi.subtotal, pi.observacoes
+      `SELECT pi.id, pi.nome, pi.quantidade, pi.preco_unitario, pi.subtotal,
+              pi.observacoes,
+              COALESCE(pi.adicionais,   '[]'::jsonb) AS adicionais,
+              COALESCE(pi.complementos, '[]'::jsonb) AS complementos
        FROM pedido_itens pi
        WHERE pi.pedido_id = $1
        ORDER BY pi.created_at ASC`,

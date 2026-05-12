@@ -7,6 +7,14 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface AdicionalItem {
+  grupo_id?:    string;
+  grupo_nome?:  string;
+  opcao_id?:    string;
+  opcao_nome?:  string;
+  preco_extra?: number;
+}
+
 interface PedidoItem {
   id:             string;
   nome:           string;
@@ -14,6 +22,7 @@ interface PedidoItem {
   preco_unitario: number;
   subtotal:       number;
   observacoes:    string | null;
+  adicionais?:    AdicionalItem[] | null;
 }
 
 interface Pedido {
@@ -161,21 +170,42 @@ function PedidoCard({ pedido, onUpdate, onChamar, updating, chamando }: CardProp
       </div>
 
       {/* Itens */}
-      <div className="space-y-1.5 border-t border-white/5 pt-3">
+      <div className="space-y-2 border-t border-white/5 pt-3">
         {pedido.itens.length === 0 ? (
           <p className="text-xs text-slate-500 italic">Carregando itens...</p>
         ) : (
-          pedido.itens.map((item) => (
-            <div key={item.id}>
-              <p className="text-sm font-medium">
-                <span className="text-brand font-bold mr-1">{item.quantidade}×</span>
-                {item.nome}
-              </p>
-              {item.observacoes && (
-                <p className="text-xs text-slate-500 ml-5">{item.observacoes}</p>
-              )}
-            </div>
-          ))
+          pedido.itens.map((item) => {
+            // Agrupa adicionais por grupo (ex: Tamanho, Adicionais)
+            const adicionaisPorGrupo: Record<string, string[]> = {};
+            (item.adicionais ?? []).forEach((ad) => {
+              const key = ad.grupo_nome ?? "Opções";
+              if (!adicionaisPorGrupo[key]) adicionaisPorGrupo[key] = [];
+              if (ad.opcao_nome) adicionaisPorGrupo[key].push(ad.opcao_nome);
+            });
+            const grupos = Object.entries(adicionaisPorGrupo);
+            return (
+              <div key={item.id}>
+                <p className="text-sm font-medium">
+                  <span className="text-brand font-bold mr-1">{item.quantidade}×</span>
+                  {item.nome}
+                </p>
+                {/* Variações em destaque (cada grupo numa linha) */}
+                {grupos.length > 0 && (
+                  <ul className="ml-5 mt-1 space-y-0.5">
+                    {grupos.map(([grupo, opcoes]) => (
+                      <li key={grupo} className="text-xs leading-tight">
+                        <span className="text-slate-500">{grupo}:</span>{" "}
+                        <span className="font-semibold text-amber-300">{opcoes.join(", ")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {item.observacoes && (
+                  <p className="ml-5 mt-1 text-xs italic text-orange-300">⚠ {item.observacoes}</p>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 
