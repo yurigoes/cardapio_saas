@@ -1124,17 +1124,23 @@ interface CartDrawerProps {
   cliente:     ClienteIdentificado | null;
   slug:        string;
   idioma:      Idioma;
+  isOnline:    boolean;
   onClose:     () => void;
   onUpdate:    (uid: string, delta: number) => void;
   onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro", cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null) => Promise<void>;
 }
 
-function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate, onConfirm }: CartDrawerProps) {
+function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, onClose, onUpdate, onConfirm }: CartDrawerProps) {
   const [nome, setNome]           = useState(cliente?.nome ?? "");
   const [tel, setTel]             = useState(cliente?.telefone ?? "");
   const [obs, setObs]             = useState("");
   const [formaPag, setFormaPag]   = useState<"pix" | "dinheiro">("dinheiro");
   const [sending, setSending]     = useState(false);
+
+  // Se ficou offline com PIX selecionado, força dinheiro
+  useEffect(() => {
+    if (!isOnline && formaPag === "pix") setFormaPag("dinheiro");
+  }, [isOnline, formaPag]);
 
   // Gateways disponíveis (carregados na primeira vez que PIX é selecionado)
   const [gateways, setGateways]               = useState<GatewayInfo[]>([]);
@@ -1377,13 +1383,16 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate
           <p className="mb-2 text-xs font-medium text-slate-400">{t(idioma, "pagamento_titulo")}</p>
           <div className="grid grid-cols-2 gap-2">
             {(["dinheiro", "pix"] as const).map((metodo) => {
-              const ativo = formaPag === metodo;
+              const ativo      = formaPag === metodo;
+              const desabilitado = metodo === "pix" && !isOnline;
               return (
                 <button
                   key={metodo}
                   type="button"
-                  onClick={() => setFormaPag(metodo)}
-                  className="flex flex-col items-center gap-1.5 rounded-xl border py-3 text-xs font-semibold transition"
+                  onClick={() => !desabilitado && setFormaPag(metodo)}
+                  disabled={desabilitado}
+                  title={desabilitado ? "PIX requer conexão com a internet" : undefined}
+                  className="flex flex-col items-center gap-1.5 rounded-xl border py-3 text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
                   style={ativo ? {
                     borderColor: "var(--color-primary-50, rgba(16,185,129,0.5))",
                     background:  "var(--color-primary-15, rgba(16,185,129,0.15))",
@@ -1396,13 +1405,18 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate
                 >
                   {metodo === "pix" ? <QrCode className="h-5 w-5" /> : <Banknote className="h-5 w-5" />}
                   {t(idioma, metodo === "pix" ? "pagamento_pix" : "pagamento_dinheiro")}
+                  {desabilitado && (
+                    <span className="text-[9px] font-normal text-slate-500 leading-tight">
+                      requer internet
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
 
-          {/* Seletor de gateway PIX (só aparece se há 2+ gateways disponíveis) */}
-          {formaPag === "pix" && gateways.length > 1 && (
+          {/* Seletor de gateway PIX (só aparece se há 2+ gateways disponíveis E online) */}
+          {isOnline && formaPag === "pix" && gateways.length > 1 && (
             <div className="mt-2.5 space-y-1.5">
               <p className="text-[10px] uppercase tracking-wider text-slate-500">Pagar com</p>
               <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
@@ -2436,6 +2450,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           cliente={cliente}
           slug={params.slug}
           idioma={idioma}
+          isOnline={isOnline}
           onClose={() => setCartOpen(false)}
           onUpdate={updateCart}
           onConfirm={handleConfirmarPedido}
