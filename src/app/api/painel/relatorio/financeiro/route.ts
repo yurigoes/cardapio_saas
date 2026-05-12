@@ -41,8 +41,12 @@ export async function GET(req: NextRequest) {
     return forbidden("Datas inválidas (esperado YYYY-MM-DD)");
   }
 
-  // Filtro de período: from 00:00 até to+1day 00:00 (intervalo aberto à direita)
-  const dateFilter = `created_at >= $2::date AND created_at < ($3::date + INTERVAL '1 day')`;
+  // Filtro de período: from 00:00 até to+1day 00:00 (intervalo aberto à direita).
+  // Função em vez de string para suportar alias (p.) sem ambiguidade em JOINs.
+  const dateFilter = (alias = "") => {
+    const a = alias ? `${alias}.` : "";
+    return `${a}created_at >= $2::date AND ${a}created_at < ($3::date + INTERVAL '1 day')`;
+  };
   const baseParams = [empresaId, from, to];
 
   try {
@@ -79,7 +83,7 @@ export async function GET(req: NextRequest) {
            COUNT(DISTINCT cliente_id)::text               AS clientes_unicos
          FROM pedidos
          WHERE empresa_id = $1
-           AND ${dateFilter}
+           AND ${dateFilter()}
            AND deleted_at IS NULL
            AND status NOT IN ('cancelado', 'pendente')`,
         baseParams
@@ -106,7 +110,7 @@ export async function GET(req: NextRequest) {
                 COUNT(*)::text                AS qtd
          FROM pedidos
          WHERE empresa_id = $1
-           AND ${dateFilter}
+           AND ${dateFilter()}
            AND deleted_at IS NULL
            AND status NOT IN ('cancelado')
          GROUP BY tipo`,
@@ -120,7 +124,7 @@ export async function GET(req: NextRequest) {
                 COUNT(*)::text                            AS qtd
          FROM pedidos
          WHERE empresa_id = $1
-           AND ${dateFilter}
+           AND ${dateFilter()}
            AND deleted_at IS NULL
            AND status NOT IN ('cancelado')
          GROUP BY EXTRACT(HOUR FROM created_at)
@@ -156,7 +160,7 @@ export async function GET(req: NextRequest) {
          FROM pedido_itens pi
          JOIN pedidos p ON p.id = pi.pedido_id
          WHERE p.empresa_id = $1
-           AND p.${dateFilter}
+           AND ${dateFilter("p")}
            AND p.deleted_at IS NULL
            AND p.status NOT IN ('cancelado')
          GROUP BY pi.produto_id, pi.nome
@@ -179,7 +183,7 @@ export async function GET(req: NextRequest) {
          FROM pedidos p
          LEFT JOIN clientes c ON c.id = p.cliente_id
          WHERE p.empresa_id = $1
-           AND p.${dateFilter}
+           AND ${dateFilter("p")}
            AND p.cliente_id IS NOT NULL
            AND p.deleted_at IS NULL
            AND p.status NOT IN ('cancelado')
