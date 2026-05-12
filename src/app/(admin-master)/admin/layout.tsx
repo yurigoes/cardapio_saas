@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, Users, Package, CreditCard,
-  BarChart3, Settings, LogOut, ChefHat, Bell, Shield, FileText, Webhook, Image as ImageIcon,
+  BarChart3, Settings, LogOut, ChefHat, Bell, Shield, FileText, Webhook,
+  Image as ImageIcon, TrendingUp,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/admin/usuarios",  label: "Usuários",   icon: Users },
   { href: "/admin/financeiro",label: "Financeiro", icon: CreditCard },
   { href: "/admin/relatorios",label: "Relatórios", icon: BarChart3 },
+  { href: "/admin/metricas",  label: "Métricas",   icon: TrendingUp },
   { href: "/admin/webhooks",  label: "Webhooks",   icon: Webhook },
   { href: "/admin/imagens",   label: "Imagens",    icon: ImageIcon },
   { href: "/admin/auditoria", label: "Auditoria",  icon: Shield },
