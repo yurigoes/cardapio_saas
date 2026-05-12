@@ -593,7 +593,147 @@ function WhatsAppSection({
           </div>
         </SectionCard>
       )}
+
+      {/* ── Templates de mensagem ── */}
+      {!notCreated && <MensagensTemplatesSection toast={toast} />}
     </div>
+  );
+}
+
+// ── Mensagens (templates) ──────────────────────────────────────────────────────
+
+interface MensagemTpl {
+  evento:      string;
+  texto:       string;
+  ativo:       boolean;
+  customizado: boolean;
+}
+
+const TPL_VARS = [
+  { tag: "{empresa}",  desc: "Nome da empresa" },
+  { tag: "{numero}",   desc: "Número do pedido" },
+  { tag: "{cliente}",  desc: "Nome do cliente" },
+  { tag: "{total}",    desc: "Total formatado (R$ 0,00)" },
+  { tag: "{telefone}", desc: "Telefone do cliente" },
+];
+
+function MensagensTemplatesSection({ toast }: { toast: ReturnType<typeof useToast> }) {
+  const [templates, setTemplates] = useState<MensagemTpl[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [savingEv, setSavingEv]   = useState<string | null>(null);
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/painel/mensagens-template", { headers: authHeader() });
+      const d = await r.json();
+      if (d.success) setTemplates(d.data.templates ?? []);
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const labelByEvento: Record<string, string> = Object.fromEntries(
+    WA_EVENTOS.map(e => [e.id, e.label])
+  );
+
+  function setLocal(evento: string, patch: Partial<MensagemTpl>) {
+    setTemplates(prev => prev.map(t => t.evento === evento ? { ...t, ...patch } : t));
+  }
+
+  async function salvar(t: MensagemTpl) {
+    setSavingEv(t.evento);
+    try {
+      const r = await fetch("/api/painel/mensagens-template", {
+        method:  "PUT",
+        headers: { ...authHeader(), ...jsonHeader() },
+        body:    JSON.stringify({ evento: t.evento, texto: t.texto, ativo: t.ativo }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        toast.show("success", `Template "${labelByEvento[t.evento] ?? t.evento}" salvo`);
+        setLocal(t.evento, { customizado: true });
+      } else {
+        toast.show("error", d.error?.message ?? "Falha ao salvar");
+      }
+    } finally { setSavingEv(null); }
+  }
+
+  if (loading) {
+    return (
+      <SectionCard>
+        <div className="flex h-20 items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+        </div>
+      </SectionCard>
+    );
+  }
+
+  return (
+    <SectionCard>
+      <h4 className="text-sm font-semibold text-white mb-1">Templates de mensagem</h4>
+      <p className="text-xs text-slate-400 mb-4">
+        Personalize o texto enviado em cada evento. Use as variáveis abaixo.
+      </p>
+
+      {/* Variáveis disponíveis */}
+      <div className="mb-5 rounded-xl border border-white/10 bg-white/5 p-3">
+        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Variáveis disponíveis</p>
+        <div className="flex flex-wrap gap-1.5">
+          {TPL_VARS.map(v => (
+            <span key={v.tag} title={v.desc} className="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] font-mono text-emerald-300">
+              {v.tag}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {templates.map(t => (
+          <div key={t.evento} className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-white">
+                  {labelByEvento[t.evento] ?? t.evento}
+                </span>
+                {t.customizado && (
+                  <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                    custom
+                  </span>
+                )}
+              </div>
+              <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={t.ativo}
+                  onChange={e => setLocal(t.evento, { ativo: e.target.checked })}
+                  className="h-3.5 w-3.5 accent-emerald-500"
+                />
+                Ativo
+              </label>
+            </div>
+            <textarea
+              value={t.texto}
+              onChange={e => setLocal(t.evento, { texto: e.target.value })}
+              rows={3}
+              className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white font-mono focus:border-emerald-500/50 focus:outline-none resize-y"
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={() => salvar(t)}
+                disabled={savingEv === t.evento}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-50 transition"
+              >
+                {savingEv === t.evento
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Save className="h-3.5 w-3.5" />}
+                Salvar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </SectionCard>
   );
 }
 

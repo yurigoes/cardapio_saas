@@ -48,27 +48,53 @@ interface NotificarVars {
 
 const EVENTOS_PARA_CLIENTE = new Set<EvolutionEvento>(["confirmado", "pronto", "cancelado"]);
 
-/** Templates default. Futuramente pode vir de config por empresa. */
-function montarMensagem(
-  evento: EvolutionEvento,
-  empresa: EmpresaEvolution,
-  vars: NotificarVars
-): string {
-  const numero = vars.pedidoNumero ?? "?";
-  const total  = vars.total != null ? `R$ ${Number(vars.total).toFixed(2).replace(".", ",")}` : "";
+export const EVENTOS_VALIDOS: EvolutionEvento[] = [
+  "novo_pedido", "confirmado", "pronto", "cancelado", "novo_cliente",
+];
 
-  switch (evento) {
-    case "novo_pedido":
-      return `🔔 *${empresa.nome_fantasia}*\n\nNovo pedido #${numero} recebido${total ? ` (${total})` : ""}.`;
-    case "confirmado":
-      return `✅ *${empresa.nome_fantasia}*\n\nSeu pedido #${numero} foi confirmado!${total ? `\nTotal: ${total}` : ""}`;
-    case "pronto":
-      return `🍔 *${empresa.nome_fantasia}*\n\nSeu pedido #${numero} está pronto para retirada!`;
-    case "cancelado":
-      return `❌ *${empresa.nome_fantasia}*\n\nSeu pedido #${numero} foi cancelado.`;
-    case "novo_cliente":
-      return `👤 *${empresa.nome_fantasia}*\n\nNovo cliente cadastrado: ${vars.clienteNome ?? "(sem nome)"}.`;
-  }
+/**
+ * Templates default. Empresa pode sobrescrever via tabela mensagens_template.
+ * Variáveis suportadas: {empresa} {numero} {cliente} {total} {telefone}
+ */
+export const TEMPLATES_DEFAULT: Record<EvolutionEvento, string> = {
+  novo_pedido:  `🔔 *{empresa}*\n\nNovo pedido #{numero} recebido{total_paren}.`,
+  confirmado:   `✅ *{empresa}*\n\nSeu pedido #{numero} foi confirmado!{total_linha}`,
+  pronto:       `🍔 *{empresa}*\n\nSeu pedido #{numero} está pronto para retirada!`,
+  cancelado:    `❌ *{empresa}*\n\nSeu pedido #{numero} foi cancelado.`,
+  novo_cliente: `👤 *{empresa}*\n\nNovo cliente cadastrado: {cliente}.`,
+};
+
+function aplicarVariaveis(
+  template: string,
+  empresa:  EmpresaEvolution,
+  vars:     NotificarVars
+): string {
+  const totalFmt = vars.total != null
+    ? `R$ ${Number(vars.total).toFixed(2).replace(".", ",")}` : "";
+
+  return template
+    .replace(/\{empresa\}/g,     empresa.nome_fantasia)
+    .replace(/\{numero\}/g,      String(vars.pedidoNumero ?? "?"))
+    .replace(/\{cliente\}/g,     vars.clienteNome  ?? "(sem nome)")
+    .replace(/\{telefone\}/g,    vars.telefone     ?? "")
+    .replace(/\{total\}/g,       totalFmt)
+    // Tokens "smart" — só renderizam se houver valor
+    .replace(/\{total_linha\}/g, totalFmt ? `\nTotal: ${totalFmt}` : "")
+    .replace(/\{total_paren\}/g, totalFmt ? ` (${totalFmt})` : "");
+}
+
+interface TemplateRow { texto: string; ativo: boolean }
+
+async function buscarTemplate(empresaId: string, evento: EvolutionEvento): Promise<string | null> {
+  const row = await queryOne<TemplateRow>(
+    `SELECT texto, ativo FROM mensagens_template
+      WHERE empresa_id = $1 AND evento = $2`,
+    [empresaId, evento]
+  ).catch(() => null);
+
+  if (!row) return null;          // sem registro → caller usa default
+  if (!row.ativo) return "";      // desativado → não envia (string vazia sinaliza skip)
+  return row.texto;
 }
 
 /** Normaliza telefone para formato E.164 sem '+' (ex: 5511999999999) */
@@ -149,8 +175,14 @@ export async function notificarEvolution(
       return { enviado: false, motivo: "sem telefone destinatário" };
     }
 
+    // Template da empresa (DB) com fallback ao default. Vazio = desativado.
+    const tpl = await buscarTemplate(empresaId, evento);
+    if (tpl === "") {
+      return { enviado: false, motivo: "template desativado" };
+    }
+    const text = aplicarVariaveis(tpl ?? TEMPLATES_DEFAULT[evento], empresa, vars);
+
     const number  = normalizarTelefone(telefone);
-    const text    = montarMensagem(evento, empresa, vars);
     const baseUrl = empresa.evolution_url.replace(/\/+$/, "");
     const url     = `${baseUrl}/message/sendText/${empresa.slug}`;
 
