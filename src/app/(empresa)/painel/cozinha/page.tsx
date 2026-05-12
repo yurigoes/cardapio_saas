@@ -278,12 +278,16 @@ export default function CozinhaPage() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const knownIdsRef = useRef<Set<string>>(new Set());
 
+  // Auto-print
+  const [imprimirAuto, setImprimirAuto] = useState(false);
+  const printedIdsRef = useRef<Set<string>>(new Set());
+
   function showToast(type: "success" | "error", msg: string) {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
   }
 
-  // Get slug from /api/auth/me
+  // Get slug from /api/auth/me + carrega config para auto-print
   useEffect(() => {
     const token = getToken();
     if (!token) return;
@@ -293,7 +297,24 @@ export default function CozinhaPage() {
         if (data.success) setSlug(data.data?.empresa?.slug || "");
       })
       .catch(() => {});
+    fetch("/api/painel/config", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success) setImprimirAuto(!!data.data?.imprimir_cozinha_auto);
+      })
+      .catch(() => {});
   }, []);
+
+  /** Abre popup de impressão para um pedido. Inclui throttling porque
+   *  navegadores bloqueiam várias janelas em sequência rápida. */
+  function imprimirPedidoCozinha(pedidoId: string, delayMs = 0) {
+    setTimeout(() => {
+      const token = getToken();
+      const sp = new URLSearchParams({ tipo: "cozinha", token });
+      window.open(`/imprimir/pedido/${pedidoId}?${sp}`, `_print_${pedidoId}`,
+        "width=400,height=700,toolbar=no,menubar=no");
+    }, delayMs);
+  }
 
   function getAudioCtx(): AudioContext {
     if (!audioCtxRef.current) {
@@ -333,14 +354,31 @@ export default function CozinhaPage() {
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
 
-      // Sound notification
+      // Detecta novos pedidos (qualquer status que entra na visão do KDS)
+      const novos = withItems.filter((p) => !knownIdsRef.current.has(p.id));
+
+      // Sound notification (só pra pendentes, no polling)
       if (isPolling && soundOn) {
-        const newPendentes = withItems.filter(
-          (p) => p.status === "pendente" && !knownIdsRef.current.has(p.id)
-        );
+        const newPendentes = novos.filter((p) => p.status === "pendente");
         if (newPendentes.length > 0) {
           try { beep(getAudioCtx()); } catch { /* ignore */ }
         }
+      }
+
+      // Auto-print: dispara popup escalonado (200ms entre cada) para
+      // evitar bloqueio do navegador quando vários pedidos chegam juntos.
+      // Só após o primeiro fetch (não imprime tudo que já estava na tela).
+      if (isPolling && imprimirAuto && novos.length > 0) {
+        novos.forEach((p, i) => {
+          if (printedIdsRef.current.has(p.id)) return;
+          printedIdsRef.current.add(p.id);
+          imprimirPedidoCozinha(p.id, i * 250);
+        });
+      }
+      // Mesmo no primeiro fetch, marca tudo como já impresso
+      // (não queremos imprimir backlog de pedidos antigos quando KDS abre)
+      if (!isPolling) {
+        withItems.forEach((p) => printedIdsRef.current.add(p.id));
       }
 
       knownIdsRef.current = new Set(withItems.map((p) => p.id));
@@ -351,7 +389,7 @@ export default function CozinhaPage() {
     } finally {
       setLoading(false);
     }
-  }, [soundOn]);
+  }, [soundOn, imprimirAuto]);
 
   useEffect(() => { fetchPedidos(false); }, [fetchPedidos]);
   useEffect(() => {
@@ -453,6 +491,17 @@ export default function CozinhaPage() {
             {soundOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
             Som
           </button>
+
+          {/* Indicador de auto-print ativo (não interativo — só status) */}
+          {imprimirAuto && (
+            <div
+              title="Cada pedido novo é impresso automaticamente. Configure em /painel/config."
+              className="flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Auto-print
+            </div>
+          )}
 
           <button
             onClick={() => fetchPedidos(false)}

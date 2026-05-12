@@ -24,11 +24,12 @@ interface EmpresaConfig {
   horario_abertura:  string;
   horario_fechamento: string;
   dias_funcionamento: string;
-  aceita_dinheiro:   boolean;
-  aceita_pix:        boolean;
-  aceita_cartao:     boolean;
-  caixa_obrigatorio: boolean;
-  taxa_entrega:      number;
+  aceita_dinheiro:       boolean;
+  aceita_pix:            boolean;
+  aceita_cartao:         boolean;
+  caixa_obrigatorio:     boolean;
+  imprimir_cozinha_auto: boolean;
+  taxa_entrega:          number;
   pedido_minimo:     number;
   tempo_entrega_min: number;
   fidelidade_ativo:  boolean;
@@ -62,11 +63,12 @@ const DEFAULT_CONFIG: EmpresaConfig = {
   horario_abertura:   "08:00",
   horario_fechamento: "22:00",
   dias_funcionamento: "",
-  aceita_dinheiro:    true,
-  aceita_pix:         true,
-  aceita_cartao:      true,
-  caixa_obrigatorio:  false,
-  taxa_entrega:       0,
+  aceita_dinheiro:        true,
+  aceita_pix:             true,
+  aceita_cartao:          true,
+  caixa_obrigatorio:      false,
+  imprimir_cozinha_auto:  false,
+  taxa_entrega:           0,
   pedido_minimo:      0,
   tempo_entrega_min:  30,
   fidelidade_ativo:   false,
@@ -694,6 +696,27 @@ export default function ConfigPage() {
                 <Toggle
                   checked={form.caixa_obrigatorio}
                   onChange={v => set("caixa_obrigatorio", v)}
+                />
+              </div>
+
+              {/* Impressão automática na cozinha */}
+              <div
+                onClick={() => set("imprimir_cozinha_auto", !form.imprimir_cozinha_auto)}
+                className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition ${
+                  form.imprimir_cozinha_auto
+                    ? "border-brand/30 bg-brand/5"
+                    : "border-white/10 bg-white/5"
+                }`}
+              >
+                <div>
+                  <p className="text-sm font-medium text-white">Imprimir cozinha automaticamente</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Cada pedido novo abre popup de impressão no KDS sem clique. Permita popups no navegador.
+                  </p>
+                </div>
+                <Toggle
+                  checked={form.imprimir_cozinha_auto}
+                  onChange={v => set("imprimir_cozinha_auto", v)}
                 />
               </div>
             </div>
