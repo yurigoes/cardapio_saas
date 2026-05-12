@@ -204,11 +204,12 @@ interface CartItem {
 }
 
 interface ClienteIdentificado {
-  id:       string;
-  nome:     string | null;
-  telefone: string | null;
-  cpf:      string | null;
-  pontos:   number;
+  id:             string;
+  nome:           string | null;
+  telefone:       string | null;
+  cpf:            string | null;
+  pontos:         number;
+  saldo_cashback?: number;
 }
 
 interface UltimoPedidoItem {
@@ -1129,7 +1130,7 @@ interface CartDrawerProps {
   isOnline:    boolean;
   onClose:     () => void;
   onUpdate:    (uid: string, delta: number) => void;
-  onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro", cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null) => Promise<void>;
+  onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro", cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null, cashbackUsar: number) => Promise<void>;
 }
 
 function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, onClose, onUpdate, onConfirm }: CartDrawerProps) {
@@ -1138,6 +1139,10 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, onClose
   const [obs, setObs]             = useState("");
   const [formaPag, setFormaPag]   = useState<"pix" | "dinheiro">("dinheiro");
   const [sending, setSending]     = useState(false);
+
+  // Cashback (usar saldo)
+  const saldoCashback = Number(cliente?.saldo_cashback ?? 0);
+  const [cashbackUsar, setCashbackUsar] = useState(0);
 
   // Se ficou offline com PIX selecionado, força dinheiro
   useEffect(() => {
@@ -1180,7 +1185,10 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, onClose
   };
   const subtotal = cart.reduce((acc, i) => acc + precoComVariacoes(i) * i.quantidade, 0);
   const desconto = cupomAplicado?.desconto ?? 0;
-  const total    = Math.max(0, subtotal - desconto);
+  // Cashback efetivamente aplicado (limitado ao saldo + ao valor após desconto de cupom)
+  const totalAposCupom = Math.max(0, subtotal - desconto);
+  const cashbackEfetivo = Math.min(cashbackUsar, saldoCashback, totalAposCupom);
+  const total    = Math.max(0, totalAposCupom - cashbackEfetivo);
 
   async function aplicarCupom() {
     if (!cupomCodigo.trim()) return;
@@ -1225,7 +1233,8 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, onClose
       await onConfirm(
         nome, tel, obs, formaPag,
         cupomAplicado ? { codigo: cupomAplicado.codigo, desconto: cupomAplicado.desconto } : null,
-        formaPag === "pix" ? gatewaySelecionado : null
+        formaPag === "pix" ? gatewaySelecionado : null,
+        cashbackEfetivo,
       );
     } finally { setSending(false); }
   }
@@ -1282,6 +1291,52 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, onClose
       </div>
 
       <div className="border-t border-white/5 p-4 space-y-3">
+
+        {/* Cashback (saldo do cliente) */}
+        {saldoCashback > 0 && (
+          <div
+            className="rounded-xl border px-3 py-2.5"
+            style={{
+              borderColor: cashbackEfetivo > 0
+                ? "var(--color-primary-50, rgba(16,185,129,0.4))"
+                : "rgba(255,255,255,0.10)",
+              background: cashbackEfetivo > 0
+                ? "var(--color-primary-15, rgba(16,185,129,0.12))"
+                : "rgba(255,255,255,0.05)",
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-300">
+                💵 Saldo Cashback
+              </p>
+              <span className="text-xs font-bold text-white">
+                {formatBRL(saldoCashback)} disponível
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={0}
+                max={Math.min(saldoCashback, totalAposCupom)}
+                step={0.5}
+                value={cashbackUsar}
+                onChange={(e) => setCashbackUsar(Number(e.target.value))}
+                className="flex-1 accent-brand"
+              />
+              <span className="w-20 text-right text-sm font-bold" style={{ color: "var(--color-primary, #10b981)" }}>
+                −{formatBRL(cashbackEfetivo)}
+              </span>
+            </div>
+            {cashbackUsar > 0 && (
+              <button
+                onClick={() => setCashbackUsar(0)}
+                className="mt-1 text-[10px] text-slate-500 hover:text-white transition"
+              >
+                Não usar cashback
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Cupom */}
         {cupomAplicado ? (
@@ -1342,6 +1397,12 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, onClose
             <div className="flex justify-between items-center text-sm">
               <span className="text-slate-400">{t(idioma, "desconto")}</span>
               <span style={{ color: "var(--color-primary, #10b981)" }}>−{formatBRL(desconto)}</span>
+            </div>
+          )}
+          {cashbackEfetivo > 0 && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-400">Cashback</span>
+              <span className="text-amber-300">−{formatBRL(cashbackEfetivo)}</span>
             </div>
           )}
           <div className="flex justify-between items-center pt-1 border-t border-white/5">
@@ -2011,12 +2072,13 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     obs: string,
     formaPagamento: "pix" | "dinheiro" = "dinheiro",
     cupom: { codigo: string; desconto: number } | null = null,
-    gatewaySlug: string | null = null
+    gatewaySlug: string | null = null,
+    cashbackUsar: number = 0,
   ) {
     // Calcula subtotal considerando variações (preço extra de cada opção)
     const subtotal  = cart.reduce((acc, i) => acc + precoUnitarioItem(i) * i.quantidade, 0);
     const desconto  = cupom?.desconto ?? 0;
-    const cartTotal = Math.max(0, subtotal - desconto);
+    const cartTotal = Math.max(0, subtotal - desconto - cashbackUsar);
 
     const res = await fetch(`/api/pub/pedidos/${params.slug}`, {
       method:  "POST",
@@ -2031,6 +2093,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         forma_pagamento:  formaPagamento,
         cupom_codigo:     cupom?.codigo  || undefined,
         desconto:         desconto       || undefined,
+        cashback_usar:    cashbackUsar > 0 ? cashbackUsar : undefined,
         itens: cart.map(i => ({
           produto_id:     i.produto.id,
           nome:           i.produto.nome,

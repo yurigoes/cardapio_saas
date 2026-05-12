@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
     if (!empresa) return notFound("Empresa não encontrada");
 
     const cliente = await queryOne<Record<string, unknown>>(
-      `SELECT id, nome, telefone, cpf, pontos, total_pedidos, total_gasto
+      `SELECT id, nome, telefone, cpf, pontos, total_pedidos, total_gasto,
+              COALESCE(saldo_cashback, 0) AS saldo_cashback
        FROM clientes WHERE empresa_id = $1 AND ${tipo} = $2`,
       [empresa.id, valor]
     );
