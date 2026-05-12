@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   ShoppingBag, Clock, CheckCircle, XCircle, Truck, ChefHat,
   RefreshCw, Eye, X, Filter, Bell, BellOff, Printer,
@@ -353,6 +353,42 @@ export default function PedidosPage() {
   // Alertas (som + notificação) ao chegar pedido novo
   const alerts = useNewOrderAlerts(pedidos, { storageKey: "alerts_pedidos_admin" });
 
+  // Auto-print do cupom do cliente
+  const [imprimirCupomAuto, setImprimirCupomAuto] = useState(false);
+  const printedIdsRef = useRef<Set<string>>(new Set());
+  const firstFetchDone = useRef(false);
+
+  // Carrega config para saber se auto-print está ativado
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    fetch("/api/painel/config", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success) setImprimirCupomAuto(!!data.data?.imprimir_cupom_auto);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Detecta novos pedidos e imprime cupom automaticamente
+  useEffect(() => {
+    if (!firstFetchDone.current) {
+      // Primeira passagem: marca tudo como já impresso (não imprime backlog)
+      pedidos.forEach((p) => printedIdsRef.current.add(p.id));
+      firstFetchDone.current = true;
+      return;
+    }
+    if (!imprimirCupomAuto) {
+      pedidos.forEach((p) => printedIdsRef.current.add(p.id));
+      return;
+    }
+    const novos = pedidos.filter((p) => !printedIdsRef.current.has(p.id));
+    novos.forEach((p, i) => {
+      printedIdsRef.current.add(p.id);
+      setTimeout(() => abrirImpressao(p.id, "cliente"), i * 250);
+    });
+  }, [pedidos, imprimirCupomAuto]);
+
   const LIMIT = 20;
 
   const fetchPedidos = useCallback(async () => {
@@ -421,6 +457,17 @@ export default function PedidosPage() {
               <span className="text-[9px] uppercase">só som</span>
             )}
           </button>
+
+          {/* Indicador de auto-print do cupom (status, não interativo) */}
+          {imprimirCupomAuto && (
+            <div
+              title="Cupom é impresso automaticamente para cada pedido novo. Configure em /painel/config."
+              className="flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Auto-cupom
+            </div>
+          )}
 
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}

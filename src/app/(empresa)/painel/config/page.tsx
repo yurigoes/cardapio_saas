@@ -29,6 +29,7 @@ interface EmpresaConfig {
   aceita_cartao:         boolean;
   caixa_obrigatorio:     boolean;
   imprimir_cozinha_auto: boolean;
+  imprimir_cupom_auto:   boolean;
   taxa_entrega:          number;
   pedido_minimo:     number;
   tempo_entrega_min: number;
@@ -68,6 +69,7 @@ const DEFAULT_CONFIG: EmpresaConfig = {
   aceita_cartao:          true,
   caixa_obrigatorio:      false,
   imprimir_cozinha_auto:  false,
+  imprimir_cupom_auto:    false,
   taxa_entrega:           0,
   pedido_minimo:      0,
   tempo_entrega_min:  30,
@@ -717,6 +719,28 @@ export default function ConfigPage() {
                 <Toggle
                   checked={form.imprimir_cozinha_auto}
                   onChange={v => set("imprimir_cozinha_auto", v)}
+                />
+              </div>
+
+              {/* Impressão automática do cupom do cliente */}
+              <div
+                onClick={() => set("imprimir_cupom_auto", !form.imprimir_cupom_auto)}
+                className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition ${
+                  form.imprimir_cupom_auto
+                    ? "border-brand/30 bg-brand/5"
+                    : "border-white/10 bg-white/5"
+                }`}
+              >
+                <div>
+                  <p className="text-sm font-medium text-white">Imprimir cupom do cliente</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Cada pedido novo dispara impressão do cupom não-fiscal no PC do PDV
+                    (página /painel/pedidos aberta). Útil para entregar com o pedido.
+                  </p>
+                </div>
+                <Toggle
+                  checked={form.imprimir_cupom_auto}
+                  onChange={v => set("imprimir_cupom_auto", v)}
                 />
               </div>
             </div>
