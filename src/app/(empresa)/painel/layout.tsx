@@ -7,9 +7,10 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Bike, DollarSign,
   Package, Users, Settings, LogOut, ChefHat, Bell, Tag, BarChart3,
   MapPin, CreditCard, Zap, LayoutGrid, Tv2, Wallet, Activity, ScrollText,
-  Receipt,
+  Receipt, Sun, Moon,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
+import { useTheme } from "@/lib/hooks/useTheme";
 
 interface Empresa {
   nome_fantasia:  string;
@@ -47,6 +48,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
   const pathname          = usePathname();
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [loading, setLoading] = useState(true);
+  const theme = useTheme();
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -148,7 +150,15 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
           })}
         </nav>
 
-        <div className="border-t border-white/5 p-3">
+        <div className="border-t border-white/5 p-3 space-y-1">
+          <button
+            onClick={theme.toggle}
+            title={theme.isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
+            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/5 hover:text-white"
+          >
+            {theme.isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {theme.isDark ? "Tema claro" : "Tema escuro"}
+          </button>
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-red-500/10 hover:text-red-400"

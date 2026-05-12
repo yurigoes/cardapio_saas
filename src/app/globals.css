@@ -11,3 +11,52 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LIGHT MODE — overrides aplicados quando html[data-theme="light"]
+   Só ativo no painel admin (totem/cliente continuam dark-only).
+   ───────────────────────────────────────────────────────────────────────────── */
+
+html[data-theme="light"] {
+  background: #fafafa;
+}
+html[data-theme="light"] body {
+  background: #fafafa;
+  color: #18181b;
+}
+
+/* Backgrounds escuros → claros */
+html[data-theme="light"] .bg-slate-950 { background-color: #fafafa !important; }
+html[data-theme="light"] .bg-slate-900 { background-color: #ffffff !important; }
+html[data-theme="light"] .bg-slate-800 { background-color: #f4f4f5 !important; }
+html[data-theme="light"] .bg-white\/5  { background-color: #f4f4f5 !important; }
+html[data-theme="light"] .bg-white\/10 { background-color: #e4e4e7 !important; }
+html[data-theme="light"] .bg-white\/20 { background-color: #d4d4d8 !important; }
+html[data-theme="light"] .bg-black\/20 { background-color: #f4f4f5 !important; }
+html[data-theme="light"] .bg-black\/30 { background-color: #e4e4e7 !important; }
+
+/* Textos */
+html[data-theme="light"] .text-white       { color: #18181b !important; }
+html[data-theme="light"] .text-slate-300   { color: #3f3f46 !important; }
+html[data-theme="light"] .text-slate-400   { color: #52525b !important; }
+html[data-theme="light"] .text-slate-500   { color: #71717a !important; }
+html[data-theme="light"] .text-slate-600   { color: #a1a1aa !important; }
+
+/* Bordas */
+html[data-theme="light"] .border-white\/5,
+html[data-theme="light"] .border-white\/10 { border-color: #e4e4e7 !important; }
+html[data-theme="light"] .border-white\/20 { border-color: #d4d4d8 !important; }
+
+/* Divisores */
+html[data-theme="light"] .divide-white\/5  > * + * { border-color: #f4f4f5 !important; }
+html[data-theme="light"] .divide-white\/10 > * + * { border-color: #e4e4e7 !important; }
+
+/* Modal backdrop em light fica menos preto */
+html[data-theme="light"] .bg-black\/60,
+html[data-theme="light"] .bg-black\/70 { background-color: rgba(0,0,0,0.30) !important; }
+
+/* Inputs ficam visíveis */
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder {
+  color: #a1a1aa !important;
+}
