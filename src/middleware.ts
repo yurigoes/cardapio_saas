@@ -85,7 +85,7 @@ export async function middleware(req: NextRequest) {
       "img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:* http://minio:*",
       "media-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:* http://minio:*",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "connect-src 'self' wss: ws: https: http://127.0.0.1:* http://localhost:* http://evolution:* http://minio:*",
+      "connect-src 'self' wss: ws: https: http://127.0.0.1:* http://localhost:* http://evolution:* http://minio:* https://viacep.com.br",
       "frame-src 'self' https://www.mercadopago.com.br https://www.mercadolibre.com https://js.stripe.com",
       "worker-src 'self' blob:",
       "manifest-src 'self'",

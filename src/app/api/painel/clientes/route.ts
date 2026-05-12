@@ -68,6 +68,8 @@ export async function GET(req: NextRequest) {
         `SELECT
            id, nome, telefone, cpf, email,
            pontos, total_pedidos, total_gasto,
+           COALESCE(saldo_cashback, 0) AS saldo_cashback,
+           endereco,
            ultimo_pedido_em AS ultimo_pedido
          FROM clientes
          WHERE ${where}

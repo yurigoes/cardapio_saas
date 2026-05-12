@@ -857,9 +857,35 @@ function EnderecoModal({ enderecoSalvo, valorAtual, onConfirm, onBack }: Enderec
   const [form, setForm] = useState<EnderecoCliente>(
     valorAtual ?? enderecoSalvo ?? {}
   );
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   const set = (k: keyof EnderecoCliente, v: string) =>
     setForm(prev => ({ ...prev, [k]: v }));
+
+  // Auto-busca ViaCEP quando o usuário digita 8 dígitos
+  async function buscarViaCep(cepRaw: string) {
+    const cep = cepRaw.replace(/\D/g, "");
+    if (cep.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      if (!r.ok) return;
+      const j = await r.json() as {
+        erro?: boolean; logradouro?: string; bairro?: string;
+        localidade?: string; uf?: string;
+      };
+      if (j.erro) return;
+      setForm(prev => ({
+        ...prev,
+        cep:    cepRaw,
+        rua:    prev.rua    || j.logradouro || "",
+        bairro: prev.bairro || j.bairro     || "",
+        cidade: prev.cidade || j.localidade || "",
+        uf:     prev.uf     || j.uf         || "",
+      }));
+    } catch { /* ignora erro de rede — usuário preenche manual */ }
+    finally { setBuscandoCep(false); }
+  }
 
   function podeConfirmar(): boolean {
     return !!(form.rua && form.numero && form.bairro);
@@ -925,10 +951,17 @@ function EnderecoModal({ enderecoSalvo, valorAtual, onConfirm, onBack }: Enderec
         <div className="mx-auto max-w-md space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1">CEP</label>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">
+                CEP {buscandoCep && <span className="text-emerald-400">· buscando…</span>}
+              </label>
               <input
                 value={form.cep ?? ""}
-                onChange={e => set("cep", e.target.value)}
+                onChange={e => {
+                  set("cep", e.target.value);
+                  if (e.target.value.replace(/\D/g, "").length === 8) {
+                    buscarViaCep(e.target.value);
+                  }
+                }}
                 placeholder="00000-000"
                 inputMode="numeric"
                 className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-base text-white focus:border-emerald-500/50 focus:outline-none"

@@ -81,6 +81,32 @@ function normalizarTelefone(tel: string): string {
   return digits;
 }
 
+/**
+ * Atalho usado pelos webhooks de pagamento: busca cliente_telefone +
+ * numero + total do pedido e dispara evento 'confirmado' ao cliente.
+ */
+export async function notificarConfirmacaoCliente(
+  empresaId: string,
+  pedidoId:  string
+): Promise<void> {
+  const pedido = await queryOne<{
+    numero: number | null; total: string | null; cliente_telefone: string | null;
+  }>(
+    `SELECT numero, total, cliente_telefone
+       FROM pedidos
+      WHERE id = $1 AND empresa_id = $2`,
+    [pedidoId, empresaId]
+  ).catch(() => null);
+
+  if (!pedido?.cliente_telefone) return;
+
+  await notificarEvolution(empresaId, "confirmado", {
+    telefone:     pedido.cliente_telefone,
+    pedidoNumero: pedido.numero,
+    total:        pedido.total != null ? Number(pedido.total) : null,
+  });
+}
+
 export async function notificarEvolution(
   empresaId: string,
   evento:    EvolutionEvento,

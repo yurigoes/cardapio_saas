@@ -15,6 +15,7 @@ import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
+import { notificarConfirmacaoCliente } from "@/lib/notify/evolution";
 import { withWebhookLog } from "@/lib/webhook/wrapper";
 
 const MP_API = "https://api.mercadopago.com";
@@ -159,6 +160,8 @@ export async function POST(req: NextRequest) {
         url:   `/painel/pedidos`,
         tag:   "pagamento-confirmado",
       }).catch(e => console.warn("[MP/webhook] Push:", e));
+      notificarConfirmacaoCliente(gateways.empresa_id, pedidoId)
+        .catch(e => console.warn("[MP/webhook] Evolution:", e));
     }
 
     console.info(`[MP/webhook] Pedido ${pedidoId} → ${novoStatus} (MP status: ${payment.status})`);

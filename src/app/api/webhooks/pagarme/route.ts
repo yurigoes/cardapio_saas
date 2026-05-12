@@ -19,6 +19,7 @@ import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
+import { notificarConfirmacaoCliente } from "@/lib/notify/evolution";
 import { withWebhookLog } from "@/lib/webhook/wrapper";
 
 interface PmWebhookPayload {
@@ -149,6 +150,8 @@ export async function POST(req: NextRequest) {
             url:   `/painel/pedidos`,
             tag:   "pagamento-confirmado",
           }).catch(e => console.warn("[Pagarme/webhook] Push:", e));
+          notificarConfirmacaoCliente(gateway.empresa_id, pedidoId)
+            .catch(e => console.warn("[Pagarme/webhook] Evolution:", e));
         }
       } catch (e) {
         console.error("[Pagarme/webhook] CaixaIntegration:", e);

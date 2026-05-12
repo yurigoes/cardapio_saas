@@ -5,10 +5,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Users, Search, ChevronDown, ChevronLeft, ChevronRight,
   X, Trophy, Phone, Mail, FileText, ShoppingBag, Tag,
-  Plus, Minus, CheckCircle,
+  Plus, Minus, CheckCircle, MapPin,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
+
+interface Endereco {
+  cep?:         string;
+  rua?:         string;
+  numero?:      string;
+  complemento?: string;
+  bairro?:      string;
+  cidade?:      string;
+  uf?:          string;
+  referencia?:  string;
+}
 
 interface Cliente {
   id:             string;
@@ -19,6 +30,8 @@ interface Cliente {
   pontos:         number;
   total_pedidos:  number;
   total_gasto:    number;
+  saldo_cashback: number;
+  endereco:       Endereco | null;
   ultimo_pedido:  string | null;
   rank?:          number;
 }
@@ -589,6 +602,30 @@ export default function ClientesPage() {
                     <StatCard label="Total Gasto" value={formatBRL(modalCliente.total_gasto)} />
                     <StatCard label="Último Pedido" value={formatDate(modalCliente.ultimo_pedido)} />
                   </div>
+
+                  {/* Endereço (delivery) */}
+                  {modalCliente.endereco && (modalCliente.endereco.rua || modalCliente.endereco.bairro) && (
+                    <div className="mb-5 rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center gap-2 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                        <MapPin className="h-3.5 w-3.5" />
+                        Endereço de entrega
+                      </div>
+                      <p className="text-sm text-white">
+                        {modalCliente.endereco.rua}{modalCliente.endereco.numero ? `, ${modalCliente.endereco.numero}` : ""}
+                        {modalCliente.endereco.complemento ? ` — ${modalCliente.endereco.complemento}` : ""}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {[modalCliente.endereco.bairro, modalCliente.endereco.cidade, modalCliente.endereco.uf]
+                          .filter(Boolean).join(" · ")}
+                        {modalCliente.endereco.cep ? ` · CEP ${modalCliente.endereco.cep}` : ""}
+                      </p>
+                      {modalCliente.endereco.referencia && (
+                        <p className="text-xs text-slate-500 mt-1.5 italic">
+                          Ref: {modalCliente.endereco.referencia}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* ── Ajuste de pontos ─────────────────────────────────────── */}
                   <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-4">
