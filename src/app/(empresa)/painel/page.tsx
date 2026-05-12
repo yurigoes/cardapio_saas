@@ -193,13 +193,14 @@ function PainelDashboard() {
       )}
 
       {/* Atalhos rápidos */}
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
         {[
           { label: "Pedidos",    icon: ShoppingBag, href: "/painel/pedidos"  },
           { label: "Cozinha",    icon: ChefHat,     href: "/painel/cozinha"  },
           { label: "Caixa",      icon: Wallet,      href: "/painel/caixa"    },
           { label: "Estoque",    icon: Package,     href: "/painel/estoque"  },
           { label: "Mesas",      icon: Eye,         href: "/painel/mesas"    },
+          { label: "Clientes",   icon: Users,       href: "/painel/clientes" },
           { label: "Painel TV",  icon: Tv2,         href: "/painel/painel-tv" },
         ].map((s) => {
           const Icon = s.icon;

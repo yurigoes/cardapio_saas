@@ -12,6 +12,7 @@ import {
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface EmpresaConfig {
+  slug:              string;
   nome_fantasia:     string;
   descricao:         string;
   logo_url:          string;
@@ -54,6 +55,7 @@ function getToken() { return localStorage.getItem("access_token") ?? ""; }
 function authHeader() { return { Authorization: `Bearer ${getToken()}` }; }
 
 const DEFAULT_CONFIG: EmpresaConfig = {
+  slug:               "",
   nome_fantasia:      "",
   descricao:          "",
   logo_url:           "",
@@ -1087,7 +1089,7 @@ export default function ConfigPage() {
                 <p className="text-xs text-slate-400 mb-3">Acesse o totem pelo slug da empresa para ver o resultado. O vídeo/imagem e o texto do botão serão exibidos na tela inicial.</p>
                 <button
                   type="button"
-                  onClick={() => window.open(`/totem/${window.location.pathname.split('/')[1] || 'demo'}`, '_blank')}
+                  onClick={() => window.open(`/totem/${form.slug || 'demo'}`, '_blank')}
                   className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
