@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   ShoppingBag, Clock, CheckCircle, XCircle, Truck, ChefHat,
-  RefreshCw, Eye, X, Filter,
+  RefreshCw, Eye, X, Filter, Bell, BellOff,
 } from "lucide-react";
+import { useNewOrderAlerts } from "@/lib/hooks/useNewOrderAlerts";
 
 interface Pedido {
   id:             string;
@@ -310,6 +311,9 @@ export default function PedidosPage() {
   const [detalhe, setDetalhe]   = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
+  // Alertas (som + notificação) ao chegar pedido novo
+  const alerts = useNewOrderAlerts(pedidos, { storageKey: "alerts_pedidos_admin" });
+
   const LIMIT = 20;
 
   const fetchPedidos = useCallback(async () => {
@@ -356,6 +360,29 @@ export default function PedidosPage() {
           <p className="mt-0.5 text-sm text-slate-400">{total} pedido{total !== 1 ? "s" : ""}</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Alertas de novo pedido (som + notificação) */}
+          <button
+            onClick={alerts.toggle}
+            title={alerts.habilitado
+              ? (alerts.permission === "granted"
+                  ? "Alertas ativos (som + notificação)"
+                  : "Alertas ativos (somente som)")
+              : "Ativar alertas de novo pedido"}
+            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition ${
+              alerts.habilitado
+                ? "border-amber-400/30 bg-amber-500/10 text-amber-300"
+                : "border-white/10 text-slate-400 hover:text-white"
+            }`}
+          >
+            {alerts.habilitado
+              ? <Bell    className="h-3.5 w-3.5" />
+              : <BellOff className="h-3.5 w-3.5" />}
+            Alertas
+            {alerts.habilitado && alerts.permission === "denied" && (
+              <span className="text-[9px] uppercase">só som</span>
+            )}
+          </button>
+
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition ${
