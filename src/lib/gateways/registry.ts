@@ -3,6 +3,7 @@ import { decrypt } from "@/lib/security/encrypt";
 import { GatewayConfig, GatewaySlug, IGateway } from "./types";
 import { PixGateway } from "./pix";
 import { StoneGateway } from "./stone";
+import { MercadoPagoGateway } from "./mercadopago";
 
 // ─────────────────────────────────────────────
 // Registry de gateways disponíveis
@@ -13,6 +14,7 @@ type GatewayFactory = (config: GatewayConfig) => IGateway;
 const GATEWAY_FACTORIES: Partial<Record<GatewaySlug, GatewayFactory>> = {
   pix_bancario: (config) => new PixGateway(config),
   stone:        (config) => new StoneGateway(config),
+  mercadopago:  (config) => new MercadoPagoGateway(config),
   // Novos gateways são adicionados aqui
 };
 
