@@ -7,6 +7,7 @@ import {
   ShoppingCart, X, Plus, Minus, ChefHat, CheckCircle, ArrowLeft,
   Search, MapPin, User, Phone, RotateCcw, Clock, Star, Gift,
   UtensilsCrossed, PackageCheck, Bike,
+  Copy, Banknote, QrCode,
 } from "lucide-react";
 
 // ─── Translations ─────────────────────────────────────────────────────────────
@@ -52,6 +53,14 @@ const TR = {
     consumo_local: "Consumir no local",
     consumo_retirada: "Retirar no balcão",
     consumo_delivery: "Delivery",
+    pagamento_titulo: "Como vai pagar?",
+    pagamento_pix: "PIX",
+    pagamento_dinheiro: "Dinheiro / Outro",
+    pagamento_aguardando: "Aguardando pagamento...",
+    pagamento_copiar: "Copiar código PIX",
+    pagamento_copiado: "Copiado!",
+    pagamento_expirou: "Escaneie o QR Code no app do banco",
+    pagamento_aprovado: "Pagamento confirmado!",
   },
   en: {
     iniciar: "Tap to place your order",
@@ -93,6 +102,14 @@ const TR = {
     consumo_local: "Dine in",
     consumo_retirada: "Take away",
     consumo_delivery: "Delivery",
+    pagamento_titulo: "How would you like to pay?",
+    pagamento_pix: "PIX",
+    pagamento_dinheiro: "Cash / Other",
+    pagamento_aguardando: "Waiting for payment...",
+    pagamento_copiar: "Copy PIX code",
+    pagamento_copiado: "Copied!",
+    pagamento_expirou: "Scan the QR Code in your banking app",
+    pagamento_aprovado: "Payment confirmed!",
   },
 } as const;
 
@@ -889,20 +906,21 @@ interface CartDrawerProps {
   idioma:      Idioma;
   onClose:     () => void;
   onUpdate:    (produtoId: string, delta: number) => void;
-  onConfirm:   (clienteNome: string, clienteTel: string, obs: string) => Promise<void>;
+  onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro") => Promise<void>;
 }
 
 function CartDrawer({ cart, mesaNumero, cliente, idioma, onClose, onUpdate, onConfirm }: CartDrawerProps) {
-  const [nome, setNome]     = useState(cliente?.nome ?? "");
-  const [tel, setTel]       = useState(cliente?.telefone ?? "");
-  const [obs, setObs]       = useState("");
-  const [sending, setSending] = useState(false);
+  const [nome, setNome]           = useState(cliente?.nome ?? "");
+  const [tel, setTel]             = useState(cliente?.telefone ?? "");
+  const [obs, setObs]             = useState("");
+  const [formaPag, setFormaPag]   = useState<"pix" | "dinheiro">("dinheiro");
+  const [sending, setSending]     = useState(false);
 
   const total = cart.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0);
 
   async function handleOrder() {
     setSending(true);
-    try { await onConfirm(nome, tel, obs); }
+    try { await onConfirm(nome, tel, obs, formaPag); }
     finally { setSending(false); }
   }
 
@@ -984,12 +1002,173 @@ function CartDrawer({ cart, mesaNumero, cliente, idioma, onClose, onUpdate, onCo
           className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
         />
 
+        {/* Forma de pagamento */}
+        <div>
+          <p className="mb-2 text-xs font-medium text-slate-400">{t(idioma, "pagamento_titulo")}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["dinheiro", "pix"] as const).map((metodo) => {
+              const ativo = formaPag === metodo;
+              return (
+                <button
+                  key={metodo}
+                  type="button"
+                  onClick={() => setFormaPag(metodo)}
+                  className={`flex flex-col items-center gap-1.5 rounded-xl border py-3 text-xs font-semibold transition ${
+                    ativo
+                      ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400"
+                      : "border-white/10 bg-slate-800 text-slate-400 hover:border-white/20 hover:text-white"
+                  }`}
+                >
+                  {metodo === "pix" ? <QrCode className="h-5 w-5" /> : <Banknote className="h-5 w-5" />}
+                  {t(idioma, metodo === "pix" ? "pagamento_pix" : "pagamento_dinheiro")}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <button
           onClick={handleOrder} disabled={sending || cart.length === 0}
-          className="w-full rounded-xl bg-emerald-500 py-3 font-semibold text-white hover:bg-emerald-400 transition disabled:opacity-50"
+          style={!sending && cart.length > 0 ? { background: "var(--color-primary, #10b981)" } : undefined}
+          className="w-full rounded-xl py-3 font-semibold text-white transition disabled:opacity-50 disabled:bg-slate-700"
         >
-          {sending ? t(idioma, "enviando") : t(idioma, "confirmar")}
+          {sending
+            ? t(idioma, "enviando")
+            : formaPag === "pix"
+              ? `${t(idioma, "confirmar")} — PIX`
+              : t(idioma, "confirmar")}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── PixPaymentScreen ─────────────────────────────────────────────────────────
+
+interface PixPaymentScreenProps {
+  slug:         string;
+  pedidoNumero: number;
+  clienteNome:  string;
+  pontosGanhos?: number;
+  totalPontos?:  number;
+  gatewayId:    string;
+  gateway:      string;
+  pixCopiaCola?: string;
+  pixQrcodeUrl?: string;
+  total:        number;
+  idioma:       Idioma;
+  onPago:       (numero: number, clienteNome: string, pontosGanhos?: number, totalPontos?: number) => void;
+  onPular:      () => void;
+}
+
+function PixPaymentScreen({
+  slug, pedidoNumero, clienteNome, pontosGanhos, totalPontos,
+  gatewayId, gateway, pixCopiaCola, pixQrcodeUrl, total, idioma, onPago, onPular,
+}: PixPaymentScreenProps) {
+  const [copiado, setCopiado]     = useState(false);
+  const [aprovado, setAprovado]   = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Poll a cada 3s
+  useEffect(() => {
+    pollRef.current = setInterval(async () => {
+      try {
+        const res  = await fetch(
+          `/api/pub/pagamentos/${slug}?gateway_id=${gatewayId}&gateway=${gateway}`
+        );
+        const data = await res.json();
+        if (data.success && data.data?.status === "aprovado") {
+          clearInterval(pollRef.current!);
+          setAprovado(true);
+          setTimeout(() => onPago(pedidoNumero, clienteNome, pontosGanhos, totalPontos), 2000);
+        }
+      } catch { /* non-fatal */ }
+    }, 3000);
+
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function copiar() {
+    if (!pixCopiaCola) return;
+    navigator.clipboard.writeText(pixCopiaCola).then(() => {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2500);
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-white">
+      <div className="flex items-center gap-3 border-b border-white/5 p-4">
+        <button onClick={onPular} className="text-slate-400 hover:text-white transition">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <div>
+          <h2 className="text-lg font-bold">Pedido #{pedidoNumero}</h2>
+          <p className="text-xs text-slate-400">
+            {formatBRL(total)} — PIX
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col items-center justify-center gap-5 p-6">
+        {aprovado ? (
+          <>
+            <CheckCircle className="h-20 w-20 text-emerald-400" />
+            <p className="text-xl font-bold text-emerald-400">{t(idioma, "pagamento_aprovado")}</p>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-4 py-2">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+              <span className="text-sm font-semibold text-amber-300">{t(idioma, "pagamento_aguardando")}</span>
+            </div>
+
+            {/* QR Code */}
+            {pixQrcodeUrl ? (
+              <div className="rounded-2xl border border-white/10 bg-white p-3">
+                <img src={pixQrcodeUrl} alt="QR PIX" className="h-52 w-52 object-contain" />
+              </div>
+            ) : (
+              <div className="flex h-52 w-52 items-center justify-center rounded-2xl border border-white/10 bg-slate-900">
+                <QrCode className="h-16 w-16 text-slate-600" />
+              </div>
+            )}
+
+            <p className="text-center text-xs text-slate-400 max-w-xs">
+              {t(idioma, "pagamento_expirou")}
+            </p>
+
+            {/* Copia e cola */}
+            {pixCopiaCola && (
+              <div className="w-full max-w-xs space-y-2">
+                <div className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5">
+                  <p className="truncate text-center font-mono text-xs text-slate-300 select-all">
+                    {pixCopiaCola.slice(0, 40)}…
+                  </p>
+                </div>
+                <button
+                  onClick={copiar}
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition ${
+                    copiado
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  }`}
+                >
+                  <Copy className="h-4 w-4" />
+                  {copiado ? t(idioma, "pagamento_copiado") : t(idioma, "pagamento_copiar")}
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={onPular}
+              className="mt-2 text-xs text-slate-500 underline underline-offset-2 hover:text-slate-300 transition"
+            >
+              Já paguei / Continuar sem PIX
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1160,6 +1339,19 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     numero: number; clienteNome: string; pontosGanhos?: number; totalPontos?: number;
   } | null>(null);
 
+  // PIX payment state
+  const [pixInfo, setPixInfo] = useState<{
+    pedidoNumero: number;
+    clienteNome:  string;
+    pontosGanhos?: number;
+    totalPontos?:  number;
+    gatewayId:    string;
+    gateway:      string;
+    pixCopiaCola?: string;
+    pixQrcodeUrl?: string;
+    total:        number;
+  } | null>(null);
+
   // Menu nav
   const [catSelecionada, setCatSelecionada] = useState<string>("todos");
   const [q, setQ]                           = useState("");
@@ -1272,6 +1464,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     setCartOpen(false);
     setProdutoAberto(null);
     setPedidoFeito(null);
+    setPixInfo(null);
     setQ("");
     setCatSelecionada("todos");
     setShowDrinksModal(false);
@@ -1317,7 +1510,14 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
   // ── Confirm order ──────────────────────────────────────────────────────────
 
-  async function handleConfirmarPedido(clienteNome: string, clienteTel: string, obs: string) {
+  async function handleConfirmarPedido(
+    clienteNome: string,
+    clienteTel: string,
+    obs: string,
+    formaPagamento: "pix" | "dinheiro" = "dinheiro"
+  ) {
+    const cartTotal = cart.reduce((acc, i) => acc + Number(i.produto.preco) * i.quantidade, 0);
+
     const res = await fetch(`/api/pub/pedidos/${params.slug}`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
@@ -1328,10 +1528,11 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         observacoes:      obs         || undefined,
         mesa_id:          mesaId      || undefined,
         tipo_consumo:     tipoConsumo,
+        forma_pagamento:  formaPagamento,
         itens: cart.map(i => ({
           produto_id:     i.produto.id,
           nome:           i.produto.nome,
-          preco_unitario: Number(i.produto.preco), // coerce string→number (pg NUMERIC)
+          preco_unitario: Number(i.produto.preco),
           quantidade:     i.quantidade,
           observacoes:    i.obs || undefined,
         })),
@@ -1343,12 +1544,48 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
     const pontosGanhos = data.data.pontos_ganhos as number | undefined;
     const totalPontos  = (cliente?.pontos ?? 0) + (pontosGanhos ?? 0);
+    const nomeExibido  = clienteNome || cliente?.nome || "";
 
     setCart([]);
     setCartOpen(false);
+
+    // Se PIX, cria cobrança e mostra tela de QR
+    if (formaPagamento === "pix") {
+      try {
+        const pixRes = await fetch(`/api/pub/pagamentos/${params.slug}`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({
+            pedido_id:     data.data.id,
+            metodo:        "pix",
+            cliente_nome:  nomeExibido || undefined,
+            cliente_email: cliente?.cpf ? undefined : undefined,
+          }),
+        });
+        const pixData = await pixRes.json();
+        if (pixData.success && pixData.data) {
+          setPixInfo({
+            pedidoNumero: data.data.numero,
+            clienteNome:  nomeExibido,
+            pontosGanhos,
+            totalPontos:  totalPontos > 0 ? totalPontos : undefined,
+            gatewayId:    pixData.data.gateway_id,
+            gateway:      pixData.data.gateway,
+            pixCopiaCola: pixData.data.pix_copia_cola,
+            pixQrcodeUrl: pixData.data.pix_qrcode_url,
+            total:        cartTotal,
+          });
+          return; // não mostra tela de sucesso ainda
+        }
+      } catch (e) {
+        console.warn("[PIX] Falha ao criar cobrança:", e);
+      }
+      // Se PIX falhar, cai no fluxo normal de sucesso
+    }
+
     setPedidoFeito({
       numero:      data.data.numero,
-      clienteNome: clienteNome || cliente?.nome || "",
+      clienteNome: nomeExibido,
       pontosGanhos,
       totalPontos: totalPontos > 0 ? totalPontos : undefined,
     });
@@ -1672,6 +1909,37 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           onClose={() => setCartOpen(false)}
           onUpdate={updateCart}
           onConfirm={handleConfirmarPedido}
+        />
+      )}
+
+      {/* PIX payment screen */}
+      {pixInfo && !pedidoFeito && (
+        <PixPaymentScreen
+          slug={params.slug}
+          pedidoNumero={pixInfo.pedidoNumero}
+          clienteNome={pixInfo.clienteNome}
+          pontosGanhos={pixInfo.pontosGanhos}
+          totalPontos={pixInfo.totalPontos}
+          gatewayId={pixInfo.gatewayId}
+          gateway={pixInfo.gateway}
+          pixCopiaCola={pixInfo.pixCopiaCola}
+          pixQrcodeUrl={pixInfo.pixQrcodeUrl}
+          total={pixInfo.total}
+          idioma={idioma}
+          onPago={(numero, nome, pg, tp) => {
+            setPixInfo(null);
+            setPedidoFeito({ numero, clienteNome: nome, pontosGanhos: pg, totalPontos: tp });
+          }}
+          onPular={() => {
+            // Mostra sucesso sem aguardar confirmação do PIX
+            setPedidoFeito({
+              numero:      pixInfo.pedidoNumero,
+              clienteNome: pixInfo.clienteNome,
+              pontosGanhos: pixInfo.pontosGanhos,
+              totalPontos:  pixInfo.totalPontos,
+            });
+            setPixInfo(null);
+          }}
         />
       )}
 
