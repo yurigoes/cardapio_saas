@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Bike, DollarSign,
   Package, Users, Settings, LogOut, ChefHat, Bell, Tag, BarChart3,
-  MapPin, CreditCard, Zap, LayoutGrid, Tv2, Wallet,
+  MapPin, CreditCard, Zap, LayoutGrid, Tv2, Wallet, Activity,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
 
@@ -36,6 +36,7 @@ const ALL_NAV = [
   { href: "/painel/gateways",    label: "Pagamentos",  icon: CreditCard,      modulo: null         },
   { href: "/painel/integracoes", label: "Integrações", icon: Zap,             modulo: null         },
   { href: "/painel/usuarios",    label: "Usuários",    icon: Users,           modulo: null         },
+  { href: "/painel/saude",       label: "Saúde",       icon: Activity,        modulo: null         },
   { href: "/painel/config",      label: "Configurações",icon: Settings,       modulo: null         },
 ];
 
