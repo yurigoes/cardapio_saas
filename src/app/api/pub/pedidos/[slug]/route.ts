@@ -140,6 +140,66 @@ export async function POST(
         0
       );
 
+      // ── Acúmulo em pedido aberto da mesa (totem QR mesa, segunda rodada) ──
+      // Se há mesa_id E a mesa tem pedido_ativo aberto, adiciona itens nele.
+      // Não aplica cupom novo nem soma pontos de novo (já foram no pedido inicial).
+      const ESTADOS_ABERTOS = ["pendente", "confirmado", "preparando", "pronto"];
+      if (body.mesa_id) {
+        const ativo = await client.query<{ pedido_ativo_id: string | null }>(
+          `SELECT pedido_ativo_id FROM mesas
+           WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL FOR UPDATE`,
+          [body.mesa_id, empresa.id]
+        ).then(r => r.rows[0]);
+
+        if (ativo?.pedido_ativo_id) {
+          const pAtivo = await client.query<{
+            id: string; numero: number; status: string;
+            taxa_entrega: string; desconto: string;
+          }>(
+            `SELECT id, numero, status, taxa_entrega, desconto
+             FROM pedidos WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL FOR UPDATE`,
+            [ativo.pedido_ativo_id, empresa.id]
+          ).then(r => r.rows[0]);
+
+          if (pAtivo && ESTADOS_ABERTOS.includes(pAtivo.status)) {
+            for (const item of body.itens) {
+              const itemSubtotal = item.preco_unitario * item.quantidade;
+              await client.query(
+                `INSERT INTO pedido_itens
+                   (pedido_id, produto_id, nome, preco_unitario, quantidade,
+                    subtotal, observacoes, adicionais, complementos)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'[]')`,
+                [
+                  pAtivo.id, item.produto_id ?? null,
+                  item.nome, item.preco_unitario, item.quantidade, itemSubtotal,
+                  item.observacoes ?? null, JSON.stringify(item.adicionais ?? []),
+                ]
+              );
+            }
+            // Recalcula subtotal a partir dos itens (fonte da verdade)
+            const totals = await client.query<{ subtotal: string }>(
+              `SELECT COALESCE(SUM(subtotal), 0) AS subtotal
+               FROM pedido_itens WHERE pedido_id = $1`,
+              [pAtivo.id]
+            ).then(r => r.rows[0]);
+            const novoSub = Number(totals.subtotal);
+            const novoTot = novoSub + Number(pAtivo.taxa_entrega) - Number(pAtivo.desconto);
+            await client.query(
+              `UPDATE pedidos SET subtotal = $1, total = $2, updated_at = NOW()
+               WHERE id = $3`,
+              [novoSub, novoTot, pAtivo.id]
+            );
+            return {
+              id: pAtivo.id,
+              numero: pAtivo.numero,
+              pontosGanhos: 0,        // não acumula pontos em rodadas extras
+              acumulado: true,
+              itens_adicionados: body.itens.length,
+            };
+          }
+        }
+      }
+
       // ── Validação server-side do cupom (nunca confia em desconto do cliente)
       let cupomId:  string | null = null;
       let desconto: number        = 0;
@@ -304,6 +364,8 @@ export async function POST(
       id:           pedido.id,
       numero:       pedido.numero,
       pontos_ganhos: pedido.pontosGanhos,
+      acumulado:    "acumulado" in pedido ? pedido.acumulado : false,
+      itens_adicionados: "itens_adicionados" in pedido ? pedido.itens_adicionados : undefined,
     });
   } catch (err) {
     console.error("[Pub/Pedidos/POST]", err);

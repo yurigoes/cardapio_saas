@@ -130,15 +130,102 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const pedido = await transaction(async (client: PoolClient) => {
-      // Calcula subtotal e total
-      const subtotal = body.itens.reduce(
-        (acc, item) => acc + item.preco_unitario * item.quantidade,
-        0
+    const result = await transaction(async (client: PoolClient) => {
+      const subtotalNovo = body.itens.reduce(
+        (acc, item) => acc + item.preco_unitario * item.quantidade, 0
       );
-      const total = subtotal + (body.taxa_entrega ?? 0) - (body.desconto ?? 0);
 
-      // Cria pedido
+      // ── Acúmulo em pedido aberto da mesa ─────────────────────────────────
+      // Para tipo=mesa, se a mesa tem pedido_ativo_id em estado aberto,
+      // adiciona itens ao pedido existente em vez de criar um novo.
+      // Estados "abertos" para acúmulo: pendente, confirmado, preparando, pronto.
+      // (entregue/cancelado abrem rodada nova.)
+      const ESTADOS_ABERTOS = ["pendente", "confirmado", "preparando", "pronto"];
+
+      if (body.tipo === "mesa" && body.mesa_id) {
+        const ativo = await client.query<{
+          pedido_ativo_id: string | null;
+        }>(
+          `SELECT pedido_ativo_id FROM mesas
+           WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL
+           FOR UPDATE`,
+          [body.mesa_id, empresaId]
+        ).then(r => r.rows[0]);
+
+        if (ativo?.pedido_ativo_id) {
+          const pedidoAtivo = await client.query<{
+            id: string; numero: number; status: string;
+            subtotal: string; desconto: string; taxa_entrega: string;
+          }>(
+            `SELECT id, numero, status, subtotal, desconto, taxa_entrega
+             FROM pedidos
+             WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL
+             FOR UPDATE`,
+            [ativo.pedido_ativo_id, empresaId]
+          ).then(r => r.rows[0]);
+
+          if (pedidoAtivo && ESTADOS_ABERTOS.includes(pedidoAtivo.status)) {
+            // ACUMULA: adiciona itens ao pedido existente
+            for (const item of body.itens) {
+              const itemSubtotal = item.preco_unitario * item.quantidade;
+              await client.query(
+                `INSERT INTO pedido_itens
+                   (pedido_id, produto_id, nome, preco_unitario, quantidade,
+                    subtotal, observacoes, adicionais, complementos)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+                [
+                  pedidoAtivo.id,
+                  item.produto_id || null,
+                  item.nome, item.preco_unitario, item.quantidade, itemSubtotal,
+                  item.observacoes || null,
+                  JSON.stringify(item.adicionais ?? []),
+                  JSON.stringify(item.complementos ?? []),
+                ]
+              );
+              if (item.produto_id) {
+                await client.query(
+                  `UPDATE produtos SET estoque_atual = estoque_atual - $1
+                   WHERE id = $2 AND controlar_estoque = TRUE AND estoque_atual >= $1`,
+                  [item.quantidade, item.produto_id]
+                );
+              }
+            }
+
+            // Recalcula totais (usa SUM dos itens — fonte da verdade)
+            const totals = await client.query<{ subtotal: string }>(
+              `SELECT COALESCE(SUM(subtotal), 0) AS subtotal
+               FROM pedido_itens WHERE pedido_id = $1`,
+              [pedidoAtivo.id]
+            ).then(r => r.rows[0]);
+
+            const novoSub  = Number(totals.subtotal);
+            const desconto = Number(pedidoAtivo.desconto);
+            const taxa     = Number(pedidoAtivo.taxa_entrega);
+            const novoTot  = novoSub + taxa - desconto;
+
+            await client.query(
+              `UPDATE pedidos
+                 SET subtotal = $1, total = $2,
+                     observacoes = COALESCE(NULLIF($3, ''), observacoes),
+                     updated_at = NOW()
+               WHERE id = $4`,
+              [novoSub, novoTot, body.observacoes ?? "", pedidoAtivo.id]
+            );
+
+            return {
+              id: pedidoAtivo.id,
+              numero: pedidoAtivo.numero,
+              acumulado: true,
+              subtotal_anterior: Number(pedidoAtivo.subtotal),
+              subtotal_novo:     novoSub,
+              itens_adicionados: body.itens.length,
+            };
+          }
+        }
+      }
+
+      // ── Pedido novo (totem, balcão, delivery, ou mesa sem ativo) ─────────
+      const total = subtotalNovo + (body.taxa_entrega ?? 0) - (body.desconto ?? 0);
       const [novoPedido] = await client.query<{ id: string; numero: number }>(
         `INSERT INTO pedidos
            (empresa_id, tipo, status, mesa_id, comanda, cliente_id, cliente_nome,
@@ -147,15 +234,14 @@ export async function POST(req: NextRequest) {
          VALUES ($1,$2,'pendente',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14)
          RETURNING id, numero`,
         [
-          empresaId,
-          body.tipo,
+          empresaId, body.tipo,
           body.mesa_id        || null,
           body.comanda        || null,
           body.cliente_id     || null,
           body.cliente_nome   || null,
           body.cliente_telefone || null,
           body.cliente_endereco ? JSON.stringify(body.cliente_endereco) : null,
-          subtotal,
+          subtotalNovo,
           body.desconto       ?? 0,
           body.taxa_entrega   ?? 0,
           total,
@@ -164,7 +250,6 @@ export async function POST(req: NextRequest) {
         ]
       ).then(r => r.rows);
 
-      // Insere itens
       for (const item of body.itens) {
         const itemSubtotal = item.preco_unitario * item.quantidade;
         await client.query(
@@ -175,28 +260,21 @@ export async function POST(req: NextRequest) {
           [
             novoPedido.id,
             item.produto_id || null,
-            item.nome,
-            item.preco_unitario,
-            item.quantidade,
-            itemSubtotal,
+            item.nome, item.preco_unitario, item.quantidade, itemSubtotal,
             item.observacoes || null,
             JSON.stringify(item.adicionais ?? []),
             JSON.stringify(item.complementos ?? []),
           ]
         );
-
-        // Desconta estoque se necessário
         if (item.produto_id) {
           await client.query(
-            `UPDATE produtos
-             SET estoque_atual = estoque_atual - $1
+            `UPDATE produtos SET estoque_atual = estoque_atual - $1
              WHERE id = $2 AND controlar_estoque = TRUE AND estoque_atual >= $1`,
             [item.quantidade, item.produto_id]
           );
         }
       }
 
-      // Se mesa, atualiza status
       if (body.mesa_id) {
         await client.query(
           `UPDATE mesas SET status = 'ocupada', pedido_ativo_id = $1 WHERE id = $2`,
@@ -204,17 +282,17 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      return novoPedido;
+      return { ...novoPedido, acumulado: false };
     });
 
     await auditLog({
-      acao:      "pedido:criar",
+      acao:      result.acumulado ? "pedido:acumular" : "pedido:criar",
       recurso:   "pedidos",
-      recursoId: pedido.id,
+      recursoId: result.id,
       usuario:   { sub: auth.payload.sub, empresaId },
     });
 
-    return created({ id: pedido.id, numero: pedido.numero });
+    return created(result);
   } catch (err) {
     console.error("[Pedidos/POST]", err);
     if (isDuplicateKeyError(err)) {
