@@ -66,6 +66,15 @@ const GATEWAY_TEMPLATES = [
     field_principal_label: "Access Token",
     field_principal_placeholder: "$aas_prod_… (cole seu token aqui)",
   },
+  {
+    slug: "stone", nome: "Stone",
+    cor: "#00aa3b",
+    descricao: "PIX + Cartão + Link",
+    instrucoes: "Painel Stone OpenBank → API Credentials → use Client ID e Secret. Cole aqui o Client Secret; defina o Client ID em Configurações > Avançadas (campo client_id).",
+    field_principal: "client_secret",
+    field_principal_label: "Client Secret",
+    field_principal_placeholder: "Cole o client_secret da OpenBank Stone",
+  },
 ] as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -168,6 +177,7 @@ export default function GatewaysPage() {
   const [formSlug, setFormSlug]     = useState<string>("mercadopago");
   const [formAmbiente, setFormAmbiente] = useState<"sandbox" | "producao">("producao");
   const [formCred, setFormCred]     = useState("");
+  const [formCredSecundaria, setFormCredSecundaria] = useState(""); // ex: client_id do Stone
   const [formWebhook, setFormWebhook] = useState("");
   const [formNome, setFormNome]     = useState("");
   const [modalSaving, setModalSaving] = useState(false);
@@ -223,6 +233,7 @@ export default function GatewaysPage() {
     setFormSlug("mercadopago");
     setFormAmbiente("producao");
     setFormCred("");
+    setFormCredSecundaria("");
     setFormWebhook("");
     setFormNome("");
     setModalErro("");
@@ -233,7 +244,8 @@ export default function GatewaysPage() {
     setEditing(gw);
     setFormSlug(gw.slug);
     setFormAmbiente(gw.ambiente);
-    setFormCred("");      // por segurança não pré-preenche
+    setFormCred("");
+    setFormCredSecundaria("");      // por segurança não pré-preenche
     setFormWebhook("");
     setFormNome(gw.nome);
     setModalErro("");
@@ -253,6 +265,10 @@ export default function GatewaysPage() {
       };
       if (formCred.trim())    body[credField]      = formCred.trim();
       if (formWebhook.trim()) body.webhook_secret  = formWebhook.trim();
+      // Stone exige client_id além do client_secret
+      if (formSlug === "stone" && formCredSecundaria.trim()) {
+        body.client_id = formCredSecundaria.trim();
+      }
 
       const res = editing
         ? await fetch(`/api/gateways/${editing.id}`, {
@@ -813,6 +829,23 @@ export default function GatewaysPage() {
                     className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none font-mono"
                   />
                 </div>
+
+                {/* Stone exige Client ID adicional */}
+                {formSlug === "stone" && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1.5">
+                      Client ID
+                      {editing && <span className="ml-2 text-slate-600">(deixe vazio para manter)</span>}
+                    </label>
+                    <input
+                      type="text"
+                      value={formCredSecundaria}
+                      onChange={(e) => setFormCredSecundaria(e.target.value)}
+                      placeholder="ID público da aplicação Stone"
+                      className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none font-mono"
+                    />
+                  </div>
+                )}
 
                 {/* Webhook secret (opcional) */}
                 <div>

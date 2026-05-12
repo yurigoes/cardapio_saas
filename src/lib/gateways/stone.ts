@@ -91,15 +91,23 @@ export class StoneGateway implements IGateway {
   private async cobrarPix(req: CobrarRequest): Promise<CobrarResponse> {
     const body = {
       amount:      Math.round(req.valor * 100),
-      expiration:  3600,
+      expiration:  3600,                    // 1h
       customer_id: req.cliente_cpf,
+      description: req.descricao ?? `Pedido ${req.pedido_id ?? ""}`.trim(),
+      reference:   req.pedido_id,           // Stone usa para conciliação
     };
 
     const data = await this.request<{
-      id: string;
+      id:     string;
       brcode: string;
       amount: number;
     }>("/api/v1/pix/payment-links", { method: "POST", body: JSON.stringify(body) });
+
+    // Stone retorna brcode (EMV) mas não imagem. Geramos via qrserver
+    // (mesmo fallback usado pelo PixGateway).
+    const qrUrl = data.brcode
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(data.brcode)}`
+      : undefined;
 
     return {
       gateway_id:     data.id,
@@ -107,6 +115,7 @@ export class StoneGateway implements IGateway {
       valor:          data.amount / 100,
       metodo:         "pix",
       pix_copia_cola: data.brcode,
+      pix_qrcode_url: qrUrl,
       gateway_data:   data,
     };
   }
