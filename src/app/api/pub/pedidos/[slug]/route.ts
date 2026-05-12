@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { queryOne, transaction } from "@/lib/db/client";
 import { ok, notFound, badRequest, serverError } from "@/lib/utils/response";
+import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import type { PoolClient } from "pg";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -175,6 +176,11 @@ export async function POST(
                   item.observacoes ?? null, JSON.stringify(item.adicionais ?? []),
                 ]
               );
+              if (item.produto_id) {
+                await registrarSaidaEstoque(
+                  client, empresa.id, item.produto_id, pAtivo.id, item.quantidade
+                );
+              }
             }
             // Recalcula subtotal a partir dos itens (fonte da verdade)
             const totals = await client.query<{ subtotal: string }>(
@@ -341,6 +347,11 @@ export async function POST(
             JSON.stringify(item.adicionais ?? []),
           ]
         );
+        if (item.produto_id) {
+          await registrarSaidaEstoque(
+            client, empresa.id, item.produto_id, row.id, item.quantidade
+          );
+        }
       }
 
       // Atualiza cliente — usa total (após desconto), não subtotal

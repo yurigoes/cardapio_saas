@@ -9,6 +9,7 @@ import { ok, created, badRequest, forbidden, serverError, paginatedOk } from "@/
 import { auditLog } from "@/lib/security/audit";
 import { checkRateLimitByRequest, API_RATE_LIMIT } from "@/lib/security/rate-limit";
 import { isDuplicateKeyError } from "@/lib/utils/errors";
+import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import type { PoolClient } from "pg";
 
 // ─────────────────────────────────────────────
@@ -183,10 +184,9 @@ export async function POST(req: NextRequest) {
                 ]
               );
               if (item.produto_id) {
-                await client.query(
-                  `UPDATE produtos SET estoque_atual = estoque_atual - $1
-                   WHERE id = $2 AND controlar_estoque = TRUE AND estoque_atual >= $1`,
-                  [item.quantidade, item.produto_id]
+                await registrarSaidaEstoque(
+                  client, empresaId, item.produto_id, pedidoAtivo.id,
+                  item.quantidade, auth.payload.sub
                 );
               }
             }
@@ -267,10 +267,9 @@ export async function POST(req: NextRequest) {
           ]
         );
         if (item.produto_id) {
-          await client.query(
-            `UPDATE produtos SET estoque_atual = estoque_atual - $1
-             WHERE id = $2 AND controlar_estoque = TRUE AND estoque_atual >= $1`,
-            [item.quantidade, item.produto_id]
+          await registrarSaidaEstoque(
+            client, empresaId, item.produto_id, novoPedido.id,
+            item.quantidade, auth.payload.sub
           );
         }
       }
