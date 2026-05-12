@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Bike, DollarSign,
   Package, Users, Settings, LogOut, ChefHat, Bell, Tag, BarChart3,
   MapPin, CreditCard, Zap, LayoutGrid, Tv2, Wallet, Activity, ScrollText,
-  Receipt, Sun, Moon,
+  Receipt, Sun, Moon, Database,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
 import { useTheme } from "@/lib/hooks/useTheme";
@@ -41,6 +41,7 @@ const ALL_NAV = [
   { href: "/painel/usuarios",    label: "Usuários",    icon: Users,           modulo: null         },
   { href: "/painel/saude",       label: "Saúde",       icon: Activity,        modulo: null         },
   { href: "/painel/auditoria",   label: "Auditoria",   icon: ScrollText,      modulo: null         },
+  { href: "/painel/backup",      label: "Backup",      icon: Database,        modulo: null         },
   { href: "/painel/config",      label: "Configurações",icon: Settings,       modulo: null         },
 ];
 
