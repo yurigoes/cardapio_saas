@@ -62,6 +62,8 @@ const pedidoPublicoSchema = z.object({
   /* Pedido */
   observacoes:      z.string().max(1000).trim().optional().transform((v) => v || undefined),
   mesa_id:          uuidOpt,
+  cupom_codigo:     z.string().max(50).trim().optional().transform((v) => v || undefined),
+  desconto:         precoLenient.optional(),
   itens:            z.array(itemSchema).min(1, "Pedido deve ter ao menos 1 item"),
 });
 
@@ -110,6 +112,57 @@ export async function POST(
         0
       );
 
+      // ── Validação server-side do cupom (nunca confia em desconto do cliente)
+      let cupomId:  string | null = null;
+      let desconto: number        = 0;
+
+      if (body.cupom_codigo) {
+        const cupom = await client.query<{
+          id:                  string;
+          tipo:                string;
+          valor:               string;
+          ativo:               boolean;
+          valido_de:           string | null;
+          valido_ate:          string | null;
+          uso_maximo:          number | null;
+          uso_atual:           number;
+          uso_por_cliente:     number | null;
+          valor_minimo_pedido: string | null;
+          cliente_id:          string | null;
+        }>(
+          `SELECT id, tipo, valor, ativo, valido_de, valido_ate,
+                  uso_maximo, uso_atual, uso_por_cliente,
+                  valor_minimo_pedido, cliente_id
+           FROM cupons
+           WHERE empresa_id = $1 AND UPPER(codigo) = UPPER($2)
+           LIMIT 1`,
+          [empresa.id, body.cupom_codigo]
+        ).then((r) => r.rows[0]);
+
+        const agora = new Date();
+        const cupomValido = cupom
+          && cupom.ativo
+          && (!cupom.valido_de  || new Date(cupom.valido_de)  <= agora)
+          && (!cupom.valido_ate || new Date(cupom.valido_ate) >= agora)
+          && (cupom.uso_maximo == null || cupom.uso_atual < cupom.uso_maximo)
+          && (!cupom.cliente_id || cupom.cliente_id === body.cliente_id)
+          && (cupom.valor_minimo_pedido == null || subtotal >= Number(cupom.valor_minimo_pedido));
+
+        if (cupomValido) {
+          cupomId = cupom.id;
+          const valor = Number(cupom.valor);
+          if (cupom.tipo === "percentual") {
+            desconto = subtotal * (valor / 100);
+          } else if (cupom.tipo === "fixo") {
+            desconto = Math.min(valor, subtotal);
+          }
+          desconto = Math.round(desconto * 100) / 100;
+        }
+        // Se cupom inválido, prossegue sem desconto (não bloqueia o pedido)
+      }
+
+      const total = Math.max(0, subtotal - desconto);
+
       // Mapeia tipo do pedido
       const tipo = body.mesa_id
         ? "mesa"
@@ -119,14 +172,14 @@ export async function POST(
             ? "balcao"
             : "totem";
 
-      // Pontos
+      // Pontos calculados sobre o total (após desconto)
       let pontosGanhos = 0;
       if (
         body.cliente_id &&
         empresa.fidelidade_ativo &&
         Number(empresa.pontos_por_real) > 0
       ) {
-        pontosGanhos = Math.floor(subtotal * Number(empresa.pontos_por_real));
+        pontosGanhos = Math.floor(total * Number(empresa.pontos_por_real));
       }
 
       // Insere pedido
@@ -135,8 +188,8 @@ export async function POST(
           `INSERT INTO pedidos
              (empresa_id, tipo, status, mesa_id, cliente_id, cliente_nome, cliente_telefone,
               subtotal, desconto, taxa_entrega, total, pontos_ganhos, observacoes,
-              forma_pagamento, tipo_consumo)
-           VALUES ($1,$2,'pendente',$3,$4,$5,$6,$7,0,0,$7,$8,$9,$10,$11)
+              forma_pagamento, tipo_consumo, cupom_id)
+           VALUES ($1,$2,'pendente',$3,$4,$5,$6,$7,$8,0,$9,$10,$11,$12,$13,$14)
            RETURNING id, numero`,
           [
             empresa.id,
@@ -146,15 +199,30 @@ export async function POST(
             body.cliente_nome     ?? null,
             body.cliente_telefone ?? null,
             subtotal,
+            desconto,
+            total,
             pontosGanhos,
             body.observacoes      ?? null,
             body.forma_pagamento  ?? null,
             body.tipo_consumo     ?? "local",
+            cupomId,
           ]
         )
         .then((r) => r.rows);
 
       const row = rows[0];
+
+      // Registra uso do cupom (e incrementa contador)
+      if (cupomId) {
+        await client.query(
+          `INSERT INTO cupons_uso (cupom_id, pedido_id, cliente_id) VALUES ($1, $2, $3)`,
+          [cupomId, row.id, body.cliente_id ?? null]
+        );
+        await client.query(
+          `UPDATE cupons SET uso_atual = uso_atual + 1, updated_at = NOW() WHERE id = $1`,
+          [cupomId]
+        );
+      }
 
       // Ocupa mesa
       if (body.mesa_id) {
@@ -186,7 +254,7 @@ export async function POST(
         );
       }
 
-      // Atualiza cliente
+      // Atualiza cliente — usa total (após desconto), não subtotal
       if (body.cliente_id) {
         await client.query(
           `UPDATE clientes SET
@@ -196,7 +264,7 @@ export async function POST(
              pontos           = pontos + $2,
              updated_at       = NOW()
            WHERE id = $3`,
-          [subtotal, pontosGanhos, body.cliente_id]
+          [total, pontosGanhos, body.cliente_id]
         );
       }
 

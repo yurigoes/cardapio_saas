@@ -7,7 +7,7 @@ import {
   ShoppingCart, X, Plus, Minus, ChefHat, CheckCircle, ArrowLeft,
   Search, MapPin, User, Phone, RotateCcw, Clock, Star, Gift,
   UtensilsCrossed, PackageCheck, Bike,
-  Copy, Banknote, QrCode,
+  Copy, Banknote, QrCode, Tag, CheckCircle2,
 } from "lucide-react";
 
 // ─── Translations ─────────────────────────────────────────────────────────────
@@ -61,6 +61,14 @@ const TR = {
     pagamento_copiado: "Copiado!",
     pagamento_expirou: "Escaneie o QR Code no app do banco",
     pagamento_aprovado: "Pagamento confirmado!",
+    cupom_titulo: "Cupom de desconto",
+    cupom_placeholder: "Tem um código?",
+    cupom_aplicar: "Aplicar",
+    cupom_aplicado: "Cupom aplicado",
+    cupom_remover: "Remover",
+    cupom_invalido: "Cupom inválido",
+    subtotal: "Subtotal",
+    desconto: "Desconto",
   },
   en: {
     iniciar: "Tap to place your order",
@@ -110,6 +118,14 @@ const TR = {
     pagamento_copiado: "Copied!",
     pagamento_expirou: "Scan the QR Code in your banking app",
     pagamento_aprovado: "Payment confirmed!",
+    cupom_titulo: "Discount coupon",
+    cupom_placeholder: "Have a code?",
+    cupom_aplicar: "Apply",
+    cupom_aplicado: "Coupon applied",
+    cupom_remover: "Remove",
+    cupom_invalido: "Invalid coupon",
+    subtotal: "Subtotal",
+    desconto: "Discount",
   },
 } as const;
 
@@ -141,6 +157,7 @@ interface Produto {
   id: string; categoria_id: string | null; nome: string;
   descricao: string | null; preco: number; imagem_url: string | null;
   tempo_preparo: number | null; tipo: string; destaque: boolean;
+  pontos_fidelidade?: number | null;
 }
 
 interface CartItem {
@@ -870,16 +887,30 @@ function DrinksModal({ bebidas, idioma, onAdd, onSkip }: DrinksModalProps) {
             <button
               key={b.id}
               onClick={() => { onAdd(b); onSkip(); }}
-              className="flex-shrink-0 w-36 rounded-2xl bg-slate-800 border border-white/5 overflow-hidden text-left hover:border-emerald-500/30 transition"
+              className="flex-shrink-0 w-36 rounded-2xl bg-slate-800 border border-white/5 overflow-hidden text-left hover:border-white/20 transition"
+              style={{ borderColor: undefined }}
             >
-              <div className="h-24">
+              <div className="h-24 relative">
                 <ProductImage src={b.imagem_url} alt={b.nome} />
+                {b.pontos_fidelidade != null && b.pontos_fidelidade > 0 && (
+                  <span
+                    className="absolute top-1 right-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white shadow-lg"
+                    style={{ background: "var(--color-primary, #10b981)" }}
+                  >
+                    +{b.pontos_fidelidade} pts
+                  </span>
+                )}
               </div>
               <div className="p-2.5">
                 <p className="text-xs font-semibold text-white line-clamp-2">{b.nome}</p>
-                <p className="mt-1 text-sm font-bold text-emerald-400">{formatBRL(b.preco)}</p>
-                <div className="mt-1.5 flex items-center justify-center rounded-lg bg-emerald-500/20 py-1">
-                  <Plus className="h-3.5 w-3.5 text-emerald-400" />
+                <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-primary, #10b981)" }}>
+                  {formatBRL(b.preco)}
+                </p>
+                <div
+                  className="mt-1.5 flex items-center justify-center rounded-lg py-1"
+                  style={{ background: "var(--color-primary-15, rgba(16,185,129,0.15))" }}
+                >
+                  <Plus className="h-3.5 w-3.5" style={{ color: "var(--color-primary, #10b981)" }} />
                 </div>
               </div>
             </button>
@@ -903,25 +934,75 @@ interface CartDrawerProps {
   cart:        CartItem[];
   mesaNumero:  number | null;
   cliente:     ClienteIdentificado | null;
+  slug:        string;
   idioma:      Idioma;
   onClose:     () => void;
   onUpdate:    (produtoId: string, delta: number) => void;
-  onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro") => Promise<void>;
+  onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro", cupom: { codigo: string; desconto: number } | null) => Promise<void>;
 }
 
-function CartDrawer({ cart, mesaNumero, cliente, idioma, onClose, onUpdate, onConfirm }: CartDrawerProps) {
+function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, onClose, onUpdate, onConfirm }: CartDrawerProps) {
   const [nome, setNome]           = useState(cliente?.nome ?? "");
   const [tel, setTel]             = useState(cliente?.telefone ?? "");
   const [obs, setObs]             = useState("");
   const [formaPag, setFormaPag]   = useState<"pix" | "dinheiro">("dinheiro");
   const [sending, setSending]     = useState(false);
 
-  const total = cart.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0);
+  // Cupom
+  const [cupomCodigo, setCupomCodigo]   = useState("");
+  const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; desconto: number; tipo: string } | null>(null);
+  const [cupomErro, setCupomErro]       = useState("");
+  const [cupomLoading, setCupomLoading] = useState(false);
+
+  const subtotal = cart.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0);
+  const desconto = cupomAplicado?.desconto ?? 0;
+  const total    = Math.max(0, subtotal - desconto);
+
+  async function aplicarCupom() {
+    if (!cupomCodigo.trim()) return;
+    setCupomLoading(true); setCupomErro("");
+    try {
+      const sp = new URLSearchParams({
+        codigo: cupomCodigo.trim().toUpperCase(),
+        total:  String(subtotal),
+      });
+      if (cliente?.id) sp.set("cliente_id", cliente.id);
+      const res  = await fetch(`/api/pub/cupons/${slug}?${sp}`);
+      const data = await res.json();
+      if (!data.success) {
+        setCupomErro(data.error || t(idioma, "cupom_invalido"));
+        return;
+      }
+      if (!data.data.valido) {
+        setCupomErro(data.data.motivo || t(idioma, "cupom_invalido"));
+        return;
+      }
+      setCupomAplicado({
+        codigo:   data.data.codigo,
+        desconto: data.data.desconto,
+        tipo:     data.data.tipo,
+      });
+      setCupomCodigo("");
+    } catch {
+      setCupomErro("Erro de conexão");
+    } finally {
+      setCupomLoading(false);
+    }
+  }
+
+  function removerCupom() {
+    setCupomAplicado(null);
+    setCupomErro("");
+  }
 
   async function handleOrder() {
     setSending(true);
-    try { await onConfirm(nome, tel, obs, formaPag); }
-    finally { setSending(false); }
+    try {
+      await onConfirm(
+        nome, tel, obs, formaPag,
+        cupomAplicado ? { codigo: cupomAplicado.codigo, desconto: cupomAplicado.desconto } : null
+      );
+    } finally { setSending(false); }
   }
 
   return (
@@ -967,9 +1048,72 @@ function CartDrawer({ cart, mesaNumero, cliente, idioma, onClose, onUpdate, onCo
       </div>
 
       <div className="border-t border-white/5 p-4 space-y-3">
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-slate-400">Total</span>
-          <span className="text-xl font-bold text-white">{formatBRL(total)}</span>
+
+        {/* Cupom */}
+        {cupomAplicado ? (
+          <div
+            className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2"
+            style={{
+              borderColor: "var(--color-primary-50, rgba(16,185,129,0.4))",
+              background:  "var(--color-primary-15, rgba(16,185,129,0.12))",
+            }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <CheckCircle2 className="h-4 w-4 flex-shrink-0" style={{ color: "var(--color-primary, #10b981)" }} />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold" style={{ color: "var(--color-primary, #10b981)" }}>
+                  {t(idioma, "cupom_aplicado")}
+                </p>
+                <p className="truncate text-xs text-slate-300 font-mono">{cupomAplicado.codigo}</p>
+              </div>
+            </div>
+            <button onClick={removerCupom} className="text-xs text-slate-400 hover:text-white transition">
+              {t(idioma, "cupom_remover")}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Tag className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                <input
+                  value={cupomCodigo}
+                  onChange={(e) => { setCupomCodigo(e.target.value.toUpperCase()); setCupomErro(""); }}
+                  placeholder={t(idioma, "cupom_placeholder")}
+                  maxLength={30}
+                  className="w-full rounded-xl bg-slate-800 border border-white/10 px-3 py-2 pl-8 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-white/20 uppercase font-mono"
+                />
+              </div>
+              <button
+                onClick={aplicarCupom}
+                disabled={cupomLoading || !cupomCodigo.trim()}
+                className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5 transition disabled:opacity-40"
+              >
+                {cupomLoading ? "..." : t(idioma, "cupom_aplicar")}
+              </button>
+            </div>
+            {cupomErro && (
+              <p className="text-xs text-red-400 px-1">{cupomErro}</p>
+            )}
+          </div>
+        )}
+
+        {/* Totais */}
+        <div className="space-y-1 pt-1">
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-slate-400">{t(idioma, "subtotal")}</span>
+            <span className="text-slate-300">{formatBRL(subtotal)}</span>
+          </div>
+          {desconto > 0 && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-400">{t(idioma, "desconto")}</span>
+              <span style={{ color: "var(--color-primary, #10b981)" }}>−{formatBRL(desconto)}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-center pt-1 border-t border-white/5">
+            <span className="text-sm font-semibold text-slate-400">Total</span>
+            <span className="text-xl font-bold text-white">{formatBRL(total)}</span>
+          </div>
         </div>
 
         {!cliente && (
@@ -1514,9 +1658,12 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     clienteNome: string,
     clienteTel: string,
     obs: string,
-    formaPagamento: "pix" | "dinheiro" = "dinheiro"
+    formaPagamento: "pix" | "dinheiro" = "dinheiro",
+    cupom: { codigo: string; desconto: number } | null = null
   ) {
-    const cartTotal = cart.reduce((acc, i) => acc + Number(i.produto.preco) * i.quantidade, 0);
+    const subtotal  = cart.reduce((acc, i) => acc + Number(i.produto.preco) * i.quantidade, 0);
+    const desconto  = cupom?.desconto ?? 0;
+    const cartTotal = Math.max(0, subtotal - desconto);
 
     const res = await fetch(`/api/pub/pedidos/${params.slug}`, {
       method:  "POST",
@@ -1529,6 +1676,8 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         mesa_id:          mesaId      || undefined,
         tipo_consumo:     tipoConsumo,
         forma_pagamento:  formaPagamento,
+        cupom_codigo:     cupom?.codigo  || undefined,
+        desconto:         desconto       || undefined,
         itens: cart.map(i => ({
           produto_id:     i.produto.id,
           nome:           i.produto.nome,
@@ -1905,6 +2054,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           cart={cart}
           mesaNumero={mesaNumeroReal}
           cliente={cliente}
+          slug={params.slug}
           idioma={idioma}
           onClose={() => setCartOpen(false)}
           onUpdate={updateCart}
