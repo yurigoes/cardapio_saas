@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   MapPin, Plus, Users, Clock, CheckCircle, X, RefreshCw, Eye, QrCode, Copy, Check,
-  XCircle, ArrowLeftRight, Trash2, AlertCircle, Loader2,
+  XCircle, ArrowLeftRight, Trash2, AlertCircle, Loader2, History,
 } from "lucide-react";
 
 interface Mesa {
@@ -145,7 +145,7 @@ function ModalCriarMesa({ onClose, onSaved }: ModalCriarMesaProps) {
 }
 
 function MesaCard({
-  mesa, onVerPedido, onQrCode, onFechar, onTransferir, onExcluir,
+  mesa, onVerPedido, onQrCode, onFechar, onTransferir, onExcluir, onHistorico,
 }: {
   mesa: Mesa;
   onVerPedido:  (id: string) => void;
@@ -153,6 +153,7 @@ function MesaCard({
   onFechar:     (mesa: Mesa) => void;
   onTransferir: (mesa: Mesa) => void;
   onExcluir:    (mesa: Mesa) => void;
+  onHistorico:  (mesa: Mesa) => void;
 }) {
   const cfg = STATUS_CONFIG[mesa.status] ?? STATUS_CONFIG.livre;
 
@@ -247,6 +248,13 @@ function MesaCard({
             <Trash2 className="h-3 w-3" />
           </button>
         )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onHistorico(mesa); }}
+          className="flex items-center justify-center h-7 w-7 rounded-lg bg-white/5 border border-white/10 text-slate-500 hover:text-white hover:bg-white/10 transition"
+          title="Histórico do dia"
+        >
+          <History className="h-3.5 w-3.5" />
+        </button>
         <button
           onClick={(e) => { e.stopPropagation(); onQrCode(mesa); }}
           className="flex items-center justify-center h-7 w-7 rounded-lg bg-white/5 border border-white/10 text-slate-500 hover:text-white hover:bg-white/10 transition"
@@ -343,6 +351,18 @@ export default function MesasPage() {
   const [transferDestino, setTransferDestino] = useState<string>("");
   const [transferLoading, setTransferLoading] = useState(false);
 
+  // Modal histórico
+  const [historicoMesa, setHistoricoMesa] = useState<Mesa | null>(null);
+  const [historico, setHistorico] = useState<{
+    pedidos: Array<{
+      id: string; numero: number; status: string; total: number;
+      subtotal: number; desconto: number; forma_pagamento: string | null;
+      cliente_nome: string | null; criado_em: string;
+    }>;
+    total_geral: number;
+  } | null>(null);
+  const [historicoLoading, setHistoricoLoading] = useState(false);
+
   // Toast simples
   const [toast, setToast] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
   useEffect(() => {
@@ -437,6 +457,22 @@ export default function MesasPage() {
       }
     } finally {
       setTransferLoading(false);
+    }
+  }
+
+  async function handleHistorico(mesa: Mesa) {
+    setHistoricoMesa(mesa);
+    setHistorico(null);
+    setHistoricoLoading(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`/api/mesas/${mesa.id}/historico`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setHistorico(data.data);
+    } finally {
+      setHistoricoLoading(false);
     }
   }
 
@@ -547,6 +583,7 @@ export default function MesasPage() {
               onFechar={handleFechar}
               onTransferir={handleAbrirTransferir}
               onExcluir={handleExcluir}
+              onHistorico={handleHistorico}
             />
           ))}
         </div>
@@ -634,6 +671,99 @@ export default function MesasPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: histórico do dia da mesa */}
+      {historicoMesa && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setHistoricoMesa(null)} />
+          <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 p-6">
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="flex items-center gap-2 text-lg font-bold text-white">
+                  <History className="h-5 w-5 text-brand" />
+                  Histórico mesa {historicoMesa.numero}
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-400">Pedidos do dia</p>
+              </div>
+              <button onClick={() => setHistoricoMesa(null)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {historicoLoading && (
+              <div className="flex h-32 items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-brand" />
+              </div>
+            )}
+
+            {!historicoLoading && historico && (
+              <>
+                {historico.pedidos.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-slate-500">
+                    Nenhum pedido nesta mesa hoje
+                  </div>
+                ) : (
+                  <>
+                    {/* Total geral */}
+                    <div className="mb-4 rounded-xl border border-brand/30 bg-brand/10 px-4 py-3">
+                      <p className="text-[10px] uppercase tracking-wider text-brand">Total do dia</p>
+                      <p className="mt-1 text-2xl font-black text-white">{formatBRL(historico.total_geral)}</p>
+                      <p className="text-xs text-slate-400">
+                        {historico.pedidos.filter(p => p.status !== "cancelado").length} pedido(s) considerado(s)
+                      </p>
+                    </div>
+
+                    {/* Lista */}
+                    <div className="space-y-2">
+                      {historico.pedidos.map((p) => {
+                        const cancelado = p.status === "cancelado";
+                        return (
+                          <div
+                            key={p.id}
+                            className={`flex items-center justify-between gap-3 rounded-xl border bg-white/5 px-4 py-3 ${
+                              cancelado ? "border-red-500/20 opacity-60" : "border-white/10"
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-mono text-slate-500">#{p.numero}</span>
+                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                                  p.status === "entregue"  ? "bg-brand/15 text-brand" :
+                                  p.status === "cancelado" ? "bg-red-500/15 text-red-400" :
+                                                             "bg-amber-500/15 text-amber-400"
+                                }`}>
+                                  {p.status}
+                                </span>
+                                {p.forma_pagamento && (
+                                  <span className="text-[11px] text-slate-500">{p.forma_pagamento}</span>
+                                )}
+                              </div>
+                              {p.cliente_nome && (
+                                <p className="mt-0.5 truncate text-xs text-slate-300">{p.cliente_nome}</p>
+                              )}
+                              <p className="mt-0.5 text-[10px] text-slate-600">
+                                {new Date(p.criado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className={`text-sm font-bold ${cancelado ? "text-slate-500 line-through" : "text-white"}`}>
+                                {formatBRL(p.total)}
+                              </p>
+                              {p.desconto > 0 && (
+                                <p className="text-[10px] text-slate-500">−{formatBRL(p.desconto)} desc.</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
