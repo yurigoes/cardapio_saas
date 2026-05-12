@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
       `SELECT e.id, e.nome_fantasia, e.slug, e.status, e.cnpj,
               e.email, e.whatsapp, e.plano_id, e.modulos_ativos,
               e.created_at, e.assinatura_expira_em,
+              e.trial_inicio, e.trial_fim, e.trial_dias,
               p.nome as plano_nome,
               (SELECT COUNT(*) FROM usuarios u WHERE u.empresa_id = e.id AND u.deleted_at IS NULL) as total_usuarios,
               (SELECT COUNT(*) FROM pedidos pd WHERE pd.empresa_id = e.id AND pd.deleted_at IS NULL) as total_pedidos
@@ -121,8 +122,10 @@ export async function POST(req: NextRequest) {
     const empresa = await queryOne<{ id: string }>(
       `INSERT INTO empresas
          (nome_fantasia, razao_social, cnpj, slug, subdominio, cor_primaria,
-          cor_secundaria, whatsapp, telefone, email, plano_id, status, slave_key)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'teste',$12)
+          cor_secundaria, whatsapp, telefone, email, plano_id, status, slave_key,
+          trial_inicio, trial_fim, trial_dias)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'teste',$12,
+               NOW(), NOW() + INTERVAL '14 days', 14)
        RETURNING id`,
       [
         body.nome_fantasia,

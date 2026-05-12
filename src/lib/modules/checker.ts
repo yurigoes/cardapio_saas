@@ -8,6 +8,7 @@ const CACHE_TTL = 300; // 5 minutos
 interface EmpresaModulos {
   modulos_ativos: ModuloId[];
   status:         string;
+  trial_fim:      string | null;
 }
 
 async function getModulosAtivos(empresaId: string): Promise<ModuloId[]> {
@@ -19,11 +20,20 @@ async function getModulosAtivos(empresaId: string): Promise<ModuloId[]> {
   }
 
   const empresa = await queryOne<EmpresaModulos>(
-    `SELECT modulos_ativos, status FROM empresas WHERE id = $1 AND deleted_at IS NULL`,
+    `SELECT modulos_ativos, status, trial_fim FROM empresas WHERE id = $1 AND deleted_at IS NULL`,
     [empresaId]
   );
 
-  if (!empresa || empresa.status !== "ativo") {
+  if (!empresa) return [];
+
+  // 'ativo' = assinante pagante → libera tudo
+  // 'teste' = trial → libera SE ainda não expirou
+  // 'suspensa'/'cancelada' = bloqueia tudo
+  const trialAtivo = empresa.status === "teste"
+    && !!empresa.trial_fim
+    && new Date(empresa.trial_fim).getTime() > Date.now();
+
+  if (empresa.status !== "ativo" && !trialAtivo) {
     return [];
   }
 

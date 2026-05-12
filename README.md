@@ -275,6 +275,7 @@ Numeradas sequencialmente. Cada migration é idempotente (`IF NOT EXISTS` em cri
 | 018 | push_subscriptions | Tabela para Web Push VAPID |
 | 019 | cashback | `clientes.saldo_cashback` + `cashback_movimentos` |
 | 020 | webhook_log | Tabela `webhook_log` para diagnóstico cross-tenant |
+| 021 | trials | `empresas.trial_inicio/fim/dias` + cron expiração 14d |
 
 ---
 
@@ -298,6 +299,9 @@ DB_SSL=false
 
 # Redis (opcional, para rate-limit distribuído)
 REDIS_URL=redis://cardapio_redis:6379
+
+# Cron interno (trials, jobs futuros)
+CRON_SECRET=...                        # 32+ chars random; chamar com header x-cron-secret
 
 # MinIO (storage de imagens)
 MINIO_ENDPOINT=cardapio_minio

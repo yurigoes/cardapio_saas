@@ -18,6 +18,7 @@ import {
   Wallet, Package, CreditCard, MessageCircle, Activity,
   AlertTriangle, ChevronRight, Eye, ChefHat, Tv2,
 } from "lucide-react";
+import { TrialBanner } from "@/components/painel/TrialBanner";
 
 interface Stats {
   pedidos_hoje:      number;
@@ -138,6 +139,9 @@ function PainelDashboard() {
 
   return (
     <div className="space-y-5 pb-12">
+      {/* Trial */}
+      <TrialBanner />
+
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-white">Dashboard</h1>
