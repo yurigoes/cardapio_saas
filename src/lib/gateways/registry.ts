@@ -5,6 +5,7 @@ import { PixGateway } from "./pix";
 import { StoneGateway } from "./stone";
 import { MercadoPagoGateway } from "./mercadopago";
 import { PagarmeGateway } from "./pagarme";
+import { AsaasGateway } from "./asaas";
 
 // ─────────────────────────────────────────────
 // Registry de gateways disponíveis
@@ -17,6 +18,7 @@ const GATEWAY_FACTORIES: Partial<Record<GatewaySlug, GatewayFactory>> = {
   stone:        (config) => new StoneGateway(config),
   mercadopago:  (config) => new MercadoPagoGateway(config),
   pagarme:      (config) => new PagarmeGateway(config),
+  asaas:        (config) => new AsaasGateway(config),
   // Novos gateways são adicionados aqui
 };
 

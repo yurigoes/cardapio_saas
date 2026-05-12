@@ -17,6 +17,7 @@ const GATEWAY_METODOS: Partial<Record<GatewaySlug, MetodoPagamento[]>> = {
   pix_bancario: ["pix"],
   mercadopago:  ["pix", "credito", "debito"],
   pagarme:      ["pix", "credito", "debito"],
+  asaas:        ["pix", "credito", "debito", "boleto"],
   stone:        ["credito", "debito"],
 };
 
@@ -24,6 +25,7 @@ const GATEWAY_NOMES_DISPLAY: Partial<Record<GatewaySlug, string>> = {
   pix_bancario: "PIX Direto",
   mercadopago:  "Mercado Pago",
   pagarme:      "Pagar.me",
+  asaas:        "Asaas",
   stone:        "Stone",
 };
 
