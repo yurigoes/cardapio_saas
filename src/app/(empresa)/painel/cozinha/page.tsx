@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
-  ChefHat, Clock, RefreshCw, Volume2, VolumeX, Bell, ExternalLink,
+  ChefHat, Clock, RefreshCw, Volume2, VolumeX, Bell, ExternalLink, Printer,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -211,6 +211,19 @@ function PedidoCard({ pedido, onUpdate, onChamar, updating, chamando }: CardProp
 
       {/* Actions */}
       <div className="flex gap-2">
+        {/* Imprimir comanda da cozinha */}
+        <button
+          onClick={() => {
+            const token = localStorage.getItem("access_token") ?? "";
+            const sp = new URLSearchParams({ tipo: "cozinha", token });
+            window.open(`/imprimir/pedido/${pedido.id}?${sp}`, "_blank", "width=400,height=700");
+          }}
+          title="Imprimir comanda para a cozinha"
+          className="flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-400 hover:bg-white/10 hover:text-white transition"
+        >
+          <Printer className="h-3.5 w-3.5" />
+        </button>
+
         {/* Chamar cliente — só quando pronto */}
         {pedido.status === "pronto" && (
           <button

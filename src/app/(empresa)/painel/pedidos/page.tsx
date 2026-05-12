@@ -3,9 +3,21 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   ShoppingBag, Clock, CheckCircle, XCircle, Truck, ChefHat,
-  RefreshCw, Eye, X, Filter, Bell, BellOff,
+  RefreshCw, Eye, X, Filter, Bell, BellOff, Printer,
 } from "lucide-react";
 import { useNewOrderAlerts } from "@/lib/hooks/useNewOrderAlerts";
+
+/** Abre janela de impressão térmica (popup com auto-print). */
+function abrirImpressao(pedidoId: string, tipo: "cliente" | "cozinha" | "comanda") {
+  const token = localStorage.getItem("access_token") ?? "";
+  const sp = new URLSearchParams({ tipo, token });
+  const w = window.open(
+    `/imprimir/pedido/${pedidoId}?${sp}`,
+    "_blank",
+    "width=400,height=700,toolbar=no,menubar=no",
+  );
+  if (!w) alert("Permita popups para imprimir.");
+}
 
 interface Pedido {
   id:             string;
@@ -271,6 +283,33 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
               <span className="text-brand">{formatBRL(pedido.total)}</span>
             </div>
           </div>
+        </div>
+
+        {/* Ações de impressão */}
+        <div className="flex flex-wrap gap-2 border-t border-white/5 px-4 pt-3">
+          <button
+            onClick={() => abrirImpressao(pedido.id, "cliente")}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5 transition"
+            title="Cupom não-fiscal completo"
+          >
+            <Printer className="h-3.5 w-3.5" /> Cupom
+          </button>
+          <button
+            onClick={() => abrirImpressao(pedido.id, "cozinha")}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5 transition"
+            title="Comanda para a cozinha (sem preços)"
+          >
+            <Printer className="h-3.5 w-3.5" /> Cozinha
+          </button>
+          {pedido.tipo === "mesa" && (
+            <button
+              onClick={() => abrirImpressao(pedido.id, "comanda")}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5 transition"
+              title="Pré-conta para o cliente conferir"
+            >
+              <Printer className="h-3.5 w-3.5" /> Pré-conta
+            </button>
+          )}
         </div>
 
         {/* Ações */}
