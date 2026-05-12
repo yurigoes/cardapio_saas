@@ -19,6 +19,7 @@ import { queryOne } from "@/lib/db/client";
 import { StoneGateway } from "@/lib/gateways/stone";
 import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
+import { registrarVendaPedido } from "@/lib/caixa/movimento";
 
 interface StoneWebhookPayload {
   event:     string;                          // ex: "pix.payment_link.paid"
@@ -145,6 +146,24 @@ export async function POST(req: NextRequest) {
         [novoStatus === "confirmado" ? "aprovado" : novoStatus, resource.id]
       );
     } catch { /* tabela pode não existir */ }
+
+    if (novoStatus === "confirmado") {
+      try {
+        const pedidoData = await queryOne<{ total: string; forma_pagamento: string | null }>(
+          `SELECT total, forma_pagamento FROM pedidos WHERE id = $1`,
+          [pedidoId]
+        );
+        if (pedidoData) {
+          await registrarVendaPedido(
+            gateway.empresa_id, pedidoId,
+            Number(pedidoData.total),
+            pedidoData.forma_pagamento ?? "pix"
+          );
+        }
+      } catch (e) {
+        console.error("[Stone/webhook] CaixaIntegration:", e);
+      }
+    }
 
     console.info(`[Stone/webhook] Pedido ${pedidoId} → ${novoStatus} (${event})`);
     return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });

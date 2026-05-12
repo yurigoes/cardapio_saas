@@ -18,6 +18,7 @@ import { queryOne } from "@/lib/db/client";
 import { PagarmeGateway } from "@/lib/gateways/pagarme";
 import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
+import { registrarVendaPedido } from "@/lib/caixa/movimento";
 
 interface PmWebhookPayload {
   id:    string;
@@ -137,6 +138,25 @@ export async function POST(req: NextRequest) {
         [payload.data.status === "paid" ? "aprovado" : novoStatus, chargeId]
       );
     } catch { /* tabela pode não existir */ }
+
+    // Integração caixa: venda online quando confirmada
+    if (novoStatus === "confirmado") {
+      try {
+        const pedidoData = await queryOne<{ total: string; forma_pagamento: string | null }>(
+          `SELECT total, forma_pagamento FROM pedidos WHERE id = $1`,
+          [pedidoId]
+        );
+        if (pedidoData) {
+          await registrarVendaPedido(
+            gateway.empresa_id, pedidoId,
+            Number(pedidoData.total),
+            pedidoData.forma_pagamento ?? "pix"
+          );
+        }
+      } catch (e) {
+        console.error("[Pagarme/webhook] CaixaIntegration:", e);
+      }
+    }
 
     console.info(`[Pagarme/webhook] Pedido ${pedidoId} → ${novoStatus} (${payload.type})`);
     return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });

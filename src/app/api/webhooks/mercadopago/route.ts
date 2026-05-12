@@ -13,6 +13,7 @@ import { queryOne } from "@/lib/db/client";
 import { MercadoPagoGateway } from "@/lib/gateways/mercadopago";
 import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
+import { registrarVendaPedido } from "@/lib/caixa/movimento";
 
 const MP_API = "https://api.mercadopago.com";
 
@@ -150,6 +151,15 @@ export async function POST(req: NextRequest) {
         [payment.status === "approved" ? "aprovado" : novoStatus, String(payment.id)]
       );
     } catch { /* tabela pode não existir */ }
+
+    // Integração caixa: registra venda quando pagamento online é confirmado
+    if (novoStatus === "confirmado") {
+      try {
+        await registrarVendaPedido(gateways.empresa_id, pedidoId, payment.transaction_amount, "pix");
+      } catch (e) {
+        console.error("[MP/webhook] CaixaIntegration:", e);
+      }
+    }
 
     console.info(`[MP/webhook] Pedido ${pedidoId} → ${novoStatus} (MP status: ${payment.status})`);
     return NextResponse.json({ ok: true, pedido_id: pedidoId, status: novoStatus });

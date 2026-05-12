@@ -5,6 +5,7 @@ import { query, queryOne } from "@/lib/db/client";
 import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { auditLog } from "@/lib/security/audit";
+import { registrarVendaPedido, registrarEstornoPedido } from "@/lib/caixa/movimento";
 
 const statusSchema = z.object({
   status: z.enum([
@@ -45,8 +46,12 @@ export async function PATCH(
   }
 
   try {
-    const pedido = await queryOne<{ id: string; status: string; empresa_id: string }>(
-      `SELECT id, status, empresa_id FROM pedidos WHERE id = $1 AND deleted_at IS NULL`,
+    const pedido = await queryOne<{
+      id: string; status: string; empresa_id: string;
+      total: string; forma_pagamento: string | null;
+    }>(
+      `SELECT id, status, empresa_id, total, forma_pagamento
+       FROM pedidos WHERE id = $1 AND deleted_at IS NULL`,
       [params.id]
     );
 
@@ -97,6 +102,35 @@ export async function PATCH(
       dadosNovos:      { status: body.status },
       usuario:        { sub: auth.payload.sub, empresaId },
     });
+
+    // ── Integração caixa ─────────────────────────────────────────────────
+    // Regra:
+    //   * Online (PIX/cartão online) → registra venda no momento "confirmado"
+    //   * Presencial (dinheiro/cartão maquininha) → no momento "entregue"
+    //   * Cancelamento de pedido pago → registra estorno
+    const valor = Number(pedido.total);
+    const forma = pedido.forma_pagamento;
+    const isOnlinePayment = forma === "pix" || forma === "credito_online" || forma === "debito_online";
+    const isPresencial    = forma === "dinheiro" || forma === "cartao" || forma === "credito" || forma === "debito";
+
+    try {
+      if (body.status === "confirmado" && isOnlinePayment) {
+        await registrarVendaPedido(empresaId, params.id, valor, forma);
+      }
+      if (body.status === "entregue" && isPresencial) {
+        await registrarVendaPedido(empresaId, params.id, valor, forma);
+      }
+      if (body.status === "cancelado") {
+        // Só estorna se já estava em estado pago (confirmado/preparando/pronto/entregue)
+        const eraPago = ["confirmado", "preparando", "pronto", "entregue"].includes(pedido.status);
+        if (eraPago) {
+          await registrarEstornoPedido(empresaId, params.id, valor, forma);
+        }
+      }
+    } catch (e) {
+      // Falha de caixa não deve bloquear a transição de status
+      console.error("[Pedidos/Status/CaixaIntegration]", e);
+    }
 
     return ok({ id: params.id, status: body.status });
   } catch (err) {
