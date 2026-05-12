@@ -22,7 +22,8 @@ export const senhaSchema = z
 
 export const telefoneSchema = z
   .string()
-  .regex(/^\d{10,15}$/, "Telefone inválido (apenas dígitos, 10-15 caracteres)");
+  .transform((v) => v.replace(/\D/g, ""))
+  .pipe(z.string().regex(/^\d{10,15}$/, "Telefone inválido (10-15 dígitos)"));
 
 export const cnpjSchema = z
   .string()
@@ -128,7 +129,7 @@ export const pedidoItemSchema = z.object({
   produto_id:     uuidSchema.optional(),
   nome:           z.string().min(1).max(255).trim(),
   preco_unitario: precoSchema,
-  quantidade:     z.number().int().min(1).max(100),
+  quantidade:     z.number().int().min(1).max(999),
   observacoes:    z.string().max(500).trim().optional(),
   adicionais:     z.array(z.unknown()).optional().default([]),
   complementos:   z.array(z.unknown()).optional().default([]),

@@ -45,7 +45,7 @@ const MODULOS: ModuloCard[] = [
     roles: ["gerente"],
   },
   {
-    href: "/cozinha", label: "Cozinha (KDS)",
+    href: "/painel/cozinha", label: "Cozinha (KDS)",
     descricao: "Display de produção para a equipe da cozinha",
     icon: ChefHat,
     cor: "from-orange-500/20 to-orange-600/10 border-orange-500/30 hover:border-orange-500/60",
