@@ -19,6 +19,8 @@ const CSP = [
   "font-src 'self' data: https://fonts.gstatic.com",
   // Service Worker PWA
   "worker-src 'self' blob:",
+  // Manifest dinâmico (servido por /api/pub/manifest/[slug])
+  "manifest-src 'self'",
 ].join("; ");
 
 const nextConfig = {

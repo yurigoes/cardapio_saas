@@ -1,5 +1,5 @@
-// Cardápio SaaS — Totem PWA Service Worker
-const CACHE_NAME = "cardapio-totem-v1";
+// Cardápio SaaS — PWA Service Worker (Totem + Cliente)
+const CACHE_NAME = "cardapio-pwa-v2";
 
 // Assets to pre-cache
 const PRECACHE = ["/"];
@@ -57,8 +57,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Totem pages: network-first with cache fallback
-  if (url.pathname.startsWith("/totem/")) {
+  // Totem + Cliente pages: network-first with cache fallback
+  if (url.pathname.startsWith("/totem/") || url.pathname.startsWith("/cliente/")) {
     event.respondWith(
       fetch(request)
         .then((response) => {
@@ -68,10 +68,15 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(request))
+        .catch(() => caches.match(request).then(c => c || caches.match("/")))
     );
     return;
   }
 
   event.respondWith(fetch(request));
+});
+
+// Permite o cliente disparar updates manualmente
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
