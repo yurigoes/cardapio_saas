@@ -48,7 +48,7 @@ export const precoSchema = z
 export const paginacaoSchema = z.object({
   // nullish() aceita null|undefined antes do coerce → .default() funciona corretamente
   page:  z.preprocess(v => v ?? undefined, z.coerce.number().int().min(1).default(1)),
-  limit: z.preprocess(v => v ?? undefined, z.coerce.number().int().min(1).max(100).default(20)),
+  limit: z.preprocess(v => v ?? undefined, z.coerce.number().int().min(1).max(500).default(20)),
   q:     z.string().max(255).nullish().transform(v => v ?? undefined),
 });
 

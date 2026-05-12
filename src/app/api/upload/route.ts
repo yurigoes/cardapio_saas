@@ -141,8 +141,12 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[Upload/POST]", err);
-    if ((err as NodeJS.ErrnoException).code === "ECONNREFUSED") {
-      return serverError("Serviço de armazenamento indisponível");
+    const e = err as NodeJS.ErrnoException;
+    if (e.code === "ECONNREFUSED" || e.code === "ENOTFOUND") {
+      return serverError(
+        `Serviço de armazenamento indisponível (host: ${process.env.MINIO_ENDPOINT}). ` +
+        `Verifique se o container do MinIO está rodando e acessível pelo nome configurado em MINIO_ENDPOINT.`
+      );
     }
     if (err instanceof Error && err.message.includes("unsupported")) {
       return badRequest("Formato de imagem não suportado ou arquivo corrompido");
