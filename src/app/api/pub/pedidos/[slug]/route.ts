@@ -11,6 +11,7 @@ import { queryOne, transaction } from "@/lib/db/client";
 import { ok, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
+import { creditarCashbackPedido, debitarCashbackPedido } from "@/lib/cashback/movimento";
 import type { PoolClient } from "pg";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ const pedidoPublicoSchema = z.object({
   mesa_id:          uuidOpt,
   cupom_codigo:     z.string().max(50).trim().optional().transform((v) => v || undefined),
   desconto:         precoLenient.optional(),
+  cashback_usar:    precoLenient.optional(),  // valor em R$ a debitar do saldo
   itens:            z.array(itemSchema).min(1, "Pedido deve ter ao menos 1 item"),
 });
 
@@ -369,7 +371,40 @@ export async function POST(
         );
       }
 
-      return { ...row, pontosGanhos };
+      // ── Cashback ──────────────────────────────────────────────────────
+      let cashbackCreditado = 0;
+      let cashbackDebitado  = 0;
+      if (body.cliente_id) {
+        // Débito (uso do saldo como desconto) — valida server-side
+        if (body.cashback_usar && body.cashback_usar > 0) {
+          // Não debita mais que o total do pedido (evita pedido negativo)
+          const max = Math.min(body.cashback_usar, total);
+          const deb = await debitarCashbackPedido(
+            client, empresa.id, body.cliente_id, row.id, max
+          );
+          if (deb.debitado) cashbackDebitado = deb.valor ?? 0;
+        }
+
+        // Se houve débito, atualiza pedido (subtrai do total, soma ao desconto)
+        if (cashbackDebitado > 0) {
+          const novoDesc  = desconto + cashbackDebitado;
+          const novoTotal = Math.max(0, total - cashbackDebitado);
+          await client.query(
+            `UPDATE pedidos SET desconto = $1, total = $2, updated_at = NOW()
+             WHERE id = $3`,
+            [novoDesc, novoTotal, row.id]
+          );
+        }
+
+        // Crédito (ganho na compra) — baseia no total real (pós desconto/cashback)
+        const totalParaCredito = Math.max(0, total - cashbackDebitado);
+        const cb = await creditarCashbackPedido(
+          client, empresa.id, body.cliente_id, row.id, totalParaCredito
+        );
+        if (cb.creditado) cashbackCreditado = cb.valor ?? 0;
+      }
+
+      return { ...row, pontosGanhos, cashbackCreditado, cashbackDebitado };
     });
 
     // Notificação Web Push (não bloqueia resposta)
@@ -388,6 +423,8 @@ export async function POST(
       id:           pedido.id,
       numero:       pedido.numero,
       pontos_ganhos: pedido.pontosGanhos,
+      cashback_creditado: "cashbackCreditado" in pedido ? pedido.cashbackCreditado : 0,
+      cashback_debitado:  "cashbackDebitado"  in pedido ? pedido.cashbackDebitado  : 0,
       acumulado:    "acumulado" in pedido ? pedido.acumulado : false,
       itens_adicionados: "itens_adicionados" in pedido ? pedido.itens_adicionados : undefined,
     });

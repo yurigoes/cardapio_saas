@@ -118,9 +118,21 @@ function formatPhone(p: string | null) {
   return p;
 }
 
+interface CashbackData {
+  empresa:  { cashback_ativo: boolean; cashback_percentual: number };
+  saldo:    number;
+  movimentos: Array<{
+    id: string; tipo: string; valor: number;
+    saldo_anterior: number | null; saldo_atual: number | null;
+    motivo: string | null; criado_em: string;
+    pedido_numero: number | null;
+  }>;
+}
+
 export default function ClientePainelPage({ params }: { params: { slug: string } }) {
   const [empresa, setEmpresa]   = useState<EmpresaPub | null>(null);
   const [perfil,  setPerfil]    = useState<PerfilCompleto | null>(null);
+  const [cashback, setCashback] = useState<CashbackData | null>(null);
   const [loading, setLoading]   = useState(true);
 
   // Login form
@@ -160,14 +172,19 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
   async function loadPerfil(id: string) {
     setLoading(true);
     try {
-      const res  = await fetch(`/api/pub/cliente/${id}?slug=${params.slug}`);
-      const data = await res.json();
+      const [resPerfil, resCb] = await Promise.all([
+        fetch(`/api/pub/cliente/${id}?slug=${params.slug}`),
+        fetch(`/api/pub/cliente/${id}/cashback?slug=${params.slug}`),
+      ]);
+      const data = await resPerfil.json();
       if (data.success) {
         setPerfil(data.data);
       } else {
-        // ID inválido → limpa storage
         localStorage.removeItem(STORAGE_KEY(params.slug));
+        return;
       }
+      const cbData = await resCb.json().catch(() => null);
+      if (cbData?.success) setCashback(cbData.data);
     } finally {
       setLoading(false);
     }
@@ -444,6 +461,46 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
             </div>
           )}
         </section>
+
+        {/* ── Saldo de cashback ─────────────────────────────────────────────── */}
+        {cashback?.empresa.cashback_ativo && (
+          <section className="rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 to-transparent p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-amber-300">
+                  💵 Saldo Cashback
+                </p>
+                <p className="mt-1 text-3xl font-black text-white">
+                  {formatBRL(cashback.saldo)}
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Você ganha <strong className="text-amber-300">{cashback.empresa.cashback_percentual}%</strong> em cada compra
+                </p>
+              </div>
+            </div>
+            {cashback.movimentos.length > 0 && (
+              <details className="mt-3 group">
+                <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-300">
+                  Ver últimos movimentos
+                </summary>
+                <div className="mt-2 space-y-1">
+                  {cashback.movimentos.slice(0, 5).map((m) => (
+                    <div key={m.id} className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-400">
+                        {m.tipo === "credito" ? "+ Crédito" :
+                         m.tipo === "debito"  ? "− Uso"     : "Ajuste"}
+                        {m.pedido_numero && ` · pedido #${m.pedido_numero}`}
+                      </span>
+                      <span className={m.tipo === "debito" ? "text-red-400" : "text-amber-300"}>
+                        {m.tipo === "debito" ? "−" : "+"}{formatBRL(m.valor)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </section>
+        )}
 
         {/* ── Stats grid ────────────────────────────────────────────────────── */}
         <section className="grid grid-cols-2 gap-3">

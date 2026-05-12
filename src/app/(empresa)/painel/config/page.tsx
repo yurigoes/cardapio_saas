@@ -6,6 +6,7 @@ import {
   Settings, Palette, Phone, CreditCard, Award, Monitor,
   Upload, Save, Eye, Sun, Moon, ToggleLeft, ToggleRight,
   CheckCircle, AlertCircle, Loader2, Video, ImageIcon, ExternalLink,
+  DollarSign,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -33,9 +34,11 @@ interface EmpresaConfig {
   taxa_entrega:          number;
   pedido_minimo:     number;
   tempo_entrega_min: number;
-  fidelidade_ativo:  boolean;
-  pontos_por_real:   number;
-  real_por_ponto:    number;
+  fidelidade_ativo:    boolean;
+  pontos_por_real:     number;
+  real_por_ponto:      number;
+  cashback_ativo:      boolean;
+  cashback_percentual: number;
   // Totem customization
   totem_bg_video_url: string;
   totem_bg_image_url: string;
@@ -73,9 +76,11 @@ const DEFAULT_CONFIG: EmpresaConfig = {
   taxa_entrega:           0,
   pedido_minimo:      0,
   tempo_entrega_min:  30,
-  fidelidade_ativo:   false,
-  pontos_por_real:    1,
-  real_por_ponto:     0.01,
+  fidelidade_ativo:    false,
+  pontos_por_real:     1,
+  real_por_ponto:      0.01,
+  cashback_ativo:      false,
+  cashback_percentual: 5,
   totem_bg_video_url: "",
   totem_bg_image_url: "",
   totem_cta_text:     "Toque para fazer seu pedido",
@@ -897,6 +902,55 @@ export default function ConfigPage() {
                   </div>
                   <p className="mt-1.5 text-xs text-slate-500">
                     Quanto cada ponto vale em reais no momento do resgate
+                  </p>
+                </div>
+              </div>
+
+              {/* Cashback */}
+              <div
+                onClick={() => set("cashback_ativo", !form.cashback_ativo)}
+                className={`flex cursor-pointer items-center justify-between rounded-2xl border p-5 transition ${
+                  form.cashback_ativo
+                    ? "border-brand/30 bg-brand/5"
+                    : "border-white/10 bg-white/5"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <DollarSign className={`h-8 w-8 flex-shrink-0 ${form.cashback_ativo ? "text-brand" : "text-slate-500"}`} />
+                  <div>
+                    <p className="font-semibold text-white">Cashback</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Cliente recebe % do valor pago como crédito em R$, usável no próximo pedido
+                    </p>
+                  </div>
+                </div>
+                <Toggle
+                  checked={form.cashback_ativo}
+                  onChange={v => set("cashback_ativo", v)}
+                />
+              </div>
+
+              <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 space-y-4 transition ${
+                !form.cashback_ativo ? "pointer-events-none opacity-40" : ""
+              }`}>
+                <h2 className="text-sm font-semibold text-white">Configuração do cashback</h2>
+                <div>
+                  <Label>Percentual (%)</Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      value={form.cashback_percentual}
+                      onChange={e => set("cashback_percentual", Number(e.target.value))}
+                      placeholder="Ex: 5"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400">%</span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    Percentual do total da compra que vira saldo de cashback.
+                    Exemplo: 5% sobre R$ 100 = R$ 5,00 de crédito.
                   </p>
                 </div>
               </div>
