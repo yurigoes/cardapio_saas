@@ -253,8 +253,17 @@ function WhatsAppSection({
       });
       const data = await res.json();
       if (data.success) {
-        toast.show("success", "Instância criada! Escaneie o QR code.");
-        await fetchStatus();
+        // Aplica QR imediatamente se a API já retornou (sem aguardar próximo poll)
+        const d = data.data as WaState & { existing?: boolean };
+        if (d.qr) {
+          setWa({ status: "aguardando", slug: d.slug, qr: d.qr, pairingCode: d.pairingCode });
+          toast.show("success", d.existing ? "QR code obtido! Escaneie para conectar." : "Instância criada! Escaneie o QR code.");
+        } else {
+          toast.show("success", "Instância criada! Aguardando QR code...");
+          // Poll mais frequente nos próximos 30s
+          setWa(prev => ({ ...prev, status: "aguardando" }));
+          await fetchStatus();
+        }
       } else {
         toast.show("error", data.error ?? "Erro ao criar instância");
       }
@@ -340,9 +349,10 @@ function WhatsAppSection({
     }, 500);
   }
 
-  const notCreated  = wa.status === "nao_criada";
+  const notCreated  = wa.status === "nao_criada" && !wa.qr;
   const isConnected = wa.status === "conectado";
-  const showQR      = (wa.status === "aguardando" || wa.status === "desconectado") && wa.qr;
+  // Mostra QR se status indica aguardando/desconectado OU se temos QR mesmo com outro status
+  const showQR      = !!wa.qr && wa.status !== "conectado";
   const hasCredentials = cfg.evolution_url.trim() !== "" && cfg.evolution_key.trim() !== "";
 
   return (

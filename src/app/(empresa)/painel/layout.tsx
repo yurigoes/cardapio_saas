@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Bike, DollarSign,
   Package, Users, Settings, LogOut, ChefHat, Bell, Tag, BarChart3,
-  MapPin, CreditCard, Zap, LayoutGrid,
+  MapPin, CreditCard, Zap, LayoutGrid, Tv2,
 } from "lucide-react";
 
 interface Empresa {
@@ -25,6 +25,7 @@ const ALL_NAV = [
   { href: "/painel/mesas",       label: "Mesas",       icon: MapPin,          modulo: "mesa"       },
   { href: "/painel/delivery",    label: "Delivery",    icon: Bike,            modulo: "delivery"   },
   { href: "/painel/cozinha",     label: "Cozinha",     icon: ChefHat,         modulo: "cozinha_kds"},
+  { href: "/painel/painel-tv",  label: "Painel TV",   icon: Tv2,             modulo: "cozinha_kds"},
   { href: "/painel/financeiro",  label: "Financeiro",  icon: DollarSign,      modulo: "financeiro" },
   { href: "/painel/estoque",     label: "Estoque",     icon: Package,         modulo: "estoque"    },
   { href: "/painel/cupons",      label: "Cupons",      icon: Tag,             modulo: "cupons"     },

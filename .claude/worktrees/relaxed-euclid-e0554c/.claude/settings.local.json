@@ -11,7 +11,11 @@
       "Bash(npx tsc *)",
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(mkdir -p \"A:\\\\Sistemas\\\\cardapio_saas\\\\src\\\\app\\\\api\\\\painel\\\\motoboys\\\\[id]\")",
-      "Bash(mkdir -p \"A:\\\\Sistemas\\\\cardapio_saas\\\\src\\\\app\\\\api\\\\painel\\\\zonas-entrega\\\\[id]\")"
+      "Bash(mkdir -p \"A:\\\\Sistemas\\\\cardapio_saas\\\\src\\\\app\\\\api\\\\painel\\\\zonas-entrega\\\\[id]\")",
+      "Bash(New-Item -ItemType Directory -Force -Path \"A:\\\\Sistemas\\\\cardapio_saas\\\\src\\\\app\\\\api\\\\pub\\\\media\\\\[...path]\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"dir created\")",
+      "Bash(mkdir -p \"A:/Sistemas/cardapio_saas/src/app/api/pub/media/[...path]\" && echo \"dir created\")"
     ]
   }
 }

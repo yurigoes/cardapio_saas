@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ShoppingCart, X, Plus, Minus, ChefHat, CheckCircle, ArrowLeft,
   Search, MapPin, User, Phone, RotateCcw, Clock, Star, Gift,
+  UtensilsCrossed, PackageCheck, Bike,
 } from "lucide-react";
 
 // ─── Translations ─────────────────────────────────────────────────────────────
@@ -47,6 +48,10 @@ const TR = {
     autoatendimento: "AUTOATENDIMENTO",
     cliente_identificado: "Cliente identificado",
     pontos_acumulados: "pontos acumulados",
+    consumo_titulo: "Como você prefere?",
+    consumo_local: "Consumir no local",
+    consumo_retirada: "Retirar no balcão",
+    consumo_delivery: "Delivery",
   },
   en: {
     iniciar: "Tap to place your order",
@@ -84,6 +89,10 @@ const TR = {
     autoatendimento: "SELF-SERVICE",
     cliente_identificado: "Identified customer",
     pontos_acumulados: "points accumulated",
+    consumo_titulo: "How would you like it?",
+    consumo_local: "Dine in",
+    consumo_retirada: "Take away",
+    consumo_delivery: "Delivery",
   },
 } as const;
 
@@ -279,12 +288,8 @@ function StartScreen({
               fontWeight: 900,
               lineHeight: 1.05,
               fontFamily: "Georgia, 'Times New Roman', serif",
-              background: "linear-gradient(135deg, #f5e6c8 0%, #d4a853 50%, #f5e6c8 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-              textShadow: "none",
-              filter: "drop-shadow(0 4px 24px rgba(212,168,83,0.35))",
+              color: "white",
+              textShadow: "0 4px 40px rgba(0,0,0,0.5)",
               maxWidth: "90vw",
             }}
           >
@@ -306,12 +311,12 @@ function StartScreen({
           <button
             onClick={onStart}
             style={{
-              background: "linear-gradient(135deg, #d4a853, #f5e6c8, #d4a853)",
-              boxShadow: "0 0 30px rgba(212,168,83,0.4), 0 8px 32px rgba(0,0,0,0.4)",
+              background: "var(--color-primary, #10b981)",
+              boxShadow: "0 0 40px var(--color-primary-50, rgba(16,185,129,0.5)), 0 8px 32px rgba(0,0,0,0.4)",
             }}
             className="
               group flex items-center gap-3 rounded-full px-10 py-5
-              text-lg font-black uppercase tracking-widest text-slate-900
+              text-lg font-black uppercase tracking-widest text-white
               transition-all duration-200
               hover:scale-105 hover:brightness-110
               active:scale-95
@@ -692,6 +697,65 @@ function RepeatOrderModal({ cliente, ultimoPedido, idioma, produtos, onRepeat, o
   );
 }
 
+// ─── TipoConsumoModal ─────────────────────────────────────────────────────────
+
+type TipoConsumo = "local" | "retirada" | "delivery";
+
+interface TipoConsumoModalProps {
+  idioma:    Idioma;
+  temMesa:   boolean;
+  onSelect:  (tipo: TipoConsumo) => void;
+}
+
+function TipoConsumoModal({ idioma, temMesa, onSelect }: TipoConsumoModalProps) {
+  const opcoes: { tipo: TipoConsumo; label: string; icon: React.ReactNode; desc: string }[] = [
+    {
+      tipo:  "local",
+      label: t(idioma, "consumo_local"),
+      icon:  <UtensilsCrossed className="h-10 w-10" />,
+      desc:  temMesa ? "Na sua mesa" : "No restaurante",
+    },
+    {
+      tipo:  "retirada",
+      label: t(idioma, "consumo_retirada"),
+      icon:  <PackageCheck className="h-10 w-10" />,
+      desc:  "Retire no balcão",
+    },
+    {
+      tipo:  "delivery",
+      label: t(idioma, "consumo_delivery"),
+      icon:  <Bike className="h-10 w-10" />,
+      desc:  "Entrega em casa",
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-slate-950 p-8">
+      <div className="text-center">
+        <h2 className="text-2xl font-black text-white">{t(idioma, "consumo_titulo")}</h2>
+      </div>
+
+      <div className="grid w-full max-w-sm grid-cols-1 gap-4">
+        {opcoes.map((o) => (
+          <button
+            key={o.tipo}
+            onClick={() => onSelect(o.tipo)}
+            className="group flex items-center gap-5 rounded-2xl border border-white/10 bg-slate-900 px-6 py-5 text-left transition hover:border-emerald-500/40 hover:bg-slate-800"
+          >
+            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 transition group-hover:bg-emerald-500/20">
+              {o.icon}
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">{o.label}</p>
+              <p className="text-sm text-slate-400">{o.desc}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── ProductDetail ────────────────────────────────────────────────────────────
 
 interface ProductDetailProps {
@@ -1062,7 +1126,7 @@ function ProductRow({ produto, onOpen }: { produto: Produto; onOpen: (p: Produto
 
 const IDLE_MS = 3 * 60 * 1000;
 
-type Fase = "start" | "identificacao" | "repeat" | "cardapio";
+type Fase = "start" | "identificacao" | "tipoConsumo" | "repeat" | "cardapio";
 
 // Framer Motion variants for page-level transitions
 const pageVariants = {
@@ -1091,6 +1155,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   const [fase, setFase]                 = useState<Fase>("start");
   const [cliente, setCliente]           = useState<ClienteIdentificado | null>(null);
   const [ultimoPedido, setUltimoPedido] = useState<UltimoPedido | null>(null);
+  const [tipoConsumo, setTipoConsumo]   = useState<TipoConsumo>("local");
   const [pedidoFeito, setPedidoFeito]   = useState<{
     numero: number; clienteNome: string; pontosGanhos?: number; totalPontos?: number;
   } | null>(null);
@@ -1128,16 +1193,22 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fase, cartOpen, produtoAberto]);
 
-  // Load cardápio data
+  // Load cardápio data + apply brand colors
   useEffect(() => {
     async function load() {
       try {
         const res  = await fetch(`/api/pub/cardapio/${params.slug}`);
         const data = await res.json();
         if (!data.success) { setNotFound(true); return; }
-        setEmpresa(data.data.empresa);
+        const emp = data.data.empresa as EmpresaInfo;
+        setEmpresa(emp);
         setCategorias(data.data.categorias);
         setProdutos(data.data.produtos);
+        // Apply brand colors as CSS variables
+        const primary   = emp.cor_primaria   || "#10b981";
+        document.documentElement.style.setProperty("--color-primary",    primary);
+        document.documentElement.style.setProperty("--color-primary-15", primary + "26");
+        document.documentElement.style.setProperty("--color-primary-50", primary + "80");
       } catch {
         setNotFound(true);
       } finally {
@@ -1156,17 +1227,34 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   function handleIdentified(c: ClienteIdentificado, up: UltimoPedido | null) {
     setCliente(c);
     setUltimoPedido(up);
-    if (up && up.itens && up.itens.length > 0) {
-      setFase("repeat");
+    // Always ask tipo_consumo first (unless coming from QR mesa)
+    if (mesaId) {
+      setTipoConsumo("local");
+      if (up && up.itens && up.itens.length > 0) setFase("repeat");
+      else setFase("cardapio");
     } else {
-      setFase("cardapio");
+      setFase("tipoConsumo");
     }
   }
 
   function handleSkipIdentificacao() {
     setCliente(null);
     setUltimoPedido(null);
-    setFase("cardapio");
+    if (mesaId) {
+      setTipoConsumo("local");
+      setFase("cardapio");
+    } else {
+      setFase("tipoConsumo");
+    }
+  }
+
+  function handleTipoConsumoSelected(tipo: TipoConsumo) {
+    setTipoConsumo(tipo);
+    if (ultimoPedido && ultimoPedido.itens && ultimoPedido.itens.length > 0) {
+      setFase("repeat");
+    } else {
+      setFase("cardapio");
+    }
   }
 
   function handleRepeatOrder(items: CartItem[]) {
@@ -1179,6 +1267,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     setFase("start");
     setCliente(null);
     setUltimoPedido(null);
+    setTipoConsumo("local");
     setCart([]);
     setCartOpen(false);
     setProdutoAberto(null);
@@ -1238,10 +1327,11 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         cliente_id:       cliente?.id || undefined,
         observacoes:      obs         || undefined,
         mesa_id:          mesaId      || undefined,
+        tipo_consumo:     tipoConsumo,
         itens: cart.map(i => ({
           produto_id:     i.produto.id,
           nome:           i.produto.nome,
-          preco_unitario: i.produto.preco,
+          preco_unitario: Number(i.produto.preco), // coerce string→number (pg NUMERIC)
           quantidade:     i.quantidade,
           observacoes:    i.obs || undefined,
         })),
@@ -1339,6 +1429,24 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
               idioma={idioma}
               onIdentified={handleIdentified}
               onSkip={handleSkipIdentificacao}
+            />
+          </motion.div>
+        )}
+
+        {fase === "tipoConsumo" && (
+          <motion.div
+            key="tipoConsumo"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={pageTransition}
+            style={{ position: "absolute", inset: 0 }}
+          >
+            <TipoConsumoModal
+              idioma={idioma}
+              temMesa={!!mesaId}
+              onSelect={handleTipoConsumoSelected}
             />
           </motion.div>
         )}

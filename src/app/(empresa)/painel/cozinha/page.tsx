@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { ChefHat, Clock, RefreshCw, Volume2, VolumeX } from "lucide-react";
+import {
+  ChefHat, Clock, RefreshCw, Volume2, VolumeX, Bell, ExternalLink,
+} from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +26,7 @@ interface Pedido {
   cliente_nome: string | null;
   mesa_numero:  number | null;
   comanda:      string | null;
+  slug?:        string;
   itens:        PedidoItem[];
 }
 
@@ -71,13 +74,11 @@ const TIPO_LABELS: Record<string, string> = {
   app:      "App",
 };
 
-// Status transitions available in the KDS view
-// API route /api/pedidos/[id]/status accepts: confirmado, preparando, pronto, entregue, cancelado
 const NEXT_STATUS: Record<string, { label: string; status: string; color: string } | null> = {
-  pendente:   { label: "Iniciar",   status: "confirmado", color: "bg-blue-500 hover:bg-blue-400 text-white" },
-  confirmado: { label: "Preparar",  status: "preparando", color: "bg-orange-500 hover:bg-orange-400 text-white" },
-  preparando: { label: "Pronto",    status: "pronto",     color: "bg-emerald-500 hover:bg-emerald-400 text-white" },
-  pronto:     { label: "Entregar",  status: "entregue",   color: "bg-purple-500 hover:bg-purple-400 text-white" },
+  pendente:   { label: "Iniciar",  status: "confirmado", color: "bg-blue-500 hover:bg-blue-400 text-white" },
+  confirmado: { label: "Preparar", status: "preparando", color: "bg-orange-500 hover:bg-orange-400 text-white" },
+  preparando: { label: "Pronto",   status: "pronto",     color: "bg-emerald-500 hover:bg-emerald-400 text-white" },
+  pronto:     { label: "Entregar", status: "entregue",   color: "bg-purple-500 hover:bg-purple-400 text-white" },
   entregue:   null,
   cancelado:  null,
 };
@@ -88,25 +89,37 @@ const COLUMN_CONFIG: Record<string, { label: string; accent: string; border: str
   pendente:   { label: "Pendente",   accent: "text-yellow-400",  border: "border-yellow-400/30"  },
   confirmado: { label: "Confirmado", accent: "text-blue-400",    border: "border-blue-400/30"    },
   preparando: { label: "Em Preparo", accent: "text-orange-400",  border: "border-orange-400/30"  },
-  pronto:     { label: "Prontos",    accent: "text-emerald-400", border: "border-emerald-400/30" },
+  pronto:     { label: "Prontos 🔔", accent: "text-emerald-400", border: "border-emerald-400/30" },
 };
 
-// ─── Timer component (re-renders on its own) ──────────────────────────────────
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+interface ToastState { type: "success" | "error"; msg: string }
+
+function Toast({ toast }: { toast: ToastState }) {
+  return (
+    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border px-5 py-4 shadow-2xl backdrop-blur-sm ${
+      toast.type === "success"
+        ? "border-emerald-500/30 bg-slate-900/95 text-emerald-300"
+        : "border-red-500/30 bg-slate-900/95 text-red-300"
+    }`}>
+      <Bell className="h-4 w-4 flex-shrink-0" />
+      <span className="text-sm font-medium">{toast.msg}</span>
+    </div>
+  );
+}
+
+// ─── Timer component ──────────────────────────────────────────────────────────
 
 function ElapsedTimer({ created_at }: { created_at: string }) {
   const [mins, setMins] = useState(() => elapsedMinutes(created_at));
-
   useEffect(() => {
     const id = setInterval(() => setMins(elapsedMinutes(created_at)), 10_000);
     return () => clearInterval(id);
   }, [created_at]);
-
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-bold tabular-nums ${timerColor(mins)} ${timerBg(mins)}`}
-    >
-      <Clock className="h-3 w-3" />
-      {mins}min
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-bold tabular-nums ${timerColor(mins)} ${timerBg(mins)}`}>
+      <Clock className="h-3 w-3" />{mins}min
     </span>
   );
 }
@@ -114,22 +127,23 @@ function ElapsedTimer({ created_at }: { created_at: string }) {
 // ─── Order Card ───────────────────────────────────────────────────────────────
 
 interface CardProps {
-  pedido:   Pedido;
-  onUpdate: (id: string, status: string) => Promise<void>;
-  updating: string | null;
+  pedido:    Pedido;
+  onUpdate:  (id: string, status: string) => Promise<void>;
+  onChamar:  (pedido: Pedido) => Promise<void>;
+  updating:  string | null;
+  chamando:  string | null;
 }
 
-function PedidoCard({ pedido, onUpdate, updating }: CardProps) {
-  const next     = NEXT_STATUS[pedido.status];
-  const isBusy   = updating === pedido.id;
-  const mins     = elapsedMinutes(pedido.created_at);
+function PedidoCard({ pedido, onUpdate, onChamar, updating, chamando }: CardProps) {
+  const next    = NEXT_STATUS[pedido.status];
+  const isBusy  = updating === pedido.id;
+  const isCalling = chamando === pedido.id;
+  const mins    = elapsedMinutes(pedido.created_at);
 
   return (
-    <div
-      className={`rounded-2xl border bg-slate-900 p-4 flex flex-col gap-3 transition ${
-        mins >= 20 ? "border-red-400/40" : "border-white/5"
-      }`}
-    >
+    <div className={`rounded-2xl border bg-slate-900 p-4 flex flex-col gap-3 transition ${
+      mins >= 20 ? "border-red-400/40" : "border-white/5"
+    }`}>
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -149,7 +163,7 @@ function PedidoCard({ pedido, onUpdate, updating }: CardProps) {
       {/* Itens */}
       <div className="space-y-1.5 border-t border-white/5 pt-3">
         {pedido.itens.length === 0 ? (
-          <p className="text-xs text-slate-500 italic">Sem itens</p>
+          <p className="text-xs text-slate-500 italic">Carregando itens...</p>
         ) : (
           pedido.itens.map((item) => (
             <div key={item.id}>
@@ -165,23 +179,43 @@ function PedidoCard({ pedido, onUpdate, updating }: CardProps) {
         )}
       </div>
 
-      {/* Action */}
-      {next && (
-        <button
-          onClick={() => onUpdate(pedido.id, next.status)}
-          disabled={isBusy}
-          className={`w-full rounded-xl py-2 text-sm font-semibold transition disabled:opacity-50 ${next.color}`}
-        >
-          {isBusy ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              Atualizando...
-            </span>
-          ) : (
-            next.label
-          )}
-        </button>
-      )}
+      {/* Actions */}
+      <div className="flex gap-2">
+        {/* Chamar cliente — só quando pronto */}
+        {pedido.status === "pronto" && (
+          <button
+            onClick={() => onChamar(pedido)}
+            disabled={isCalling}
+            title="Chamar cliente no painel TV"
+            className="flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-400 hover:bg-amber-500/20 transition disabled:opacity-50"
+          >
+            {isCalling ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+            ) : (
+              <Bell className="h-3.5 w-3.5" />
+            )}
+            Chamar
+          </button>
+        )}
+
+        {/* Próximo status */}
+        {next && (
+          <button
+            onClick={() => onUpdate(pedido.id, next.status)}
+            disabled={isBusy}
+            className={`flex-1 rounded-xl py-2 text-sm font-semibold transition disabled:opacity-50 ${next.color}`}
+          >
+            {isBusy ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Atualizando...
+              </span>
+            ) : (
+              next.label
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -189,14 +223,34 @@ function PedidoCard({ pedido, onUpdate, updating }: CardProps) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CozinhaPage() {
-  const [pedidos, setPedidos]   = useState<Pedido[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [updating, setUpdating] = useState<string | null>(null);
-  const [soundOn, setSoundOn]   = useState(true);
+  const [pedidos,   setPedidos]   = useState<Pedido[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [updating,  setUpdating]  = useState<string | null>(null);
+  const [chamando,  setChamando]  = useState<string | null>(null);
+  const [soundOn,   setSoundOn]   = useState(true);
   const [lastCount, setLastCount] = useState(0);
+  const [slug,      setSlug]      = useState<string>("");
+  const [toast,     setToast]     = useState<ToastState | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const knownIdsRef = useRef<Set<string>>(new Set());
+
+  function showToast(type: "success" | "error", msg: string) {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  // Get slug from /api/auth/me
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success) setSlug(data.data?.empresa?.slug || "");
+      })
+      .catch(() => {});
+  }, []);
 
   function getAudioCtx(): AudioContext {
     if (!audioCtxRef.current) {
@@ -207,10 +261,9 @@ export default function CozinhaPage() {
 
   const fetchPedidos = useCallback(async (isPolling = false) => {
     try {
-      const token = getToken();
-      // Fetch pendente, confirmado, preparando, pronto in separate calls
-      // because the API doesn't support multi-status in a single param
+      const token    = getToken();
       const statuses = ["pendente", "confirmado", "preparando", "pronto"];
+
       const results = await Promise.all(
         statuses.map((s) =>
           fetch(`/api/pedidos?status=${s}&limit=50`, {
@@ -221,7 +274,7 @@ export default function CozinhaPage() {
 
       const all: Pedido[] = results.flatMap((r) => (r.success ? (r.data as Pedido[]) : []));
 
-      // Fetch items for each pedido
+      // Fetch items for each pedido (batch)
       const withItems = await Promise.all(
         all.map(async (p) => {
           const res  = await fetch(`/api/pedidos/${p.id}`, {
@@ -232,24 +285,22 @@ export default function CozinhaPage() {
         })
       );
 
-      // Sort by created_at asc (oldest first)
+      // Sort oldest first
       withItems.sort(
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
 
-      // Sound notification: detect new pendente orders
+      // Sound notification
       if (isPolling && soundOn) {
         const newPendentes = withItems.filter(
           (p) => p.status === "pendente" && !knownIdsRef.current.has(p.id)
         );
         if (newPendentes.length > 0) {
-          try { beep(getAudioCtx()); } catch { /* ignore AudioContext errors in SSR/restricted contexts */ }
+          try { beep(getAudioCtx()); } catch { /* ignore */ }
         }
       }
 
-      // Update known ids
       knownIdsRef.current = new Set(withItems.map((p) => p.id));
-
       setPedidos(withItems);
       setLastCount(withItems.length);
     } catch (err) {
@@ -259,12 +310,7 @@ export default function CozinhaPage() {
     }
   }, [soundOn]);
 
-  // Initial load
-  useEffect(() => {
-    fetchPedidos(false);
-  }, [fetchPedidos]);
-
-  // Poll every 8 seconds
+  useEffect(() => { fetchPedidos(false); }, [fetchPedidos]);
   useEffect(() => {
     const id = setInterval(() => fetchPedidos(true), 8_000);
     return () => clearInterval(id);
@@ -276,11 +322,8 @@ export default function CozinhaPage() {
       const token = getToken();
       await fetch(`/api/pedidos/${id}/status`, {
         method:  "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization:  `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ status }),
       });
       await fetchPedidos(false);
     } catch (err) {
@@ -290,8 +333,31 @@ export default function CozinhaPage() {
     }
   }
 
-  const byStatus = (s: string) => pedidos.filter((p) => p.status === s);
+  async function handleChamar(pedido: Pedido) {
+    setChamando(pedido.id);
+    try {
+      const token = getToken();
+      const res   = await fetch(`/api/painel/pedidos/${pedido.id}/chamar`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body:    JSON.stringify({ balcao: "Balcão 1" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("success", `Pedido #${pedido.numero} chamado no painel TV!`);
+        // Play beep
+        try { beep(getAudioCtx()); } catch { /* ignore */ }
+      } else {
+        showToast("error", "Erro ao chamar cliente");
+      }
+    } catch {
+      showToast("error", "Erro de conexão");
+    } finally {
+      setChamando(null);
+    }
+  }
 
+  const byStatus = (s: string) => pedidos.filter((p) => p.status === s);
   const counts = {
     pendente:   byStatus("pendente").length,
     confirmado: byStatus("confirmado").length,
@@ -301,6 +367,8 @@ export default function CozinhaPage() {
 
   return (
     <div className="flex flex-col h-full gap-4">
+      {toast && <Toast toast={toast} />}
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -317,7 +385,19 @@ export default function CozinhaPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Sound toggle */}
+          {/* Link para painel TV */}
+          {slug && (
+            <a
+              href={`/painel/${slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-500/20 transition"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Painel TV
+            </a>
+          )}
+
           <button
             onClick={() => setSoundOn(!soundOn)}
             title={soundOn ? "Desligar som" : "Ligar som"}
@@ -331,7 +411,6 @@ export default function CozinhaPage() {
             Som
           </button>
 
-          {/* Manual refresh */}
           <button
             onClick={() => fetchPedidos(false)}
             disabled={loading}
@@ -368,7 +447,6 @@ export default function CozinhaPage() {
             const colPeds = byStatus(s);
             return (
               <div key={s} className="flex flex-col gap-3">
-                {/* Column header */}
                 <div className={`flex items-center justify-between rounded-xl border px-3 py-2 ${cfg.border} bg-slate-900/60`}>
                   <span className={`text-xs font-bold uppercase tracking-wider ${cfg.accent}`}>
                     {cfg.label}
@@ -378,7 +456,6 @@ export default function CozinhaPage() {
                   </span>
                 </div>
 
-                {/* Cards */}
                 <div className="flex flex-col gap-3">
                   {colPeds.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-slate-600 text-xs">
@@ -390,7 +467,9 @@ export default function CozinhaPage() {
                         key={p.id}
                         pedido={p}
                         onUpdate={handleUpdate}
+                        onChamar={handleChamar}
                         updating={updating}
+                        chamando={chamando}
                       />
                     ))
                   )}
@@ -401,9 +480,11 @@ export default function CozinhaPage() {
         </div>
       )}
 
-      {/* Footer: last refresh indicator */}
       <p className="text-center text-xs text-slate-600">
-        Atualização automática a cada 8 segundos · {lastCount} pedido{lastCount !== 1 ? "s" : ""} ativo{lastCount !== 1 ? "s" : ""}
+        Atualização automática a cada 8s · {lastCount} pedido{lastCount !== 1 ? "s" : ""} ativo{lastCount !== 1 ? "s" : ""}
+        {slug && (
+          <> · <a href={`/painel/${slug}`} target="_blank" className="underline hover:text-slate-400">Abrir painel TV</a></>
+        )}
       </p>
     </div>
   );
