@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   MapPin, Plus, Users, Clock, CheckCircle, X, RefreshCw, Eye, QrCode, Copy, Check,
+  XCircle, ArrowLeftRight, Trash2, AlertCircle, Loader2,
 } from "lucide-react";
 
 interface Mesa {
@@ -143,7 +144,16 @@ function ModalCriarMesa({ onClose, onSaved }: ModalCriarMesaProps) {
   );
 }
 
-function MesaCard({ mesa, onVerPedido, onQrCode }: { mesa: Mesa; onVerPedido: (id: string) => void; onQrCode: (mesa: Mesa) => void }) {
+function MesaCard({
+  mesa, onVerPedido, onQrCode, onFechar, onTransferir, onExcluir,
+}: {
+  mesa: Mesa;
+  onVerPedido:  (id: string) => void;
+  onQrCode:     (mesa: Mesa) => void;
+  onFechar:     (mesa: Mesa) => void;
+  onTransferir: (mesa: Mesa) => void;
+  onExcluir:    (mesa: Mesa) => void;
+}) {
   const cfg = STATUS_CONFIG[mesa.status] ?? STATUS_CONFIG.livre;
 
   return (
@@ -198,6 +208,24 @@ function MesaCard({ mesa, onVerPedido, onQrCode }: { mesa: Mesa; onVerPedido: (i
               </button>
             </div>
           </div>
+
+          {/* Ações da mesa ocupada */}
+          <div className="mt-2.5 flex gap-1.5 border-t border-white/5 pt-2.5">
+            <button
+              onClick={() => onFechar(mesa)}
+              className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-red-500/15 px-2 py-1.5 text-[11px] font-bold text-red-300 hover:bg-red-500/25 transition"
+              title="Fechar mesa (libera para próximo cliente)"
+            >
+              <XCircle className="h-3 w-3" /> Fechar
+            </button>
+            <button
+              onClick={() => onTransferir(mesa)}
+              className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-[11px] font-bold text-slate-300 hover:bg-white/5 transition"
+              title="Transferir pedido para outra mesa"
+            >
+              <ArrowLeftRight className="h-3 w-3" /> Mover
+            </button>
+          </div>
         </div>
       )}
 
@@ -208,14 +236,25 @@ function MesaCard({ mesa, onVerPedido, onQrCode }: { mesa: Mesa; onVerPedido: (i
         </div>
       )}
 
-      {/* botão QR code */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onQrCode(mesa); }}
-        className="absolute bottom-3 right-3 flex items-center justify-center h-7 w-7 rounded-lg bg-white/5 border border-white/10 text-slate-500 hover:text-white hover:bg-white/10 transition"
-        title="Ver QR Code"
-      >
-        <QrCode className="h-3.5 w-3.5" />
-      </button>
+      {/* Ações secundárias (canto inferior direito) */}
+      <div className="absolute bottom-3 right-3 flex items-center gap-1">
+        {mesa.status === "livre" && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onExcluir(mesa); }}
+            className="flex items-center justify-center h-7 w-7 rounded-lg bg-white/5 border border-white/10 text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition"
+            title="Excluir mesa"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onQrCode(mesa); }}
+          className="flex items-center justify-center h-7 w-7 rounded-lg bg-white/5 border border-white/10 text-slate-500 hover:text-white hover:bg-white/10 transition"
+          title="Ver QR Code"
+        >
+          <QrCode className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -299,6 +338,19 @@ export default function MesasPage() {
   const [qrMesa, setQrMesa]     = useState<Mesa | null>(null);
   const [empresaSlug, setSlug]  = useState("");
 
+  // Modal transferir
+  const [transferOrigem, setTransferOrigem] = useState<Mesa | null>(null);
+  const [transferDestino, setTransferDestino] = useState<string>("");
+  const [transferLoading, setTransferLoading] = useState(false);
+
+  // Toast simples
+  const [toast, setToast] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   const fetchMesas = useCallback(async () => {
     setLoading(true);
     try {
@@ -341,6 +393,71 @@ export default function MesasPage() {
       </div>
     );
   }
+
+  // ── Ações ────────────────────────────────────────────────────────────────
+
+  async function handleFechar(mesa: Mesa) {
+    if (!confirm(`Fechar mesa ${mesa.numero}? O pedido será marcado como entregue e a mesa liberada.`)) return;
+    const token = localStorage.getItem("access_token");
+    const res = await fetch(`/api/mesas/${mesa.id}/fechar`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (data.success) {
+      setToast({ type: "ok", msg: `Mesa ${mesa.numero} fechada` });
+      fetchMesas();
+    } else {
+      setToast({ type: "err", msg: data.error || "Erro ao fechar mesa" });
+    }
+  }
+
+  function handleAbrirTransferir(mesa: Mesa) {
+    setTransferOrigem(mesa);
+    setTransferDestino("");
+  }
+
+  async function handleTransferir() {
+    if (!transferOrigem || !transferDestino) return;
+    setTransferLoading(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`/api/mesas/${transferOrigem.id}/transferir`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ mesa_destino_id: transferDestino }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToast({ type: "ok", msg: `Pedido transferido para mesa ${data.data.para.numero}` });
+        setTransferOrigem(null);
+        fetchMesas();
+      } else {
+        setToast({ type: "err", msg: data.error || "Erro ao transferir" });
+      }
+    } finally {
+      setTransferLoading(false);
+    }
+  }
+
+  async function handleExcluir(mesa: Mesa) {
+    if (!confirm(`Excluir mesa ${mesa.numero}? Esta ação não pode ser desfeita.`)) return;
+    const token = localStorage.getItem("access_token");
+    const res = await fetch(`/api/mesas/${mesa.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (data.success) {
+      setToast({ type: "ok", msg: "Mesa excluída" });
+      fetchMesas();
+    } else {
+      setToast({ type: "err", msg: data.error || "Erro ao excluir" });
+    }
+  }
+
+  // Mesas livres para destino da transferência
+  const mesasLivres = mesas.filter((m) => m.status === "livre" && m.id !== transferOrigem?.id);
 
   return (
     <div className="space-y-6">
@@ -427,6 +544,9 @@ export default function MesasPage() {
               mesa={mesa}
               onVerPedido={(id) => setPedidoDetalhe(id)}
               onQrCode={(m) => setQrMesa(m)}
+              onFechar={handleFechar}
+              onTransferir={handleAbrirTransferir}
+              onExcluir={handleExcluir}
             />
           ))}
         </div>
@@ -454,6 +574,80 @@ export default function MesasPage() {
             >
               Fechar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: transferir mesa */}
+      {transferOrigem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setTransferOrigem(null)} />
+          <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6">
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-white">Transferir mesa {transferOrigem.numero}</h3>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Pedido #{transferOrigem.pedido_numero} será movido para a mesa selecionada
+                </p>
+              </div>
+              <button onClick={() => setTransferOrigem(null)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">Mesa de destino</label>
+                {mesasLivres.length === 0 ? (
+                  <p className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-300">
+                    Não há mesas livres disponíveis
+                  </p>
+                ) : (
+                  <select
+                    value={transferDestino}
+                    onChange={(e) => setTransferDestino(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white focus:border-brand/50 focus:outline-none"
+                  >
+                    <option value="">Selecione...</option>
+                    {mesasLivres.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        Mesa {m.numero}{m.nome ? ` — ${m.nome}` : ""}{m.setor ? ` (${m.setor})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTransferOrigem(null)}
+                  className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleTransferir}
+                  disabled={transferLoading || !transferDestino}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-brand py-2.5 text-sm font-bold text-white hover:brightness-110 disabled:opacity-50 transition"
+                >
+                  {transferLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowLeftRight className="h-4 w-4" />}
+                  Transferir
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2">
+          <div className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm shadow-2xl backdrop-blur ${
+            toast.type === "ok"
+              ? "border-brand/30 bg-brand/15 text-brand"
+              : "border-red-500/30 bg-red-500/15 text-red-300"
+          }`}>
+            {toast.type === "ok" ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            {toast.msg}
           </div>
         </div>
       )}
