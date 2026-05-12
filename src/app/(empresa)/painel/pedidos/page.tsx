@@ -143,6 +143,29 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
     }
   }
 
+  async function handleReabrir() {
+    const motivo = window.prompt(
+      "Por que está reabrindo este pedido cancelado?\n(motivo obrigatório, mínimo 3 caracteres)"
+    );
+    if (!motivo || motivo.trim().length < 3) return;
+    setUpdating(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`/api/pedidos/${pedidoId}/reabrir`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ motivo: motivo.trim() }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.error || "Erro ao reabrir");
+        return;
+      }
+      onUpdate();
+      onClose();
+    } finally { setUpdating(false); }
+  }
+
   if (!pedido) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -334,6 +357,20 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Reabrir pedido cancelado */}
+        {pedido.status === "cancelado" && (
+          <div className="flex gap-2 border-t border-white/5 p-4">
+            <button
+              onClick={handleReabrir}
+              disabled={updating}
+              className="flex-1 rounded-xl border border-amber-400/30 bg-amber-500/10 py-2.5 text-sm font-bold text-amber-300 hover:bg-amber-500/20 transition disabled:opacity-50"
+              title="Reverter cancelamento (apenas admin/gerente, até 24h após cancelamento)"
+            >
+              ↻ Reabrir pedido
+            </button>
           </div>
         )}
       </div>
