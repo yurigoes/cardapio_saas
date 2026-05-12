@@ -98,21 +98,38 @@ export default function PagamentosPage() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  async function sincronizar(pagId: string) {
+  async function sincronizar(pagId: string, force = false) {
     setSyncing(pagId);
     try {
-      const res = await fetch(`/api/painel/pagamentos/${pagId}/sincronizar`, {
-        method: "POST",
-        headers: authHeader(),
-      });
+      const url = force
+        ? `/api/painel/pagamentos/${pagId}/sincronizar?force=1`
+        : `/api/painel/pagamentos/${pagId}/sincronizar`;
+      const res = await fetch(url, { method: "POST", headers: authHeader() });
       const data = await res.json();
       if (data.success) {
+        const ef = data.data.efeitos ?? {};
+        const acoes: string[] = [];
+        if (ef.pedido_confirmado) acoes.push("pedido confirmado");
+        if (ef.venda_registrada)  acoes.push("caixa registrado");
+        if (ef.push_enviado)      acoes.push("push enviado");
+
         if (data.data.mudou) {
-          setToast({ type: "ok", msg: `Status atualizado: ${data.data.status_anterior} → ${data.data.status_atual}` });
-          fetchPagamentos(page);
+          setToast({
+            type: "ok",
+            msg: `${data.data.status_anterior} → ${data.data.status_atual}` +
+                 (acoes.length ? ` · ${acoes.join(", ")}` : ""),
+          });
+        } else if (force) {
+          setToast({
+            type: "ok",
+            msg: acoes.length
+              ? `Reprocessado: ${acoes.join(", ")}`
+              : `Status confirmado: ${data.data.status_atual} (sem mudança)`,
+          });
         } else {
           setToast({ type: "ok", msg: `Status confirmado: ${data.data.status_atual}` });
         }
+        fetchPagamentos(page);
       } else {
         setToast({ type: "err", msg: data.error || "Erro ao sincronizar" });
       }
@@ -268,14 +285,28 @@ export default function PagamentosPage() {
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-bold text-white">{fmtBRL(p.valor)}</p>
                   </div>
-                  <button
-                    onClick={() => sincronizar(p.id)}
-                    disabled={isSyncing || ["aprovado", "estornado", "cancelado"].includes(p.status)}
-                    title="Consultar status no gateway"
-                    className="flex items-center justify-center h-7 w-7 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition disabled:opacity-30"
-                  >
-                    {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
-                  </button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => sincronizar(p.id)}
+                      disabled={isSyncing || ["aprovado", "estornado", "cancelado"].includes(p.status)}
+                      title="Consultar status no gateway"
+                      className="flex items-center justify-center h-7 w-7 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition disabled:opacity-30"
+                    >
+                      {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
+                    </button>
+                    {/* Reprocessar (force) — só aparece para aprovados,
+                        para casos de webhook chegou mas processamento interno falhou */}
+                    {p.status === "aprovado" && (
+                      <button
+                        onClick={() => sincronizar(p.id, true)}
+                        disabled={isSyncing}
+                        title="Reprocessar: força caixa + push + audit (idempotente)"
+                        className="flex items-center justify-center h-7 px-2 rounded-lg bg-amber-500/10 border border-amber-400/30 text-amber-300 hover:bg-amber-500/20 transition disabled:opacity-30 text-[10px] font-bold"
+                      >
+                        ↻ FORÇAR
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
