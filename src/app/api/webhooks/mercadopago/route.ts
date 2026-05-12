@@ -14,6 +14,7 @@ import { MercadoPagoGateway } from "@/lib/gateways/mercadopago";
 import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
+import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 
 const MP_API = "https://api.mercadopago.com";
 
@@ -159,6 +160,13 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         console.error("[MP/webhook] CaixaIntegration:", e);
       }
+      // Push: pagamento confirmado é momento crítico
+      enviarPushParaUsuariosDaEmpresa(gateways.empresa_id, {
+        title: `💰 Pagamento confirmado`,
+        body:  `R$ ${payment.transaction_amount.toFixed(2).replace(".", ",")} via Mercado Pago`,
+        url:   `/painel/pedidos`,
+        tag:   "pagamento-confirmado",
+      }).catch(e => console.warn("[MP/webhook] Push:", e));
     }
 
     console.info(`[MP/webhook] Pedido ${pedidoId} → ${novoStatus} (MP status: ${payment.status})`);

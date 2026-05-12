@@ -20,6 +20,7 @@ import { StoneGateway } from "@/lib/gateways/stone";
 import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
+import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 
 interface StoneWebhookPayload {
   event:     string;                          // ex: "pix.payment_link.paid"
@@ -159,6 +160,12 @@ export async function POST(req: NextRequest) {
             Number(pedidoData.total),
             pedidoData.forma_pagamento ?? "pix"
           );
+          enviarPushParaUsuariosDaEmpresa(gateway.empresa_id, {
+            title: `💰 Pagamento confirmado`,
+            body:  `R$ ${Number(pedidoData.total).toFixed(2).replace(".", ",")} via Stone`,
+            url:   `/painel/pedidos`,
+            tag:   "pagamento-confirmado",
+          }).catch(e => console.warn("[Stone/webhook] Push:", e));
         }
       } catch (e) {
         console.error("[Stone/webhook] CaixaIntegration:", e);

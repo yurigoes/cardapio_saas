@@ -19,6 +19,7 @@ import { PagarmeGateway } from "@/lib/gateways/pagarme";
 import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
+import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 
 interface PmWebhookPayload {
   id:    string;
@@ -152,6 +153,12 @@ export async function POST(req: NextRequest) {
             Number(pedidoData.total),
             pedidoData.forma_pagamento ?? "pix"
           );
+          enviarPushParaUsuariosDaEmpresa(gateway.empresa_id, {
+            title: `💰 Pagamento confirmado`,
+            body:  `R$ ${Number(pedidoData.total).toFixed(2).replace(".", ",")} via Pagar.me`,
+            url:   `/painel/pedidos`,
+            tag:   "pagamento-confirmado",
+          }).catch(e => console.warn("[Pagarme/webhook] Push:", e));
         }
       } catch (e) {
         console.error("[Pagarme/webhook] CaixaIntegration:", e);

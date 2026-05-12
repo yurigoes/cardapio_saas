@@ -17,6 +17,7 @@ import { AsaasGateway } from "@/lib/gateways/asaas";
 import type { GatewayConfig } from "@/lib/gateways/types";
 import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
+import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 
 interface AsaasWebhookPayload {
   event:  string;
@@ -147,6 +148,12 @@ export async function POST(req: NextRequest) {
             Number(pedidoData.total),
             pedidoData.forma_pagamento ?? "pix"
           );
+          enviarPushParaUsuariosDaEmpresa(gateway.empresa_id, {
+            title: `💰 Pagamento confirmado`,
+            body:  `R$ ${Number(pedidoData.total).toFixed(2).replace(".", ",")} via Asaas`,
+            url:   `/painel/pedidos`,
+            tag:   "pagamento-confirmado",
+          }).catch(e => console.warn("[Asaas/webhook] Push:", e));
         }
       } catch (e) {
         console.error("[Asaas/webhook] CaixaIntegration:", e);

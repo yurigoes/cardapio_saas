@@ -6,6 +6,7 @@ import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { auditLog } from "@/lib/security/audit";
 import { registrarVendaPedido, registrarEstornoPedido } from "@/lib/caixa/movimento";
+import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 
 const statusSchema = z.object({
   status: z.enum([
@@ -130,6 +131,31 @@ export async function PATCH(
     } catch (e) {
       // Falha de caixa não deve bloquear a transição de status
       console.error("[Pedidos/Status/CaixaIntegration]", e);
+    }
+
+    // ── Web Push em transições relevantes ────────────────────────────────
+    // Notifica os admins/operadores em estados acionáveis:
+    //   pronto    → pedido pode ser entregue/chamado
+    //   cancelado → atenção, pode ser estorno necessário
+    // (confirmado e preparando não notificam para evitar spam — KDS já vê)
+    type StatusKey = "pronto" | "cancelado";
+    const PUSH_CONFIGS: Record<StatusKey, { title: string; emoji: string }> = {
+      pronto:    { title: "Pedido pronto",    emoji: "✅" },
+      cancelado: { title: "Pedido cancelado", emoji: "⚠️" },
+    };
+    const cfg = PUSH_CONFIGS[body.status as StatusKey];
+    if (cfg) {
+      // pega numero do pedido para a mensagem
+      const p = await queryOne<{ numero: number; cliente_nome: string | null }>(
+        `SELECT numero, cliente_nome FROM pedidos WHERE id = $1`,
+        [params.id]
+      ).catch(() => null);
+      enviarPushParaUsuariosDaEmpresa(empresaId, {
+        title: `${cfg.emoji} ${cfg.title} #${p?.numero ?? ""}`,
+        body:  p?.cliente_nome ? `Cliente: ${p.cliente_nome}` : `Pedido ${body.status}`,
+        url:   `/painel/pedidos`,
+        tag:   `pedido-${body.status}`,
+      }).catch(e => console.warn("[Push] erro:", e));
     }
 
     return ok({ id: params.id, status: body.status });
