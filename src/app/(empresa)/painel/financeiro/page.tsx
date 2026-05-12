@@ -13,7 +13,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   DollarSign, TrendingUp, ShoppingBag, Users, Receipt, RefreshCw,
   Banknote, QrCode, CreditCard, Wallet, Package, Trophy, Clock,
-  Calendar, ChevronDown, RotateCcw, AlertCircle,
+  RotateCcw, AlertCircle, Download,
 } from "lucide-react";
 
 interface RelatorioFinanceiro {
@@ -88,9 +88,40 @@ export default function FinanceiroPage() {
   const [from, setFrom] = useState<string>(isoToday());
   const [to,   setTo]   = useState<string>(isoToday());
   const [customOpen, setCustomOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const [data, setData]       = useState<RelatorioFinanceiro | null>(null);
   const [loading, setLoading] = useState(true);
+
+  /**
+   * Faz download do CSV. Usa fetch com Authorization header e cria um blob URL
+   * para download. Não pode usar <a href=...> direto porque a API exige JWT.
+   */
+  async function exportarCSV(tipo: "pedidos" | "caixa") {
+    setExportOpen(false);
+    try {
+      const sp = new URLSearchParams({ from, to, tipo });
+      const res = await fetch(`/api/painel/relatorio/financeiro/csv?${sp}`, {
+        headers: authHeader(),
+      });
+      if (!res.ok) {
+        alert("Erro ao gerar CSV");
+        return;
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `${tipo === "pedidos" ? "pedidos" : "movimentos_caixa"}_${from}_a_${to}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("[Export CSV]", e);
+      alert("Erro ao baixar CSV");
+    }
+  }
 
   // Aplica preset de período
   function aplicarPreset(p: Periodo) {
@@ -153,14 +184,54 @@ export default function FinanceiroPage() {
             {data.kpis.total_pedidos > 0 && ` · ${data.kpis.total_pedidos} pedidos`}
           </p>
         </div>
-        <button
-          onClick={fetchRelatorio}
-          disabled={loading}
-          className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/5 transition disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchRelatorio}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/5 transition disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            Atualizar
+          </button>
+
+          {/* Dropdown de exportação */}
+          <div className="relative">
+            <button
+              onClick={() => setExportOpen(o => !o)}
+              className="flex items-center gap-2 rounded-xl bg-brand px-3 py-2 text-xs font-bold text-white hover:brightness-110 transition"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exportar CSV
+            </button>
+            {exportOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setExportOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-40 w-56 rounded-xl border border-white/10 bg-slate-900 shadow-2xl overflow-hidden">
+                  <button
+                    onClick={() => exportarCSV("pedidos")}
+                    className="flex w-full items-start gap-3 px-3 py-3 text-left hover:bg-white/5 transition"
+                  >
+                    <Receipt className="h-4 w-4 mt-0.5 text-brand" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">Pedidos</p>
+                      <p className="text-[11px] text-slate-400">1 linha por pedido — ideal para conciliação</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => exportarCSV("caixa")}
+                    className="flex w-full items-start gap-3 px-3 py-3 text-left hover:bg-white/5 transition border-t border-white/5"
+                  >
+                    <Wallet className="h-4 w-4 mt-0.5 text-brand" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">Movimentos de Caixa</p>
+                      <p className="text-[11px] text-slate-400">Vendas, sangrias, reforços, estornos</p>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Filtros de período */}
