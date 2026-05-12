@@ -203,6 +203,17 @@ interface CartItem {
   uid?:       string;                // chave única para diferenciar mesmas produto+variações
 }
 
+interface EnderecoCliente {
+  cep?:         string;
+  rua?:         string;
+  numero?:      string;
+  complemento?: string;
+  bairro?:      string;
+  cidade?:      string;
+  uf?:          string;
+  referencia?:  string;
+}
+
 interface ClienteIdentificado {
   id:             string;
   nome:           string | null;
@@ -210,6 +221,7 @@ interface ClienteIdentificado {
   cpf:            string | null;
   pontos:         number;
   saldo_cashback?: number;
+  endereco?:      EnderecoCliente | null;
 }
 
 interface UltimoPedidoItem {
@@ -823,6 +835,183 @@ function TipoConsumoModal({ idioma, temMesa, onSelect }: TipoConsumoModalProps) 
             </div>
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── EnderecoModal ────────────────────────────────────────────────────────────
+
+interface EnderecoModalProps {
+  enderecoSalvo: EnderecoCliente | null;
+  valorAtual:    EnderecoCliente | null;
+  onConfirm:     (e: EnderecoCliente) => void;
+  onBack:        () => void;
+}
+
+function EnderecoModal({ enderecoSalvo, valorAtual, onConfirm, onBack }: EnderecoModalProps) {
+  // Se cliente tem endereço salvo e ainda não escolheu, mostra escolha
+  const [modo, setModo] = useState<"escolha" | "form">(
+    enderecoSalvo && !valorAtual ? "escolha" : "form"
+  );
+  const [form, setForm] = useState<EnderecoCliente>(
+    valorAtual ?? enderecoSalvo ?? {}
+  );
+
+  const set = (k: keyof EnderecoCliente, v: string) =>
+    setForm(prev => ({ ...prev, [k]: v }));
+
+  function podeConfirmar(): boolean {
+    return !!(form.rua && form.numero && form.bairro);
+  }
+
+  // ── Tela de escolha (cliente retornante) ─────────────────────────────────
+  if (modo === "escolha" && enderecoSalvo) {
+    const linha1 = `${enderecoSalvo.rua ?? ""}, ${enderecoSalvo.numero ?? ""}`;
+    const linha2 = [enderecoSalvo.bairro, enderecoSalvo.cidade, enderecoSalvo.uf]
+      .filter(Boolean).join(" · ");
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-slate-950 p-8">
+        <div className="text-center">
+          <h2 className="text-2xl font-black text-white">Para qual endereço?</h2>
+          <p className="mt-1 text-sm text-slate-400">Você tem um endereço salvo</p>
+        </div>
+
+        <button
+          onClick={() => onConfirm(enderecoSalvo)}
+          className="group flex w-full max-w-sm items-start gap-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-left transition hover:bg-emerald-500/15"
+        >
+          <div className="mt-1 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+            ✓
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">Mesmo endereço</p>
+            <p className="mt-1 text-base font-bold text-white">{linha1}</p>
+            {enderecoSalvo.complemento && (
+              <p className="text-sm text-slate-400">{enderecoSalvo.complemento}</p>
+            )}
+            <p className="text-sm text-slate-400">{linha2}</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => { setForm({}); setModo("form"); }}
+          className="flex w-full max-w-sm items-center justify-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-6 py-4 text-sm font-semibold text-slate-300 transition hover:border-white/20 hover:bg-slate-800"
+        >
+          + Endereço diferente
+        </button>
+
+        <button onClick={onBack} className="mt-2 text-sm text-slate-500 hover:text-white">
+          ← Voltar
+        </button>
+      </div>
+    );
+  }
+
+  // ── Formulário de endereço ───────────────────────────────────────────────
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
+      <div className="flex items-center gap-3 border-b border-white/10 p-4">
+        <button onClick={onBack} className="text-slate-400 hover:text-white p-2">
+          ←
+        </button>
+        <div>
+          <h2 className="text-xl font-black text-white">Endereço de entrega</h2>
+          <p className="text-xs text-slate-500">Para onde devemos entregar?</p>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto p-6">
+        <div className="mx-auto max-w-md space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">CEP</label>
+              <input
+                value={form.cep ?? ""}
+                onChange={e => set("cep", e.target.value)}
+                placeholder="00000-000"
+                inputMode="numeric"
+                className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-base text-white focus:border-emerald-500/50 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">UF</label>
+              <input
+                value={form.uf ?? ""}
+                onChange={e => set("uf", e.target.value.toUpperCase().slice(0, 2))}
+                placeholder="SP"
+                maxLength={2}
+                className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-base text-white uppercase focus:border-emerald-500/50 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">Rua *</label>
+            <input
+              value={form.rua ?? ""}
+              onChange={e => set("rua", e.target.value)}
+              placeholder="Nome da rua"
+              className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-base text-white focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Número *</label>
+              <input
+                value={form.numero ?? ""}
+                onChange={e => set("numero", e.target.value)}
+                placeholder="123"
+                className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-base text-white focus:border-emerald-500/50 focus:outline-none"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Complemento</label>
+              <input
+                value={form.complemento ?? ""}
+                onChange={e => set("complemento", e.target.value)}
+                placeholder="Apto 12, fundos…"
+                className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-base text-white focus:border-emerald-500/50 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">Bairro *</label>
+            <input
+              value={form.bairro ?? ""}
+              onChange={e => set("bairro", e.target.value)}
+              placeholder="Bairro"
+              className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-base text-white focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">Cidade</label>
+            <input
+              value={form.cidade ?? ""}
+              onChange={e => set("cidade", e.target.value)}
+              placeholder="Cidade"
+              className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-base text-white focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">Ponto de referência</label>
+            <input
+              value={form.referencia ?? ""}
+              onChange={e => set("referencia", e.target.value)}
+              placeholder="Próximo ao mercado X"
+              className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-3 text-base text-white focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-white/10 p-4 bg-slate-950/95">
+        <button
+          onClick={() => podeConfirmar() && onConfirm(form)}
+          disabled={!podeConfirmar()}
+          className="w-full rounded-xl bg-emerald-500 px-6 py-4 text-base font-bold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          Confirmar endereço
+        </button>
       </div>
     </div>
   );
@@ -1797,7 +1986,7 @@ function ProductRow({ produto, onOpen }: { produto: Produto; onOpen: (p: Produto
 
 const IDLE_MS = 3 * 60 * 1000;
 
-type Fase = "start" | "identificacao" | "tipoConsumo" | "repeat" | "cardapio";
+type Fase = "start" | "identificacao" | "tipoConsumo" | "endereco" | "repeat" | "cardapio";
 
 // Framer Motion variants for page-level transitions
 const pageVariants = {
@@ -1827,6 +2016,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   const [cliente, setCliente]           = useState<ClienteIdentificado | null>(null);
   const [ultimoPedido, setUltimoPedido] = useState<UltimoPedido | null>(null);
   const [tipoConsumo, setTipoConsumo]   = useState<TipoConsumo>("local");
+  const [endereco, setEndereco]         = useState<EnderecoCliente | null>(null);
   const [pedidoFeito, setPedidoFeito]   = useState<{
     numero: number; clienteNome: string; pontosGanhos?: number; totalPontos?: number;
   } | null>(null);
@@ -1971,6 +2161,22 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
   function handleTipoConsumoSelected(tipo: TipoConsumo) {
     setTipoConsumo(tipo);
+    // Delivery: precisa de endereço antes de seguir
+    if (tipo === "delivery") {
+      // Pré-popula com último endereço do cliente, se houver
+      if (cliente?.endereco) setEndereco(cliente.endereco);
+      setFase("endereco");
+      return;
+    }
+    if (ultimoPedido && ultimoPedido.itens && ultimoPedido.itens.length > 0) {
+      setFase("repeat");
+    } else {
+      setFase("cardapio");
+    }
+  }
+
+  function handleEnderecoConfirmado(e: EnderecoCliente) {
+    setEndereco(e);
     if (ultimoPedido && ultimoPedido.itens && ultimoPedido.itens.length > 0) {
       setFase("repeat");
     } else {
@@ -1989,6 +2195,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     setCliente(null);
     setUltimoPedido(null);
     setTipoConsumo("local");
+    setEndereco(null);
     setCart([]);
     setCartOpen(false);
     setProdutoAberto(null);
@@ -2087,6 +2294,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         cliente_nome:     clienteNome || cliente?.nome || undefined,
         cliente_telefone: clienteTel  || cliente?.telefone || undefined,
         cliente_id:       cliente?.id || undefined,
+        cliente_endereco: tipoConsumo === "delivery" ? (endereco ?? undefined) : undefined,
         observacoes:      obs         || undefined,
         mesa_id:          mesaId      || undefined,
         tipo_consumo:     tipoConsumo,
@@ -2302,6 +2510,25 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
               idioma={idioma}
               temMesa={!!mesaId}
               onSelect={handleTipoConsumoSelected}
+            />
+          </motion.div>
+        )}
+
+        {fase === "endereco" && (
+          <motion.div
+            key="endereco"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={pageTransition}
+            style={{ position: "absolute", inset: 0 }}
+          >
+            <EnderecoModal
+              enderecoSalvo={cliente?.endereco ?? null}
+              valorAtual={endereco}
+              onConfirm={handleEnderecoConfirmado}
+              onBack={() => setFase("tipoConsumo")}
             />
           </motion.div>
         )}

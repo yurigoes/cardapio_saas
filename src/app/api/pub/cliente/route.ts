@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
 
     const cliente = await queryOne<Record<string, unknown>>(
       `SELECT id, nome, telefone, cpf, pontos, total_pedidos, total_gasto,
-              COALESCE(saldo_cashback, 0) AS saldo_cashback
+              COALESCE(saldo_cashback, 0) AS saldo_cashback,
+              endereco
        FROM clientes WHERE empresa_id = $1 AND ${tipo} = $2`,
       [empresa.id, valor]
     );

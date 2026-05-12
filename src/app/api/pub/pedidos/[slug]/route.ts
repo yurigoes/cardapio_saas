@@ -73,6 +73,16 @@ const pedidoPublicoSchema = z.object({
   cliente_nome:     z.string().min(1).max(255).trim().optional().transform((v) => v || undefined),
   cliente_telefone: telefoneLenient,
   cliente_id:       uuidOpt,
+  cliente_endereco: z.object({
+    cep:         z.string().max(10).optional(),
+    rua:         z.string().max(200).optional(),
+    numero:      z.string().max(20).optional(),
+    complemento: z.string().max(100).optional(),
+    bairro:      z.string().max(100).optional(),
+    cidade:      z.string().max(100).optional(),
+    uf:          z.string().max(2).optional(),
+    referencia:  z.string().max(200).optional(),
+  }).partial().optional(),
 
   /* Pedido */
   observacoes:      z.string().max(1000).trim().optional().transform((v) => v || undefined),
@@ -286,9 +296,10 @@ export async function POST(
         .query<{ id: string; numero: number }>(
           `INSERT INTO pedidos
              (empresa_id, tipo, status, mesa_id, cliente_id, cliente_nome, cliente_telefone,
+              cliente_endereco,
               subtotal, desconto, taxa_entrega, total, pontos_ganhos, observacoes,
               forma_pagamento, tipo_consumo, cupom_id)
-           VALUES ($1,$2,'pendente',$3,$4,$5,$6,$7,$8,0,$9,$10,$11,$12,$13,$14)
+           VALUES ($1,$2,'pendente',$3,$4,$5,$6,$7::jsonb,$8,$9,0,$10,$11,$12,$13,$14,$15)
            RETURNING id, numero`,
           [
             empresa.id,
@@ -297,6 +308,7 @@ export async function POST(
             body.cliente_id       ?? null,
             body.cliente_nome     ?? null,
             body.cliente_telefone ?? null,
+            body.cliente_endereco ? JSON.stringify(body.cliente_endereco) : null,
             subtotal,
             desconto,
             total,
@@ -360,16 +372,21 @@ export async function POST(
       }
 
       // Atualiza cliente — usa total (após desconto), não subtotal
+      // Persiste endereço quando vier (delivery) — vira "endereço padrão" pra próxima
       if (body.cliente_id) {
+        const enderecoJson = body.cliente_endereco
+          ? JSON.stringify(body.cliente_endereco)
+          : null;
         await client.query(
           `UPDATE clientes SET
              total_pedidos    = total_pedidos + 1,
              total_gasto      = total_gasto + $1,
              ultimo_pedido_em = NOW(),
              pontos           = pontos + $2,
+             endereco         = COALESCE($4::jsonb, endereco),
              updated_at       = NOW()
            WHERE id = $3`,
-          [total, pontosGanhos, body.cliente_id]
+          [total, pontosGanhos, body.cliente_id, enderecoJson]
         );
       }
 
