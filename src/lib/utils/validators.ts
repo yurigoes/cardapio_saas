@@ -41,10 +41,14 @@ export const colorSchema = z
   .string()
   .regex(/^#[0-9A-Fa-f]{6}$/, "Cor inválida (formato: #RRGGBB)");
 
-export const precoSchema = z
-  .number()
-  .min(0, "Preço não pode ser negativo")
-  .max(99999.99, "Preço muito alto");
+// Aceita number OU string numérica (pg NUMERIC vem como string e o frontend
+// pode repassar sem converter). Coerce + valida intervalo.
+export const precoSchema = z.preprocess(
+  (v) => (typeof v === "string" ? parseFloat(v) : v),
+  z.number()
+    .min(0, "Preço não pode ser negativo")
+    .max(99999.99, "Preço muito alto")
+);
 
 export const paginacaoSchema = z.object({
   // nullish() aceita null|undefined antes do coerce → .default() funciona corretamente
