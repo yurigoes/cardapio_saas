@@ -41,6 +41,7 @@ const ALL_NAV = [
   { href: "/painel/gateways",    label: "Gateways",    icon: CreditCard,      modulo: null         },
   { href: "/painel/pagamentos",  label: "Cobranças",   icon: Receipt,         modulo: null         },
   { href: "/painel/integracoes", label: "Integrações", icon: Zap,             modulo: null         },
+  { href: "/painel/ifood",       label: "iFood",       icon: Zap,             modulo: "ifood"      },
   { href: "/painel/api-keys",    label: "API Keys",    icon: Key,             modulo: null         },
   { href: "/painel/usuarios",    label: "Usuários",    icon: Users,           modulo: null         },
   { href: "/painel/saude",       label: "Saúde",       icon: Activity,        modulo: null         },
