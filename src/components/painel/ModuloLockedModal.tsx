@@ -57,7 +57,12 @@ export function ModuloLockedModal({ modulo, onClose, onSucesso }: Props) {
       });
       const d = await r.json();
       if (d.success) {
-        setMsg({ ok: true, texto: `✓ Compra registrada (status: pendente). Em breve receberá o link de pagamento.` });
+        if (d.data.checkout_url) {
+          // Redireciona pro Mercado Pago
+          window.location.href = d.data.checkout_url;
+        } else {
+          setMsg({ ok: true, texto: `✓ ${d.data.mensagem ?? "Compra registrada (pendente)."}` });
+        }
       } else {
         setMsg({ ok: false, texto: d.error?.message ?? d.error ?? "Falha" });
       }
