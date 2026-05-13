@@ -13,6 +13,9 @@ import { applyBrandColors } from "@/lib/theme";
 import { useTheme } from "@/lib/hooks/useTheme";
 import { PwaInstallPrompt } from "@/components/painel/PwaInstallPrompt";
 import { PrintAgentStatus } from "@/components/painel/PrintAgentStatus";
+import { ModuloLockedModal } from "@/components/painel/ModuloLockedModal";
+import { useModulos, type ModuloStatus } from "@/lib/hooks/useModulos";
+import { Lock } from "lucide-react";
 
 interface Empresa {
   nome_fantasia:  string;
@@ -89,11 +92,17 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
     }).finally(() => { localStorage.clear(); window.location.href = "/login"; });
   }
 
-  const modulos = empresa?.modulos_ativos ?? [];
+  const modulosEmpresa = empresa?.modulos_ativos ?? [];
+  const { get: getModulo, recarregar: recarregarModulos } = useModulos();
+  const [moduloBloqueado, setModuloBloqueado] = useState<ModuloStatus | null>(null);
 
-  const navItems = ALL_NAV.filter(
-    (item) => item.modulo === null || modulos.includes(item.modulo)
-  );
+  // Mostra TODOS os itens; bloqueia visualmente os que não estão no plano
+  const navItems = ALL_NAV.map(item => {
+    const incluso = item.modulo === null || modulosEmpresa.includes(item.modulo);
+    const moduloStatus = item.modulo ? getModulo(item.modulo) : undefined;
+    const ativo = incluso || (moduloStatus?.ativo ?? false);
+    return { ...item, locked: !ativo, moduloStatus };
+  });
 
   // Injeta manifest do PWA admin no head (só dentro de /painel)
   // ATENÇÃO: hook DEVE ficar antes de qualquer early return (regras de hooks)
@@ -173,6 +182,21 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
             const Icon   = item.icon;
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
 
+            if (item.locked) {
+              return (
+                <button
+                  key={item.href}
+                  onClick={() => setModuloBloqueado(item.moduloStatus ?? null)}
+                  className="flex items-center gap-2.5 mx-2 mb-0.5 rounded-xl px-3 py-2 text-sm font-medium transition-all w-[calc(100%-1rem)] text-left text-slate-600 hover:bg-amber-500/5 hover:text-amber-300/80"
+                  title="Módulo não incluso — clique para testar 7 dias ou comprar"
+                >
+                  <Icon className="h-4 w-4 flex-shrink-0 opacity-50" />
+                  <span className="flex-1 truncate opacity-60">{item.label}</span>
+                  <Lock className="h-3 w-3 flex-shrink-0 opacity-60" />
+                </button>
+              );
+            }
+
             return (
               <Link
                 key={item.href}
@@ -232,6 +256,11 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         <main className="flex-1 p-6">{children}</main>
       </div>
       <PwaInstallPrompt />
+      <ModuloLockedModal
+        modulo={moduloBloqueado}
+        onClose={() => setModuloBloqueado(null)}
+        onSucesso={recarregarModulos}
+      />
     </div>
   );
 }

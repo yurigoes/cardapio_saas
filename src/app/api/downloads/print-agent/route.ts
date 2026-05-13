@@ -13,8 +13,11 @@ import { createGzip } from "zlib";
 import { Readable } from "stream";
 import { promises as fs } from "fs";
 import path from "path";
+import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 
 export const runtime = "nodejs";
+
+const ROLES_PERMITIDOS = ["master", "admin", "gerente"];
 
 // Tar minimal escritor (USTAR) — sem dependências
 function tarHeader(name: string, size: number, mode = 0o644, type: "0" | "5" = "0"): Buffer {
@@ -61,7 +64,13 @@ async function buildTar(rootDir: string, prefix: string): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+  if (!ROLES_PERMITIDOS.includes(auth.payload.role)) {
+    return NextResponse.json({ ok: false, error: "Sem permissão" }, { status: 403 });
+  }
+
   // No build standalone do Next, process.cwd() = /app
   // Fora do container, usa o repo. Tenta os 2.
   const candidates = [

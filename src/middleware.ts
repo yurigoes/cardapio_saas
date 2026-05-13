@@ -24,6 +24,7 @@ const AUTH_ROUTES = [
   "/api/cardapio",
   "/api/financeiro",
   "/api/painel",
+  "/api/downloads",
   "/api/motoboy",
   "/motoboy",
 ];
