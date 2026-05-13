@@ -5,8 +5,8 @@ import {
 
 describe("telefoneSchema", () => {
   it("aceita formatado e strip não-dígitos", () => {
-    expect(telefoneSchema.parse("(11) 99999-9999")).toBe("11999999999");
-    expect(telefoneSchema.parse("+55 11 9999-9999")).toBe("5511999999999");
+    expect(telefoneSchema.parse("(11) 99999-9999")).toBe("11999999999");        // 11 dígitos
+    expect(telefoneSchema.parse("+55 11 99999-9999")).toBe("5511999999999");    // 13 dígitos
   });
   it("aceita só dígitos", () => {
     expect(telefoneSchema.parse("11999999999")).toBe("11999999999");
