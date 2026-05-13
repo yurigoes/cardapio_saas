@@ -6,11 +6,17 @@ import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/re
 import { z } from "zod";
 
 const updateSchema = z.object({
-  nome:      z.string().min(2).max(100).trim().optional(),
-  descricao: z.string().max(500).trim().optional(),
-  taxa:      z.number().min(0).optional(),
-  tempo_min: z.number().int().min(0).optional(),
-  ativo:     z.boolean().optional(),
+  nome:          z.string().min(2).max(100).trim().optional(),
+  descricao:     z.string().max(500).trim().nullable().optional(),
+  bairro:        z.string().max(100).nullable().optional(),
+  cep_inicio:    z.string().regex(/^\d{8}$/).nullable().optional().or(z.literal("").transform(() => null)),
+  cep_fim:       z.string().regex(/^\d{8}$/).nullable().optional().or(z.literal("").transform(() => null)),
+  taxa:          z.number().min(0).optional(),
+  valor_cobrado: z.number().min(0).optional(),
+  valor_motoboy: z.number().min(0).optional(),
+  tempo_min:     z.number().int().min(0).nullable().optional(),
+  ativo:         z.boolean().optional(),
+  ordem:         z.number().int().optional(),
 });
 
 export async function PATCH(
@@ -38,11 +44,22 @@ export async function PATCH(
     const values: unknown[] = [];
     let i = 1;
 
-    if (body.nome      !== undefined) { sets.push(`nome = $${i++}`);      values.push(body.nome); }
-    if (body.descricao !== undefined) { sets.push(`descricao = $${i++}`); values.push(body.descricao); }
-    if (body.taxa      !== undefined) { sets.push(`taxa = $${i++}`);      values.push(body.taxa); }
-    if (body.tempo_min !== undefined) { sets.push(`tempo_min = $${i++}`); values.push(body.tempo_min); }
-    if (body.ativo     !== undefined) { sets.push(`ativo = $${i++}`);     values.push(body.ativo); }
+    if (body.nome          !== undefined) { sets.push(`nome = $${i++}`);          values.push(body.nome); }
+    if (body.descricao     !== undefined) { sets.push(`descricao = $${i++}`);     values.push(body.descricao); }
+    if (body.bairro        !== undefined) { sets.push(`bairro = $${i++}`);        values.push(body.bairro); }
+    if (body.cep_inicio    !== undefined) { sets.push(`cep_inicio = $${i++}`);    values.push(body.cep_inicio); }
+    if (body.cep_fim       !== undefined) { sets.push(`cep_fim = $${i++}`);       values.push(body.cep_fim); }
+    if (body.taxa          !== undefined) {
+      sets.push(`taxa = $${i}, valor_cobrado = $${i++}`);
+      values.push(body.taxa);
+    } else if (body.valor_cobrado !== undefined) {
+      sets.push(`valor_cobrado = $${i}, taxa = $${i++}`);
+      values.push(body.valor_cobrado);
+    }
+    if (body.valor_motoboy !== undefined) { sets.push(`valor_motoboy = $${i++}`); values.push(body.valor_motoboy); }
+    if (body.tempo_min     !== undefined) { sets.push(`tempo_min = $${i++}`);     values.push(body.tempo_min); }
+    if (body.ativo         !== undefined) { sets.push(`ativo = $${i++}`);         values.push(body.ativo); }
+    if (body.ordem         !== undefined) { sets.push(`ordem = $${i++}`);         values.push(body.ordem); }
 
     sets.push(`updated_at = NOW()`);
     values.push(params.id, empresaId);

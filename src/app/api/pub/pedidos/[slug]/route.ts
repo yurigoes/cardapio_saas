@@ -14,6 +14,8 @@ import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 import { creditarCashbackPedido, debitarCashbackPedido } from "@/lib/cashback/movimento";
 import { notificarEvolution } from "@/lib/notify/evolution";
+import { lookupZonaParaEndereco } from "@/lib/delivery/lookup-zona";
+import crypto from "crypto";
 import type { PoolClient } from "pg";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -281,9 +283,26 @@ export async function POST(
             ? "balcao"
             : "totem";
 
-      // Taxa de entrega: aplica empresa.taxa_entrega quando delivery
-      const taxaEntrega = tipo === "delivery" ? Number(empresa.taxa_entrega) : 0;
+      // Taxa de entrega: tenta zona específica (CEP/bairro), senão usa empresa.taxa_entrega
+      let taxaEntrega = 0;
+      let zonaId: string | null = null;
+      let valorMotoboy = 0;
+      if (tipo === "delivery") {
+        const zona = await lookupZonaParaEndereco(empresa.id, body.cliente_endereco ?? null);
+        if (zona) {
+          taxaEntrega  = zona.valor_cobrado;
+          zonaId       = zona.id;
+          valorMotoboy = zona.valor_motoboy;
+        } else {
+          taxaEntrega = Number(empresa.taxa_entrega);
+        }
+      }
       const total = Math.max(0, subtotal + taxaEntrega - desconto);
+
+      // Tracking token para delivery (cliente acompanha em tempo real)
+      const trackingToken = tipo === "delivery"
+        ? crypto.randomBytes(12).toString("base64url")
+        : null;
 
       // Pontos calculados sobre o total (após desconto)
       let pontosGanhos = 0;
@@ -302,8 +321,10 @@ export async function POST(
              (empresa_id, tipo, status, mesa_id, cliente_id, cliente_nome, cliente_telefone,
               cliente_endereco,
               subtotal, desconto, taxa_entrega, total, pontos_ganhos, observacoes,
-              forma_pagamento, tipo_consumo, cupom_id)
-           VALUES ($1,$2,'pendente',$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+              forma_pagamento, tipo_consumo, cupom_id,
+              zona_id, status_entrega, tracking_token, valor_motoboy)
+           VALUES ($1,$2,'pendente',$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+                   $17,$18,$19,$20)
            RETURNING id, numero`,
           [
             empresa.id,
@@ -322,6 +343,10 @@ export async function POST(
             body.forma_pagamento  ?? null,
             body.tipo_consumo     ?? "local",
             cupomId,
+            zonaId,
+            tipo === "delivery" ? "aguardando" : null,
+            trackingToken,
+            valorMotoboy,
           ]
         )
         .then((r) => r.rows);
@@ -428,7 +453,7 @@ export async function POST(
         if (cb.creditado) cashbackCreditado = cb.valor ?? 0;
       }
 
-      return { ...row, pontosGanhos, cashbackCreditado, cashbackDebitado };
+      return { ...row, pontosGanhos, cashbackCreditado, cashbackDebitado, trackingToken };
     });
 
     // Notificação Web Push (não bloqueia resposta)
@@ -455,6 +480,7 @@ export async function POST(
     return ok({
       id:           pedido.id,
       numero:       pedido.numero,
+      tracking_token: "trackingToken" in pedido ? pedido.trackingToken : null,
       pontos_ganhos: pedido.pontosGanhos,
       cashback_creditado: "cashbackCreditado" in pedido ? pedido.cashbackCreditado : 0,
       cashback_debitado:  "cashbackDebitado"  in pedido ? pedido.cashbackDebitado  : 0,

@@ -19,12 +19,17 @@ interface Motoboy {
 }
 
 interface ZonaEntrega {
-  id:           string;
-  nome:         string;
-  descricao:    string | null;
-  taxa:         number;
-  tempo_min:    number | null;
-  ativo:        boolean;
+  id:             string;
+  nome:           string;
+  descricao?:     string | null;
+  bairro?:        string | null;
+  cep_inicio?:    string | null;
+  cep_fim?:       string | null;
+  valor_cobrado:  number;
+  valor_motoboy:  number;
+  taxa?:          number;             // legado
+  tempo_min:      number | null;
+  ativo:          boolean;
 }
 
 type Tab = "motoboys" | "zonas";
@@ -53,7 +58,12 @@ const STATUS_COLOR: Record<Motoboy["status"], string> = {
 // ── Default forms ─────────────────────────────────────────────────────────────
 
 const DEFAULT_MOTOBOY = { nome: "", telefone: "", veiculo: "", placa: "", status: "disponivel" as Motoboy["status"] };
-const DEFAULT_ZONA    = { nome: "", descricao: "", taxa: "", tempo_min: "", ativo: true };
+const DEFAULT_ZONA = {
+  nome: "", descricao: "",
+  bairro: "", cep_inicio: "", cep_fim: "",
+  valor_cobrado: "", valor_motoboy: "",
+  tempo_min: "", ativo: true,
+};
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -184,11 +194,14 @@ export default function DeliveryPage() {
         method:  "POST",
         headers: { "Content-Type": "application/json", ...authHeader() },
         body:    JSON.stringify({
-          nome:      formZona.nome,
-          descricao: formZona.descricao || undefined,
-          taxa:      Number(formZona.taxa),
-          tempo_min: formZona.tempo_min ? Number(formZona.tempo_min) : undefined,
-          ativo:     formZona.ativo,
+          nome:          formZona.nome,
+          bairro:        formZona.bairro      || undefined,
+          cep_inicio:    formZona.cep_inicio?.replace(/\D/g,"") || undefined,
+          cep_fim:       formZona.cep_fim?.replace(/\D/g,"")    || undefined,
+          valor_cobrado: Number(formZona.valor_cobrado || 0),
+          valor_motoboy: Number(formZona.valor_motoboy || 0),
+          tempo_min:     formZona.tempo_min ? Number(formZona.tempo_min) : undefined,
+          ativo:         formZona.ativo,
         }),
       });
       const data = await res.json();
@@ -475,18 +488,48 @@ export default function DeliveryPage() {
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Descrição</label>
-                  <input value={formZona.descricao} onChange={e => setFormZona(f => ({ ...f, descricao: e.target.value }))}
-                    placeholder="Ruas, bairros incluídos..."
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Bairro (match exato)</label>
+                  <input value={formZona.bairro} onChange={e => setFormZona(f => ({ ...f, bairro: e.target.value }))}
+                    placeholder="Ex: Centro (case-insensitive)"
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Taxa de Entrega (R$) *</label>
-                    <input type="number" min={0} step={0.01} value={formZona.taxa}
-                      onChange={e => setFormZona(f => ({ ...f, taxa: e.target.value }))} required
+                    <label className="block text-xs font-medium text-slate-400 mb-1.5">CEP início</label>
+                    <input value={formZona.cep_inicio} onChange={e => setFormZona(f => ({ ...f, cep_inicio: e.target.value.replace(/\D/g,'').slice(0,8) }))}
+                      placeholder="00000000" inputMode="numeric"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none font-mono" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1.5">CEP fim</label>
+                    <input value={formZona.cep_fim} onChange={e => setFormZona(f => ({ ...f, cep_fim: e.target.value.replace(/\D/g,'').slice(0,8) }))}
+                      placeholder="99999999" inputMode="numeric"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none font-mono" />
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 -mt-2">
+                  Match acontece por CEP range OU bairro. Deixe um deles preenchido.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Taxa cobrada (R$) *</label>
+                    <input type="number" min={0} step={0.01} value={formZona.valor_cobrado}
+                      onChange={e => setFormZona(f => ({ ...f, valor_cobrado: e.target.value }))} required
                       placeholder="0,00"
                       className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Pago ao motoboy (R$)</label>
+                    <input type="number" min={0} step={0.01} value={formZona.valor_motoboy}
+                      onChange={e => setFormZona(f => ({ ...f, valor_motoboy: e.target.value }))}
+                      placeholder="0,00 = sem pagamento"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1.5">&nbsp;</label>
+                    <div className="text-[11px] text-slate-500 pt-2.5">Sem valor = motoboy não recebe taxa</div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">Tempo estimado (min)</label>
