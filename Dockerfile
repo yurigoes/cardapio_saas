@@ -18,9 +18,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+ENV TZ=America/Bahia
 
-# Runtime libs nativas
-RUN apk add --no-cache libc6-compat
+# Runtime libs nativas + tzdata pra TZ funcionar
+RUN apk add --no-cache libc6-compat tzdata && \
+    cp /usr/share/zoneinfo/America/Bahia /etc/localtime && \
+    echo "America/Bahia" > /etc/timezone
 
 # Usuário não-root por segurança
 RUN addgroup --system --gid 1001 nodejs && \
