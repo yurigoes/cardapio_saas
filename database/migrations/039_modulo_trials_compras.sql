@@ -23,9 +23,8 @@ CREATE TABLE IF NOT EXISTS modulo_trials (
   UNIQUE (empresa_id, modulo)
 );
 
-CREATE INDEX IF NOT EXISTS idx_modulo_trials_ativos
-  ON modulo_trials (empresa_id, modulo)
-  WHERE expira_em > NOW();
+CREATE INDEX IF NOT EXISTS idx_modulo_trials_lookup
+  ON modulo_trials (empresa_id, modulo, expira_em);
 
 -- ── Compras à la carte ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS modulo_compras (
@@ -44,9 +43,8 @@ CREATE TABLE IF NOT EXISTS modulo_compras (
   criado_por  UUID         REFERENCES usuarios(id) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_modulo_compras_ativas
-  ON modulo_compras (empresa_id, modulo)
-  WHERE status = 'pago' AND (ativa_ate IS NULL OR ativa_ate > NOW());
+CREATE INDEX IF NOT EXISTS idx_modulo_compras_lookup
+  ON modulo_compras (empresa_id, modulo, status, ativa_ate);
 
 CREATE INDEX IF NOT EXISTS idx_modulo_compras_pendentes
   ON modulo_compras (status, criado_em DESC);
