@@ -102,7 +102,10 @@ export const PERMISSOES_POR_ROLE: Record<JWTRole, Permissao[]> = {
   ],
 
   motoboy: [
-    "pedido:ver", "delivery:ver",
+    // Pode ver e fechar pedidos atribuídos a ele (check adicional no handler:
+    // motoboy_id = sub do JWT)
+    "pedido:ver", "pedido:editar", "pedido:imprimir",
+    "delivery:ver",
   ],
 
   cliente: [

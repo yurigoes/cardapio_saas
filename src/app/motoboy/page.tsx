@@ -296,6 +296,15 @@ export default function MotoboyPage() {
                     </a>
                   ) : <div />}
                 </div>
+                {p.cliente_telefone && (
+                  <a
+                    href={`https://wa.me/${(p.cliente_telefone.startsWith("+") ? "" : "55") + p.cliente_telefone.replace(/\D/g, "")}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 py-2.5 text-xs font-semibold text-green-300 hover:bg-green-500/20"
+                  >
+                    💬 WhatsApp
+                  </a>
+                )}
 
                 <div className="grid grid-cols-2 gap-2">
                   {p.status_entrega === "atribuido" && (

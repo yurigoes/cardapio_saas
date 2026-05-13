@@ -67,8 +67,9 @@ export async function POST(
         mesa_id: string | null; numero: number | null;
         cliente_id: string | null;
         cliente_telefone: string | null;
+        motoboy_id: string | null;
       }>(
-        `SELECT id, status, total, mesa_id, numero, cliente_id, cliente_telefone
+        `SELECT id, status, total, mesa_id, numero, cliente_id, cliente_telefone, motoboy_id
            FROM pedidos
           WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL
           FOR UPDATE`,
@@ -78,6 +79,13 @@ export async function POST(
       if (!pedido) {
         const e: Error & { code?: string } = new Error("Pedido não encontrado");
         e.code = "NOT_FOUND";
+        throw e;
+      }
+
+      // Motoboy só pode fechar pedidos atribuídos a ele
+      if (role === "motoboy" && pedido.motoboy_id !== sub) {
+        const e: Error & { code?: string } = new Error("Você só pode fechar pedidos atribuídos a você");
+        e.code = "FORBIDDEN";
         throw e;
       }
 
@@ -254,6 +262,7 @@ export async function POST(
     if (e.code === "NOT_FOUND")   return notFound(e.message);
     if (e.code === "CONFLICT")    return conflict(e.message);
     if (e.code === "BAD_REQUEST") return badRequest(e.message);
+    if (e.code === "FORBIDDEN")   return forbidden(e.message);
     console.error("[Pedidos/Fechar]", err);
     return serverError();
   }

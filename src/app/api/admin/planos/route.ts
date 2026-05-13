@@ -30,12 +30,12 @@ export async function GET(req: NextRequest) {
   try { assertMaster(auth.payload.role); } catch { return forbidden(); }
 
   try {
+    // Inclui inativos pra UI mostrar como obsoletos (lista expansível)
     const planos = await query(
       `SELECT p.*,
               (SELECT COUNT(*) FROM empresas e WHERE e.plano_id = p.id AND e.deleted_at IS NULL) as total_empresas
        FROM planos p
-       WHERE p.ativo = true
-       ORDER BY p.preco ASC`
+       ORDER BY p.ativo DESC, COALESCE(p.preco_mensal, p.preco) ASC`
     );
     return ok(planos);
   } catch (err) {
