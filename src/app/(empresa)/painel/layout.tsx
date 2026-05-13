@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
 import { useTheme } from "@/lib/hooks/useTheme";
+import { PwaInstallPrompt } from "@/components/painel/PwaInstallPrompt";
 
 interface Empresa {
   nome_fantasia:  string;
@@ -104,10 +105,37 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
     );
   }
 
+  // Injeta manifest do PWA admin no head (só dentro de /painel)
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const linkId = "pwa-admin-manifest";
+    if (!document.getElementById(linkId)) {
+      const link = document.createElement("link");
+      link.id   = linkId;
+      link.rel  = "manifest";
+      link.href = "/manifest-admin.json";
+      document.head.appendChild(link);
+    }
+    const metaId = "pwa-theme-color";
+    if (!document.getElementById(metaId)) {
+      const meta = document.createElement("meta");
+      meta.id      = metaId;
+      meta.name    = "theme-color";
+      meta.content = "#10b981";
+      document.head.appendChild(meta);
+    }
+    // Service Worker (necessário pra installable)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistration("/sw-admin.js").then(reg => {
+        if (!reg) navigator.serviceWorker.register("/sw-admin.js", { scope: "/painel" }).catch(() => {});
+      });
+    }
+  }, []);
+
   // PDV é full-screen — sem sidebar visível
   const fullScreenRoutes = ["/painel/pdv"];
   if (fullScreenRoutes.some(r => pathname.startsWith(r))) {
-    return <>{children}</>;
+    return <>{children}<PwaInstallPrompt /></>;
   }
 
   return (
@@ -195,6 +223,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         </header>
         <main className="flex-1 p-6">{children}</main>
       </div>
+      <PwaInstallPrompt />
     </div>
   );
 }
