@@ -5,6 +5,11 @@ node_modules
 npm-debug.log
 .DS_Store
 
+# Override específico de cada VPS (portas, envs do Cloudflare Tunnel etc)
+docker-compose.override.yml
+deploy.log
+backups/
+
 # Test artifacts
 playwright-report
 test-results

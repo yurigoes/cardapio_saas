@@ -127,13 +127,35 @@ fi
 log "Ativando modo manutenção"
 modo_manutencao true
 
-# 4. Git pull
+# 4. Git pull (stash mudanças locais antes — podem ser overrides específicos da VPS)
+HAS_LOCAL_CHANGES=0
+if ! git diff --quiet HEAD 2>/dev/null; then
+  HAS_LOCAL_CHANGES=1
+  log "Mudanças locais detectadas — stashing"
+  git stash push -u -m "deploy-${TS}" >>"$LOG_FILE" 2>&1
+fi
+
 log "git pull"
-git pull --rebase 2>&1 | tee -a "$LOG_FILE"
-if [[ $? -ne 0 ]]; then
+if ! git pull --rebase 2>&1 | tee -a "$LOG_FILE"; then
   err "git pull falhou"
+  [[ $HAS_LOCAL_CHANGES -eq 1 ]] && git stash pop >>"$LOG_FILE" 2>&1 || true
   modo_manutencao false
   exit 1
+fi
+# pipefail pode mascarar status; reverifica via $PIPESTATUS
+if [[ "${PIPESTATUS[0]:-0}" -ne 0 ]]; then
+  err "git pull falhou (status do pipe)"
+  [[ $HAS_LOCAL_CHANGES -eq 1 ]] && git stash pop >>"$LOG_FILE" 2>&1 || true
+  modo_manutencao false
+  exit 1
+fi
+
+# Restaura mudanças locais
+if [[ $HAS_LOCAL_CHANGES -eq 1 ]]; then
+  log "Restaurando mudanças locais (stash pop)"
+  if ! git stash pop >>"$LOG_FILE" 2>&1; then
+    warn "Conflito ao aplicar stash — verifique manualmente. Stash mantido."
+  fi
 fi
 
 # 5. Migrations
