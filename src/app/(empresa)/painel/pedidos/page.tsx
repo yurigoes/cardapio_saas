@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useNewOrderAlerts } from "@/lib/hooks/useNewOrderAlerts";
 import { useWebPush } from "@/lib/hooks/useWebPush";
+import { FecharContaModal } from "@/components/pedidos/FecharContaModal";
 
 /** Abre janela de impressão térmica (popup com auto-print). */
 function abrirImpressao(pedidoId: string, tipo: "cliente" | "cozinha" | "comanda") {
@@ -62,6 +63,7 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; co
   pendente:   { label: "Pendente",    icon: Clock,         color: "text-yellow-400 bg-yellow-400/10 border-yellow-400/20" },
   confirmado: { label: "Confirmado",  icon: CheckCircle,   color: "text-blue-400 bg-blue-400/10 border-blue-400/20"       },
   preparo:    { label: "Em preparo",  icon: ChefHat,       color: "text-orange-400 bg-orange-400/10 border-orange-400/20" },
+  preparando: { label: "Em preparo",  icon: ChefHat,       color: "text-orange-400 bg-orange-400/10 border-orange-400/20" },
   pronto:     { label: "Pronto",      icon: CheckCircle,   color: "text-brand bg-brand/10 border-brand/20" },
   entregue:   { label: "Entregue",    icon: Truck,         color: "text-green-400 bg-green-400/10 border-green-400/20"    },
   cancelado:  { label: "Cancelado",   icon: XCircle,       color: "text-red-400 bg-red-400/10 border-red-400/20"          },
@@ -80,6 +82,7 @@ const PROXIMOS_STATUS: Record<string, string[]> = {
   pendente:   ["confirmado", "cancelado"],
   confirmado: ["preparo", "cancelado"],
   preparo:    ["pronto"],
+  preparando: ["pronto"],
   pronto:     ["entregue"],
   entregue:   [],
   cancelado:  [],
@@ -119,6 +122,7 @@ interface PedidoModalProps {
 function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
   const [pedido, setPedido] = useState<PedidoDetalhe | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [fechando, setFechando] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -337,6 +341,19 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
         </div>
 
         {/* Ações */}
+        {/* Fechar conta — disponível em qualquer status aberto */}
+        {!["entregue", "cancelado"].includes(pedido.status) && (
+          <div className="flex gap-2 border-t border-white/5 p-4">
+            <button
+              onClick={() => setFechando(true)}
+              disabled={updating}
+              className="flex-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-sm font-bold text-emerald-300 hover:bg-emerald-500/20 transition disabled:opacity-50"
+            >
+              💰 Fechar conta · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(pedido.total)}
+            </button>
+          </div>
+        )}
+
         {proximos.length > 0 && (
           <div className="flex gap-2 border-t border-white/5 p-4">
             {proximos.map((s) => {
@@ -358,6 +375,23 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
               );
             })}
           </div>
+        )}
+
+        {/* Modal de fechamento */}
+        {fechando && (
+          <FecharContaModal
+            pedido={{
+              id:           pedido.id,
+              numero:       pedido.numero,
+              total:        Number(pedido.total),
+              mesa_numero:  pedido.mesa_numero ?? null,
+              cliente_nome: pedido.cliente_nome ?? null,
+            }}
+            open={fechando}
+            authToken={localStorage.getItem("access_token") ?? ""}
+            onClose={() => setFechando(false)}
+            onClosed={() => { setFechando(false); onUpdate(); onClose(); }}
+          />
         )}
 
         {/* Reabrir pedido cancelado */}

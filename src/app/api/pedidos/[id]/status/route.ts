@@ -9,10 +9,11 @@ import { registrarVendaPedido, registrarEstornoPedido } from "@/lib/caixa/movime
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 
 const statusSchema = z.object({
+  // 'preparo' é alias do frontend → normalizado para 'preparando' antes da query
   status: z.enum([
-    "confirmado", "preparando", "pronto", "entregue",
+    "confirmado", "preparo", "preparando", "pronto", "entregue",
     "cancelado", "aguardando_pagamento", "pago",
-  ]),
+  ]).transform(s => s === "preparo" ? "preparando" : s),
   motivo: z.string().max(500).optional(),
 });
 
@@ -20,6 +21,7 @@ const statusSchema = z.object({
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pendente:              ["confirmado", "cancelado"],
   confirmado:            ["preparando", "cancelado"],
+  preparo:               ["pronto", "cancelado"],
   preparando:            ["pronto", "cancelado"],
   pronto:                ["entregue", "cancelado"],
   aguardando_pagamento:  ["pago", "cancelado"],
