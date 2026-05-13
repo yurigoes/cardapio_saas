@@ -16,6 +16,7 @@ function CadastroForm() {
   const [planoId, setPlanoId] = useState<string>("");
   const [busy, setBusy]       = useState(false);
   const [erro, setErro]       = useState<string | null>(null);
+  const [aceitouTermos, setAceitouTermos] = useState(false);
 
   const [form, setForm] = useState({
     empresa_nome: "",
@@ -58,6 +59,10 @@ function CadastroForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!aceitouTermos) {
+      setErro("Você precisa concordar com os Termos e a Política de Privacidade pra continuar.");
+      return;
+    }
     setBusy(true);
     setErro(null);
 
@@ -170,15 +175,27 @@ function CadastroForm() {
             </div>
           </Section>
 
-          <button type="submit" disabled={busy}
-            className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2">
+          <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-300 cursor-pointer hover:bg-white/10">
+            <input type="checkbox" checked={aceitouTermos}
+              onChange={e => setAceitouTermos(e.target.checked)}
+              className="mt-0.5 accent-emerald-500" />
+            <span>
+              Li e concordo com os{" "}
+              <Link href="/termos" target="_blank" className="text-emerald-400 underline">Termos de Uso</Link>
+              {" "}e a{" "}
+              <Link href="/privacidade" target="_blank" className="text-emerald-400 underline">Política de Privacidade</Link>
+              {" "}(LGPD).
+            </span>
+          </label>
+
+          <button type="submit" disabled={busy || !aceitouTermos}
+            className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
             {busy ? "Criando conta..." : "Criar conta grátis"}
           </button>
 
           <p className="text-xs text-slate-500 text-center">
-            Ao criar conta você concorda em testar o sistema por 14 dias.
-            Após o trial, escolha continuar ou cancele sem custo.
+            14 dias grátis. Cancele a qualquer momento sem custo.
           </p>
         </form>
       </main>

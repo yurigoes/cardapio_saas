@@ -170,6 +170,8 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-4">
             <Link href="/login" className="hover:text-white">Entrar</Link>
+            <Link href="/termos" className="hover:text-white">Termos</Link>
+            <Link href="/privacidade" className="hover:text-white">Privacidade</Link>
             <Link href="/docs/api" className="hover:text-white">API</Link>
           </div>
         </div>
