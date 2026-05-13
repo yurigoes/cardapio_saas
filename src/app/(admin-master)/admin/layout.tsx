@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, Users, Package, CreditCard,
   BarChart3, Settings, LogOut, ChefHat, Bell, Shield, FileText, Webhook,
-  Image as ImageIcon, TrendingUp,
+  Image as ImageIcon, TrendingUp, Bug,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { href: "/admin/webhooks",  label: "Webhooks",   icon: Webhook },
   { href: "/admin/imagens",   label: "Imagens",    icon: ImageIcon },
   { href: "/admin/auditoria", label: "Auditoria",  icon: Shield },
+  { href: "/admin/observability", label: "Observability", icon: Bug },
   { href: "/admin/logs",      label: "Logs",       icon: FileText },
   { href: "/admin/config",    label: "Config",     icon: Settings },
 ];
