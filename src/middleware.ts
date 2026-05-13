@@ -33,6 +33,7 @@ const AUTH_ROUTES = [
 const PUBLIC_ROUTES = [
   "/api/auth/login",
   "/api/auth/refresh",
+  "/api/auth/cadastro-empresa",
   "/api/webhooks",
   "/api/health",
   "/api/pub",
@@ -43,6 +44,7 @@ const PUBLIC_ROUTES = [
   "/totem",
   "/rastrear",
   "/docs",
+  "/cadastro",
 ];
 
 // Rotas por role
