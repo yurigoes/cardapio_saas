@@ -1350,12 +1350,13 @@ interface CartDrawerProps {
   slug:        string;
   idioma:      Idioma;
   isOnline:    boolean;
+  taxaInfo?:   { taxa: number; zona_nome: string | null; tempo_min: number | null; fallback: boolean } | null;
   onClose:     () => void;
   onUpdate:    (uid: string, delta: number) => void;
   onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro", cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null, cashbackUsar: number) => Promise<void>;
 }
 
-function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, onClose, onUpdate, onConfirm }: CartDrawerProps) {
+function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, taxaInfo, onClose, onUpdate, onConfirm }: CartDrawerProps) {
   const [nome, setNome]           = useState(cliente?.nome ?? "");
   const [tel, setTel]             = useState(cliente?.telefone ?? "");
   const [obs, setObs]             = useState("");
@@ -1410,7 +1411,8 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, onClose
   // Cashback efetivamente aplicado (limitado ao saldo + ao valor após desconto de cupom)
   const totalAposCupom = Math.max(0, subtotal - desconto);
   const cashbackEfetivo = Math.min(cashbackUsar, saldoCashback, totalAposCupom);
-  const total    = Math.max(0, totalAposCupom - cashbackEfetivo);
+  const taxa     = taxaInfo?.taxa ?? 0;
+  const total    = Math.max(0, totalAposCupom - cashbackEfetivo + taxa);
 
   async function aplicarCupom() {
     if (!cupomCodigo.trim()) return;
@@ -1625,6 +1627,16 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, onClose
             <div className="flex justify-between items-center text-sm">
               <span className="text-slate-400">Cashback</span>
               <span className="text-amber-300">−{formatBRL(cashbackEfetivo)}</span>
+            </div>
+          )}
+          {taxa > 0 && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-400">
+                Taxa de entrega
+                {taxaInfo?.zona_nome && <span className="text-[10px] text-slate-500"> · {taxaInfo.zona_nome}</span>}
+                {taxaInfo?.fallback && <span className="text-[10px] text-amber-500"> · padrão</span>}
+              </span>
+              <span className="text-slate-300">{formatBRL(taxa)}</span>
             </div>
           )}
           <div className="flex justify-between items-center pt-1 border-t border-white/5">
@@ -2050,6 +2062,9 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   const [ultimoPedido, setUltimoPedido] = useState<UltimoPedido | null>(null);
   const [tipoConsumo, setTipoConsumo]   = useState<TipoConsumo>("local");
   const [endereco, setEndereco]         = useState<EnderecoCliente | null>(null);
+  const [taxaEntrega, setTaxaEntrega]   = useState<{
+    taxa: number; zona_nome: string | null; tempo_min: number | null; fallback: boolean;
+  } | null>(null);
   const [pedidoFeito, setPedidoFeito]   = useState<{
     numero: number; clienteNome: string; pontosGanhos?: number; totalPontos?: number;
   } | null>(null);
@@ -2208,8 +2223,18 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     }
   }
 
-  function handleEnderecoConfirmado(e: EnderecoCliente) {
+  async function handleEnderecoConfirmado(e: EnderecoCliente) {
     setEndereco(e);
+    // Consulta taxa antes de prosseguir (mostra no carrinho)
+    try {
+      const sp = new URLSearchParams();
+      if (e.cep)    sp.set("cep",    e.cep.replace(/\D/g, ""));
+      if (e.bairro) sp.set("bairro", e.bairro);
+      const r = await fetch(`/api/pub/cardapio/${params.slug}/taxa-entrega?${sp}`);
+      const d = await r.json();
+      if (d.success) setTaxaEntrega(d.data);
+    } catch { /* ignora — backend recalcula no checkout */ }
+
     if (ultimoPedido && ultimoPedido.itens && ultimoPedido.itens.length > 0) {
       setFase("repeat");
     } else {
@@ -2229,6 +2254,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     setUltimoPedido(null);
     setTipoConsumo("local");
     setEndereco(null);
+    setTaxaEntrega(null);
     setCart([]);
     setCartOpen(false);
     setProdutoAberto(null);
@@ -2786,6 +2812,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           slug={params.slug}
           idioma={idioma}
           isOnline={isOnline}
+          taxaInfo={tipoConsumo === "delivery" ? taxaEntrega : null}
           onClose={() => setCartOpen(false)}
           onUpdate={updateCart}
           onConfirm={handleConfirmarPedido}
