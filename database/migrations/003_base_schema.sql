@@ -69,10 +69,11 @@ CREATE TABLE IF NOT EXISTS usuarios (
 CREATE INDEX IF NOT EXISTS idx_usuarios_email   ON usuarios(email);
 CREATE INDEX IF NOT EXISTS idx_usuarios_empresa ON usuarios(empresa_id) WHERE deleted_at IS NULL;
 
--- Lockout de tentativas de login (anti brute-force)
+-- Lockout de tentativas de login (anti brute-force) + avatar
 ALTER TABLE usuarios
   ADD COLUMN IF NOT EXISTS tentativas_login INTEGER     NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS bloqueado_ate    TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS bloqueado_ate    TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS avatar_url       TEXT;
 
 -- ── categorias ───────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS categorias (
