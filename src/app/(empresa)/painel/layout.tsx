@@ -35,6 +35,7 @@ const ALL_NAV = [
   { href: "/painel/estoque",     label: "Estoque",     icon: Package,         modulo: "estoque"    },
   { href: "/painel/cupons",      label: "Cupons",      icon: Tag,             modulo: "cupom"      },
   { href: "/painel/clientes",    label: "Clientes",    icon: Users,           modulo: "crm"        },
+  { href: "/painel/vales",       label: "Vales",       icon: Wallet,          modulo: "crm"        },
   { href: "/painel/relatorios",  label: "Relatórios",  icon: BarChart3,       modulo: "relatorios_basicos" },
   { href: "/painel/gateways",    label: "Gateways",    icon: CreditCard,      modulo: null         },
   { href: "/painel/pagamentos",  label: "Cobranças",   icon: Receipt,         modulo: null         },

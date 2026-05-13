@@ -15,9 +15,19 @@ import { transaction } from "@/lib/db/client";
 import { temPermissao } from "@/lib/auth/rbac";
 import { ok, badRequest, notFound, forbidden, serverError } from "@/lib/utils/response";
 
+// Compat: aceita o body antigo (apenas valor_fechamento total) E o novo
+// (valores_informados por forma de pagamento — fechamento detalhado).
 const bodySchema = z.object({
   valor_fechamento:       z.number().min(0).max(9999999.99),
   observacoes_fechamento: z.string().max(500).optional(),
+  valores_informados:     z.object({
+    pix:      z.number().min(0).optional(),
+    dinheiro: z.number().min(0).optional(),
+    credito:  z.number().min(0).optional(),
+    debito:   z.number().min(0).optional(),
+    vale:     z.number().min(0).optional(),
+    outro:    z.number().min(0).optional(),
+  }).partial().optional(),
 });
 
 export async function POST(
@@ -72,23 +82,43 @@ export async function POST(
       const sumByTipo = (t: string) =>
         Number(totals.find(r => r.tipo === t)?.total ?? 0);
 
-      // Vendas em dinheiro especificamente
-      const vendasDinheiro = await client.query<{ total: string }>(
-        `SELECT COALESCE(SUM(valor), 0) AS total
+      // Vendas por forma de pagamento (esperado por forma)
+      const vendasPorForma = await client.query<{ forma: string; total: string }>(
+        `SELECT COALESCE(forma_pagamento, 'outro') AS forma, COALESCE(SUM(valor), 0) AS total
          FROM caixa_movimentos
-         WHERE caixa_id = $1 AND tipo = 'venda' AND forma_pagamento = 'dinheiro'`,
+         WHERE caixa_id = $1 AND tipo = 'venda'
+         GROUP BY forma_pagamento`,
         [params.id]
-      ).then(r => Number(r.rows[0]?.total ?? 0));
+      ).then(r => r.rows);
 
+      const FORMAS = ["pix", "dinheiro", "credito", "debito", "vale", "outro"] as const;
+      const esperadosPorForma: Record<string, number> = {};
+      for (const f of FORMAS) {
+        esperadosPorForma[f] = Number(vendasPorForma.find(v => v.forma === f)?.total ?? 0);
+      }
+
+      const vendasDinheiro = esperadosPorForma.dinheiro;
       const reforcos = sumByTipo("reforco");
       const sangrias = sumByTipo("sangria");
       const estornos = sumByTipo("estorno");
 
+      // Esperado em GAVETA (dinheiro físico): só dinheiro entra/sai do caixa
       const valorEsperado = Math.round(
         (Number(caixa.valor_abertura) + reforcos + vendasDinheiro - sangrias - estornos) * 100
       ) / 100;
 
       const diferenca = Math.round((body.valor_fechamento - valorEsperado) * 100) / 100;
+
+      // Diferenças por forma (se body trouxe valores_informados)
+      const informadosPorForma: Record<string, number> = {};
+      const diferencasPorForma: Record<string, number> = {};
+      if (body.valores_informados) {
+        for (const f of FORMAS) {
+          const inf = body.valores_informados[f] ?? 0;
+          informadosPorForma[f]  = inf;
+          diferencasPorForma[f]  = Math.round((inf - esperadosPorForma[f]) * 100) / 100;
+        }
+      }
 
       await client.query(
         `UPDATE caixas SET
@@ -98,15 +128,21 @@ export async function POST(
            valor_esperado         = $3,
            diferenca              = $4,
            observacoes_fechamento = $5,
+           valores_esperados      = $6::jsonb,
+           valores_informados     = $7::jsonb,
+           diferencas_por_forma   = $8::jsonb,
            fechado_em             = NOW(),
            updated_at             = NOW()
-         WHERE id = $6 AND empresa_id = $7`,
+         WHERE id = $9 AND empresa_id = $10`,
         [
           usuarioId,
           body.valor_fechamento,
           valorEsperado,
           diferenca,
           body.observacoes_fechamento ?? null,
+          JSON.stringify(esperadosPorForma),
+          body.valores_informados ? JSON.stringify(informadosPorForma) : null,
+          body.valores_informados ? JSON.stringify(diferencasPorForma) : null,
           params.id,
           empresaId,
         ]
@@ -121,6 +157,9 @@ export async function POST(
         reforcos,
         sangrias,
         estornos,
+        esperados_por_forma:  esperadosPorForma,
+        informados_por_forma: body.valores_informados ? informadosPorForma  : null,
+        diferencas_por_forma: body.valores_informados ? diferencasPorForma : null,
       };
     });
 

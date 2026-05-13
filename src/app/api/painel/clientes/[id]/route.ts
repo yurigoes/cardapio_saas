@@ -16,19 +16,27 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   try {
     const clienteRaw = await queryOne<{
-      id:            string;
-      nome:          string;
-      telefone:      string | null;
-      email:         string | null;
-      cpf:           string | null;
-      pontos:        string | number;
-      total_pedidos: string | number;
-      total_gasto:   string | number;
-      ultimo_pedido: string | null;
+      id:                string;
+      nome:              string;
+      telefone:          string | null;
+      email:             string | null;
+      cpf:               string | null;
+      pontos:            string | number;
+      total_pedidos:     string | number;
+      total_gasto:       string | number;
+      ultimo_pedido:     string | null;
+      saldo_cashback:    string | number;
+      limite_vale:       string | number;
+      saldo_vale_aberto: string | number;
+      endereco:          Record<string, unknown> | null;
     }>(
       `SELECT id, nome, telefone, cpf, email,
               pontos, total_pedidos, total_gasto,
-              ultimo_pedido_em AS ultimo_pedido
+              ultimo_pedido_em AS ultimo_pedido,
+              COALESCE(saldo_cashback, 0)    AS saldo_cashback,
+              COALESCE(limite_vale, 0)       AS limite_vale,
+              COALESCE(saldo_vale_aberto, 0) AS saldo_vale_aberto,
+              endereco
        FROM clientes WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL`,
       [params.id, empresaId]
     );
@@ -36,9 +44,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const cliente = {
       ...clienteRaw,
-      pontos:        Number(clienteRaw.pontos),
-      total_pedidos: Number(clienteRaw.total_pedidos),
-      total_gasto:   Number(clienteRaw.total_gasto),
+      pontos:            Number(clienteRaw.pontos),
+      total_pedidos:     Number(clienteRaw.total_pedidos),
+      total_gasto:       Number(clienteRaw.total_gasto),
+      saldo_cashback:    Number(clienteRaw.saldo_cashback),
+      limite_vale:       Number(clienteRaw.limite_vale),
+      saldo_vale_aberto: Number(clienteRaw.saldo_vale_aberto),
     };
 
     // Últimos pedidos do cliente
@@ -93,8 +104,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return badRequest("JSON inválido"); }
 
-  const { pontos_ajuste, nome, telefone, email } = body as {
+  const { pontos_ajuste, nome, telefone, email, limite_vale } = body as {
     pontos_ajuste?: number; nome?: string; telefone?: string; email?: string;
+    limite_vale?: number;
   };
 
   try {
@@ -112,9 +124,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       sets.push(`pontos = GREATEST(0, pontos + $${idx++})`);
       vals.push(pontos_ajuste);
     }
-    if (nome !== undefined) { sets.push(`nome = $${idx++}`); vals.push(nome); }
-    if (telefone !== undefined) { sets.push(`telefone = $${idx++}`); vals.push(telefone); }
-    if (email !== undefined) { sets.push(`email = $${idx++}`); vals.push(email); }
+    if (nome !== undefined)        { sets.push(`nome = $${idx++}`);        vals.push(nome); }
+    if (telefone !== undefined)    { sets.push(`telefone = $${idx++}`);    vals.push(telefone); }
+    if (email !== undefined)       { sets.push(`email = $${idx++}`);       vals.push(email); }
+    if (limite_vale !== undefined) { sets.push(`limite_vale = $${idx++}`); vals.push(Math.max(0, limite_vale)); }
 
     vals.push(params.id);
 

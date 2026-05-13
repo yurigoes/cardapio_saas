@@ -64,9 +64,10 @@ export async function POST(
       const pedido = await client.query<{
         id: string; status: string; total: string;
         mesa_id: string | null; numero: number | null;
+        cliente_id: string | null;
         cliente_telefone: string | null;
       }>(
-        `SELECT id, status, total, mesa_id, numero, cliente_telefone
+        `SELECT id, status, total, mesa_id, numero, cliente_id, cliente_telefone
            FROM pedidos
           WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL
           FOR UPDATE`,
@@ -111,7 +112,38 @@ export async function POST(
         throw e;
       }
 
-      // 4. Insere pagamentos
+      // 3.5. Valida e prepara pagamentos com 'vale' (crediário)
+      const valorVale = body.pagamentos
+        .filter(p => p.forma === "vale")
+        .reduce((a, p) => a + p.valor, 0);
+      if (valorVale > 0) {
+        if (!pedido.cliente_id) {
+          const e: Error & { code?: string } = new Error(
+            "Pagamento em vale requer cliente identificado no pedido"
+          );
+          e.code = "BAD_REQUEST";
+          throw e;
+        }
+        const cli = await client.query<{
+          limite_vale: string; saldo_vale_aberto: string;
+        }>(
+          `SELECT COALESCE(limite_vale, 0)       AS limite_vale,
+                  COALESCE(saldo_vale_aberto, 0) AS saldo_vale_aberto
+             FROM clientes WHERE id = $1 AND empresa_id = $2 FOR UPDATE`,
+          [pedido.cliente_id, empresaId]
+        ).then(r => r.rows[0]);
+        const disponivel = Number(cli?.limite_vale ?? 0) - Number(cli?.saldo_vale_aberto ?? 0);
+        if (valorVale > disponivel + 0.01) {
+          const e: Error & { code?: string } = new Error(
+            `Limite de vale insuficiente. Disponível: R$ ${disponivel.toFixed(2)}, ` +
+            `solicitado: R$ ${valorVale.toFixed(2)}.`
+          );
+          e.code = "BAD_REQUEST";
+          throw e;
+        }
+      }
+
+      // 4. Insere pagamentos (e cria vale se forma='vale')
       for (const p of body.pagamentos) {
         await client.query(
           `INSERT INTO pedido_pagamentos
@@ -124,6 +156,20 @@ export async function POST(
             p.observacoes ?? null,
           ]
         );
+
+        if (p.forma === "vale" && pedido.cliente_id) {
+          await client.query(
+            `INSERT INTO vales
+               (empresa_id, cliente_id, pedido_id, usuario_id, valor, observacoes)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              empresaId, pedido.cliente_id, params.id, sub,
+              p.valor,
+              p.observacoes ?? `Vale do pedido #${pedido.numero ?? params.id.slice(0, 8)}`,
+            ]
+          );
+          // O trigger tg_vales_recalc_saldo atualiza clientes.saldo_vale_aberto
+        }
       }
 
       // 5. Atualiza pedido + libera mesa
