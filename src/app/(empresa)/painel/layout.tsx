@@ -92,21 +92,8 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
     (item) => item.modulo === null || modulos.includes(item.modulo)
   );
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div
-          className="h-8 w-8 animate-spin rounded-full border-2"
-          style={{
-            borderColor:    "var(--color-primary, #10b981)",
-            borderTopColor: "transparent",
-          }}
-        />
-      </div>
-    );
-  }
-
   // Injeta manifest do PWA admin no head (só dentro de /painel)
+  // ATENÇÃO: hook DEVE ficar antes de qualquer early return (regras de hooks)
   useEffect(() => {
     if (typeof document === "undefined") return;
     const linkId = "pwa-admin-manifest";
@@ -132,6 +119,20 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
       });
     }
   }, []);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-2"
+          style={{
+            borderColor:    "var(--color-primary, #10b981)",
+            borderTopColor: "transparent",
+          }}
+        />
+      </div>
+    );
+  }
 
   // PDV é full-screen — sem sidebar visível
   const fullScreenRoutes = ["/painel/pdv"];

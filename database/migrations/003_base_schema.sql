@@ -586,8 +586,13 @@ CREATE TABLE IF NOT EXISTS chamados_painel (
   numero       INTEGER,
   cliente_nome VARCHAR(255),
   balcao       VARCHAR(50),
+  status       VARCHAR(20)  NOT NULL DEFAULT 'aberto',
+  chamado_em   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+ALTER TABLE chamados_painel
+  ADD COLUMN IF NOT EXISTS status     VARCHAR(20)  NOT NULL DEFAULT 'aberto',
+  ADD COLUMN IF NOT EXISTS chamado_em TIMESTAMPTZ  NOT NULL DEFAULT NOW();
 CREATE INDEX IF NOT EXISTS idx_chamados_empresa ON chamados_painel(empresa_id, created_at DESC);
 
 -- ── mensagens_template ───────────────────────────────────────────────────────
