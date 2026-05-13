@@ -7,7 +7,7 @@
 import { NextRequest } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { query, queryOne, queryCount } from "@/lib/db/client";
-import { ok, forbidden, serverError, paginatedOk } from "@/lib/utils/response";
+import { ok, forbidden, serverError } from "@/lib/utils/response";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -69,7 +69,6 @@ export async function GET(req: NextRequest) {
     ]);
 
     return ok({
-      ...paginatedOk(rows, total, page, limit).then ? {} : {},
       data: rows,
       meta: { pagination: { total, page, limit } },
       resumo: {
@@ -83,6 +82,18 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error("[Admin/Observability]", err);
+    // Se error_log não existe ainda, devolve estrutura vazia em vez de 500
+    const msg = err instanceof Error ? err.message : "";
+    if (msg.includes("error_log") || msg.includes("does not exist")) {
+      return ok({
+        data: [],
+        meta: { pagination: { total: 0, page, limit } },
+        resumo: { total: 0, erros: 0, warns: 0, clients: 0 },
+        top_rotas: [],
+        por_hora: [],
+        aviso: "tabela error_log ainda não criada — rode migration 034",
+      });
+    }
     return serverError();
   }
 }

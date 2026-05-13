@@ -122,6 +122,26 @@ export default function ImpressorasPage() {
     carregar();
   }
 
+  async function toggleAgent(a: Agent) {
+    const t = localStorage.getItem("access_token") ?? "";
+    await fetch(`/api/painel/print-agents/${a.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ ativo: !a.ativo }),
+    });
+    carregar();
+  }
+
+  async function removerAgent(a: Agent) {
+    if (!confirm(`Remover agente "${a.nome}"? A key fica inválida imediatamente.`)) return;
+    const t = localStorage.getItem("access_token") ?? "";
+    await fetch(`/api/painel/print-agents/${a.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    carregar();
+  }
+
   async function criarAgent() {
     if (!novoAgentNome.trim()) return;
     const t = localStorage.getItem("access_token") ?? "";
@@ -251,13 +271,18 @@ export default function ImpressorasPage() {
                       ? <Wifi    className="h-5 w-5 text-emerald-400" />
                       : <WifiOff className="h-5 w-5 text-slate-500" />}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-bold text-white truncate">{a.nome}</p>
                         <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                           online ? "bg-emerald-500/15 text-emerald-400" : "bg-slate-700 text-slate-400"
                         }`}>
                           {online ? "ONLINE" : "offline"}
                         </span>
+                        {!a.ativo && (
+                          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-400">
+                            DESATIVADO
+                          </span>
+                        )}
                       </div>
                       <p className="mt-0.5 text-xs font-mono text-slate-500">{a.prefix}***</p>
                       <p className="mt-0.5 text-xs text-slate-500">
@@ -266,6 +291,19 @@ export default function ImpressorasPage() {
                         {a.versao && ` · v${a.versao}`}
                       </p>
                     </div>
+                    <button
+                      onClick={() => toggleAgent(a)}
+                      className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5"
+                    >
+                      {a.ativo ? "Desativar" : "Ativar"}
+                    </button>
+                    <button
+                      onClick={() => removerAgent(a)}
+                      className="rounded-lg p-2 text-slate-400 hover:bg-red-500/10 hover:text-red-400"
+                      title="Remover agente"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 );
               })}

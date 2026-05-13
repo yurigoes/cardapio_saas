@@ -81,6 +81,11 @@ export async function GET(req: NextRequest) {
     return ok(pedidos);
   } catch (err) {
     console.error("[Cozinha/Pedidos]", err);
+    const msg = err instanceof Error ? err.message : "";
+    // Coluna ainda não criada (migration 038 ainda não rodada)
+    if (msg.includes("does not exist") || msg.includes("setor_producao") || msg.includes("aceito_em")) {
+      return ok([]);
+    }
     return serverError();
   }
 }
