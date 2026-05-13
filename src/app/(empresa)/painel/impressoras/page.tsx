@@ -205,10 +205,10 @@ export default function ImpressorasPage() {
                 <Download className="h-3.5 w-3.5" /> Baixar agente (.tar.gz)
               </a>
               <ol className="list-decimal pl-5 space-y-0.5 text-slate-400">
-                <li>Extrai o .tar.gz na máquina do restaurante (precisa Node.js 18+)</li>
-                <li>No terminal, dentro da pasta: <code className="text-emerald-300">node setup-wizard.js</code></li>
-                <li>Cola a key acima quando perguntar e configura IP de cada impressora</li>
-                <li>Rode <code className="text-emerald-300">node index.js</code> (ou registre como serviço — README explica)</li>
+                <li>Extrai o .tar.gz na máquina do restaurante (precisa Node.js 18+ — baixe em nodejs.org)</li>
+                <li><b className="text-white">Windows:</b> duplo clique em <code className="text-emerald-300">setup.bat</code> — detecta impressoras automaticamente</li>
+                <li>Cola a key acima e escolhe pra cada setor: rede (IP) ou Windows (lista de impressoras instaladas)</li>
+                <li>Pra rodar em segundo plano: clique direito em <code className="text-emerald-300">install-service.bat</code> → "Executar como administrador"</li>
               </ol>
             </div>
             <button

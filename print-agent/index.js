@@ -2,11 +2,13 @@
 /**
  * Cardápio SaaS — Print Agent
  *
- * Long-poll de jobs em GET /api/agent/jobs e envia ESC/POS por TCP
- * para impressoras locais conforme `config.json` (criado pelo setup-wizard).
+ * Long-poll dos jobs em GET /api/agent/jobs e envia ESC/POS para
+ * impressoras locais. Suporta:
+ *   - TCP (impressora de rede com IP)
+ *   - Windows (impressora pelo nome — local USB ou compartilhada)
  *
  * Uso:
- *   node setup-wizard.js   ← primeira vez
+ *   node setup-wizard.js   ← primeira vez (configura)
  *   node index.js          ← roda em loop
  */
 "use strict";
@@ -14,34 +16,32 @@
 const fs   = require("fs");
 const net  = require("net");
 const path = require("path");
+const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.0.0";
+const VERSION     = "1.1.0";
 
 // ─── ESC/POS bytes ──────────────────────────────────────────
 const ESC = 0x1b;
 const GS  = 0x1d;
-const INIT       = Buffer.from([ESC, 0x40]);                   // @ - reset
-const CUT        = Buffer.from([GS,  0x56, 0x00]);             // full cut
-const FEED3      = Buffer.from([ESC, 0x64, 0x03]);             // feed 3 lines
-const ALIGN_C    = Buffer.from([ESC, 0x61, 0x01]);
-const ALIGN_L    = Buffer.from([ESC, 0x61, 0x00]);
-const BOLD_ON    = Buffer.from([ESC, 0x45, 0x01]);
-const BOLD_OFF   = Buffer.from([ESC, 0x45, 0x00]);
-const SIZE_2X    = Buffer.from([GS,  0x21, 0x11]);             // double w+h
-const SIZE_1X    = Buffer.from([GS,  0x21, 0x00]);
+const INIT    = Buffer.from([ESC, 0x40]);
+const CUT     = Buffer.from([GS,  0x56, 0x00]);
+const FEED3   = Buffer.from([ESC, 0x64, 0x03]);
+const ALIGN_L = Buffer.from([ESC, 0x61, 0x00]);
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
-    console.error(`[FATAL] ${CONFIG_PATH} não existe — rode 'node setup-wizard.js' primeiro.`);
+    console.error(`[FATAL] ${CONFIG_PATH} não existe — rode o setup primeiro.`);
+    console.error(`        Windows: clique em setup.bat`);
+    console.error(`        Outros:  node setup-wizard.js`);
     process.exit(1);
   }
   return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
 }
 
-// ─── HTTP helpers (sem dependências externas) ───────────────
+// ─── HTTP helpers ───────────────────────────────────────────
 async function httpJson(method, url, agentKey, body) {
-  const u = new URL(url);
+  const u   = new URL(url);
   const lib = u.protocol === "https:" ? require("https") : require("http");
   const data = body ? JSON.stringify(body) : null;
 
@@ -52,10 +52,10 @@ async function httpJson(method, url, agentKey, body) {
       port:     u.port || (u.protocol === "https:" ? 443 : 80),
       path:     u.pathname + u.search,
       headers: {
-        "Authorization":     `Bearer ${agentKey}`,
-        "X-Agent-Version":   VERSION,
-        "Content-Type":      "application/json",
-        "Accept":            "application/json",
+        "Authorization":   `Bearer ${agentKey}`,
+        "X-Agent-Version": VERSION,
+        "Content-Type":    "application/json",
+        "Accept":          "application/json",
         ...(data ? { "Content-Length": Buffer.byteLength(data) } : {}),
       },
       timeout: 30000,
@@ -96,7 +96,6 @@ function imprimirTCP(ip, porta, payload) {
     sock.connect(porta, ip, () => {
       sock.write(payload, (err) => {
         if (err) return finish(err);
-        // dá tempo da impressora drenar antes de fechar
         setTimeout(() => finish(null), 400);
       });
     });
@@ -104,10 +103,6 @@ function imprimirTCP(ip, porta, payload) {
 }
 
 function montarPayloadTexto(conteudo) {
-  // conteúdo é texto pré-formatado pelo backend (formatadores.ts)
-  // Aqui só envolvemos com INIT + texto + FEED + CUT.
-  // CP850/Latin1 funciona na maioria das térmicas; se sua impressora exigir,
-  // pode rodar `iconv` aqui — mantivemos UTF-8 por padrão.
   const body = Buffer.from(conteudo.replace(/\n/g, "\r\n") + "\r\n", "utf-8");
   return Buffer.concat([INIT, ALIGN_L, body, FEED3, CUT]);
 }
@@ -123,17 +118,24 @@ async function processarJob(job) {
     return { sucesso: false, erro: `setor '${setor}' desativado neste agente` };
   }
 
-  const ip    = conf.ip    || job.impressora.ip;
-  const porta = conf.porta || job.impressora.porta || 9100;
-  if (!ip) return { sucesso: false, erro: `sem IP para setor '${setor}'` };
+  const payload = montarPayloadTexto(job.conteudo || "");
+  const tipo    = conf.tipo || "tcp";
 
   try {
-    const payload = montarPayloadTexto(job.conteudo || "");
-    await imprimirTCP(ip, porta, payload);
-    console.log(`  ✓ job ${job.id.slice(0, 8)} → ${setor} @ ${ip}:${porta}`);
+    if (tipo === "windows") {
+      if (!conf.printer_name) throw new Error(`sem printer_name pra setor '${setor}'`);
+      await imprimirWindows(conf.printer_name, payload);
+      console.log(`  ✓ job ${job.id.slice(0, 8)} → ${setor} via Windows: ${conf.printer_name}`);
+    } else {
+      const ip    = conf.ip    || job.impressora.ip;
+      const porta = conf.porta || job.impressora.porta || 9100;
+      if (!ip) throw new Error(`sem IP pra setor '${setor}'`);
+      await imprimirTCP(ip, porta, payload);
+      console.log(`  ✓ job ${job.id.slice(0, 8)} → ${setor} via TCP: ${ip}:${porta}`);
+    }
     return { sucesso: true };
   } catch (err) {
-    console.warn(`  ✗ job ${job.id.slice(0, 8)} → ${setor} @ ${ip}:${porta} — ${err.message}`);
+    console.warn(`  ✗ job ${job.id.slice(0, 8)} → ${setor} — ${err.message}`);
     return { sucesso: false, erro: err.message };
   }
 }
@@ -165,11 +167,13 @@ async function main() {
   console.log(`Setores ativos: ${
     Object.entries(cfg.impressoras)
       .filter(([, v]) => v.ativa)
-      .map(([k, v]) => `${k}@${v.ip}:${v.porta}`).join(", ") || "(nenhum)"
+      .map(([k, v]) => v.tipo === "windows"
+        ? `${k}→${v.printer_name}`
+        : `${k}→${v.ip}:${v.porta}`)
+      .join(", ") || "(nenhum)"
   }`);
   console.log(`Polling a cada ${cfg.pollMs}ms — Ctrl+C para sair\n`);
 
-  // ping inicial pra detectar key inválida cedo
   try {
     await httpJson("GET", `${cfg.apiUrl}/api/agent/jobs`, cfg.agentKey);
     console.log("✓ Autenticado no servidor.\n");
@@ -178,7 +182,6 @@ async function main() {
     process.exit(2);
   }
 
-  // loop
   setInterval(tick, cfg.pollMs);
   tick();
 }
