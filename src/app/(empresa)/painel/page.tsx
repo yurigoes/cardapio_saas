@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { TrialBanner } from "@/components/painel/TrialBanner";
 import { OnboardingBanner } from "@/components/painel/OnboardingBanner";
+import { ImpersonateBanner } from "@/components/painel/ImpersonateBanner";
 
 interface Stats {
   pedidos_hoje:      number;
@@ -140,6 +141,9 @@ function PainelDashboard() {
 
   return (
     <div className="space-y-5 pb-12">
+      {/* Master operando como esta empresa */}
+      <ImpersonateBanner />
+
       {/* Trial */}
       <TrialBanner />
 

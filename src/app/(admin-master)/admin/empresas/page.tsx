@@ -710,6 +710,31 @@ export default function EmpresasPage() {
                         </a>
 
                         <button
+                          onClick={async () => {
+                            if (!confirm(`Operar como "${empresa.nome_fantasia}"?\n\nVocê será redirecionado ao painel da empresa. Banner amarelo aparece pra voltar.`)) return;
+                            try {
+                              const t = localStorage.getItem("access_token");
+                              const r = await fetch(`/api/admin/empresas/${empresa.id}/impersonar`, {
+                                method: "POST",
+                                headers: { Authorization: `Bearer ${t}` },
+                              });
+                              const d = await r.json();
+                              if (!d.success) { alert(d.error?.message ?? "Falha"); return; }
+                              // Salva token original em backup + troca pelo novo
+                              localStorage.setItem("master_token_backup", t ?? "");
+                              localStorage.setItem("access_token", d.data.access_token);
+                              window.location.href = "/painel";
+                            } catch (e) {
+                              alert("Erro: " + (e as Error).message);
+                            }
+                          }}
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-amber-500/20 hover:text-amber-400 transition"
+                          title="Operar como esta empresa (impersonar)"
+                        >
+                          <Building2 className="h-4 w-4" />
+                        </button>
+
+                        <button
                           onClick={() => setEditEmpresa(empresa)}
                           className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-emerald-400 transition"
                           title="Configurar empresa"
