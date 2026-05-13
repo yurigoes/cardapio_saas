@@ -35,8 +35,10 @@ const PUBLIC_ROUTES = [
   "/api/webhooks",
   "/api/health",
   "/api/pub",
+  "/api/v1",
   "/totem",
   "/rastrear",
+  "/docs",
 ];
 
 // Rotas por role
@@ -84,14 +86,14 @@ export async function middleware(req: NextRequest) {
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sdk.mercadopago.com https://js.stripe.com https://unpkg.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sdk.mercadopago.com https://js.stripe.com https://unpkg.com blob:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
+      "worker-src 'self' blob:",
       "img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:* http://minio:*",
       "media-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:* http://minio:*",
       "font-src 'self' data: https://fonts.gstatic.com",
       "connect-src 'self' wss: ws: https: http://127.0.0.1:* http://localhost:* http://evolution:* http://minio:* https://viacep.com.br https://*.tile.openstreetmap.org",
       "frame-src 'self' https://www.mercadopago.com.br https://www.mercadolibre.com https://js.stripe.com",
-      "worker-src 'self' blob:",
       "manifest-src 'self'",
       "frame-ancestors 'none'",
     ].join("; ")

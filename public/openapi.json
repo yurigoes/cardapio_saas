@@ -1,0 +1,189 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Cardápio SaaS API v1",
+    "version": "1.0.0",
+    "description": "API pública para integrações externas. Autenticação via API key (Authorization: Bearer apk_...).\n\nGere keys em /painel/api-keys."
+  },
+  "servers": [
+    { "url": "/", "description": "Servidor atual" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "apk_xxxxxx"
+      }
+    },
+    "schemas": {
+      "Erro": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "error":   { "type": "object", "properties": { "message": { "type": "string" } } }
+        }
+      },
+      "Categoria": {
+        "type": "object",
+        "properties": {
+          "id":         { "type": "string", "format": "uuid" },
+          "nome":       { "type": "string" },
+          "descricao":  { "type": "string", "nullable": true },
+          "ordem":      { "type": "integer" },
+          "disponivel": { "type": "boolean" }
+        }
+      },
+      "Produto": {
+        "type": "object",
+        "properties": {
+          "id":             { "type": "string", "format": "uuid" },
+          "categoria_id":   { "type": "string", "format": "uuid", "nullable": true },
+          "nome":           { "type": "string" },
+          "descricao":      { "type": "string", "nullable": true },
+          "preco":          { "type": "number" },
+          "imagem_url":     { "type": "string", "nullable": true },
+          "tipo":           { "type": "string" },
+          "disponivel":     { "type": "boolean" },
+          "destaque":       { "type": "boolean" },
+          "tempo_preparo":  { "type": "integer", "nullable": true }
+        }
+      },
+      "PedidoItem": {
+        "type": "object",
+        "required": ["nome", "preco_unitario", "quantidade"],
+        "properties": {
+          "produto_id":     { "type": "string", "format": "uuid" },
+          "nome":           { "type": "string" },
+          "preco_unitario": { "type": "number" },
+          "quantidade":     { "type": "integer", "minimum": 1, "maximum": 999 },
+          "observacoes":    { "type": "string" }
+        }
+      },
+      "Pedido": {
+        "type": "object",
+        "properties": {
+          "id":               { "type": "string", "format": "uuid" },
+          "numero":           { "type": "integer" },
+          "tipo":             { "type": "string", "enum": ["balcao","delivery","whatsapp","app"] },
+          "status":           { "type": "string" },
+          "total":            { "type": "number" },
+          "cliente_nome":     { "type": "string", "nullable": true },
+          "cliente_telefone": { "type": "string", "nullable": true },
+          "created_at":       { "type": "string", "format": "date-time" }
+        }
+      },
+      "PedidoCreate": {
+        "type": "object",
+        "required": ["itens"],
+        "properties": {
+          "tipo":             { "type": "string", "enum": ["balcao","delivery","whatsapp","app"], "default": "balcao" },
+          "cliente_nome":     { "type": "string" },
+          "cliente_telefone": { "type": "string" },
+          "observacoes":      { "type": "string" },
+          "itens":            { "type": "array", "items": { "$ref": "#/components/schemas/PedidoItem" }, "minItems": 1 }
+        }
+      },
+      "Resposta": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "data":    {}
+        }
+      }
+    }
+  },
+  "security": [{ "ApiKey": [] }],
+  "paths": {
+    "/api/v1/categorias": {
+      "get": {
+        "summary": "Lista categorias",
+        "description": "Requer scope `read`",
+        "tags": ["Catálogo"],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": {
+              "allOf": [
+                { "$ref": "#/components/schemas/Resposta" },
+                { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Categoria" } } } }
+              ]
+            } } }
+          },
+          "401": { "description": "API key inválida", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Erro" } } } }
+        }
+      }
+    },
+    "/api/v1/produtos": {
+      "get": {
+        "summary": "Lista produtos",
+        "description": "Filtros opcionais. Requer scope `read`.",
+        "tags": ["Catálogo"],
+        "parameters": [
+          { "name": "categoria_id", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "disponivel",   "in": "query", "schema": { "type": "boolean" } },
+          { "name": "q",            "in": "query", "schema": { "type": "string" }, "description": "Busca em nome/descrição" },
+          { "name": "page",         "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "limit",        "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": {
+              "allOf": [
+                { "$ref": "#/components/schemas/Resposta" },
+                { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Produto" } } } }
+              ]
+            } } }
+          }
+        }
+      }
+    },
+    "/api/v1/pedidos": {
+      "get": {
+        "summary": "Lista pedidos",
+        "description": "Requer scope `read`",
+        "tags": ["Pedidos"],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "tipo",   "in": "query", "schema": { "type": "string" } },
+          { "name": "page",   "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "limit",  "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      },
+      "post": {
+        "summary": "Cria pedido externo",
+        "description": "Cria pedido marcado origem='api_v1'. Requer scope `write`.",
+        "tags": ["Pedidos"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PedidoCreate" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Criado",
+            "content": { "application/json": { "schema": {
+              "allOf": [
+                { "$ref": "#/components/schemas/Resposta" },
+                { "type": "object", "properties": { "data": { "type": "object", "properties": {
+                  "id":     { "type": "string", "format": "uuid" },
+                  "numero": { "type": "integer" },
+                  "total":  { "type": "number" }
+                } } } }
+              ]
+            } } }
+          },
+          "400": { "description": "Body inválido" },
+          "403": { "description": "Scope `write` necessário" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Catálogo", "description": "Categorias e produtos" },
+    { "name": "Pedidos",  "description": "Listar e criar pedidos externos" }
+  ]
+}
