@@ -35,6 +35,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/sharp     ./node_modules/sharp
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/web-push  ./node_modules/web-push
 
+# Pasta do agente de impressão local — servida via /api/downloads/print-agent
+COPY --from=builder --chown=nextjs:nodejs /app/print-agent  ./print-agent
+
 USER nextjs
 
 EXPOSE 3000

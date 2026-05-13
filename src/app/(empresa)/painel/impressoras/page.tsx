@@ -194,15 +194,21 @@ export default function ImpressorasPage() {
               <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
               <p>Salve esta key agora. Ela não vai ser exibida de novo — só revogar e gerar nova.</p>
             </div>
-            <div className="rounded-lg bg-slate-900/50 p-3 text-xs text-slate-300 space-y-1">
+            <div className="rounded-lg bg-slate-900/50 p-3 text-xs text-slate-300 space-y-2">
               <p className="font-bold text-white flex items-center gap-1.5">
                 <Download className="h-3.5 w-3.5" /> Como instalar:
               </p>
+              <a
+                href="/api/downloads/print-agent"
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white hover:brightness-110"
+              >
+                <Download className="h-3.5 w-3.5" /> Baixar agente (.tar.gz)
+              </a>
               <ol className="list-decimal pl-5 space-y-0.5 text-slate-400">
-                <li>Baixe a pasta <code className="text-emerald-300">/print-agent</code> do repositório</li>
-                <li>Rode <code className="text-emerald-300">node setup-wizard.js</code> e cole a key acima</li>
-                <li>Configure IP de cada impressora por setor</li>
-                <li>Rode <code className="text-emerald-300">node index.js</code></li>
+                <li>Extrai o .tar.gz na máquina do restaurante (precisa Node.js 18+)</li>
+                <li>No terminal, dentro da pasta: <code className="text-emerald-300">node setup-wizard.js</code></li>
+                <li>Cola a key acima quando perguntar e configura IP de cada impressora</li>
+                <li>Rode <code className="text-emerald-300">node index.js</code> (ou registre como serviço — README explica)</li>
               </ol>
             </div>
             <button
