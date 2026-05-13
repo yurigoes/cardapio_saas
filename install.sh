@@ -414,8 +414,11 @@ run_migrations() {
 }
 
 # ── Cria admin master via app ──────────────────────────────────
+# Usa pgcrypto (extensão nativa do Postgres) em vez de subir um container
+# Node externo só pra gerar hash. Mais rápido, sem dependências, e o
+# formato $2a$ gerado pelo pgcrypto é 100% compatível com bcryptjs.
 create_master() {
-  info "Aguardando app iniciar para criar admin master..."
+  info "Aguardando app iniciar..."
   for i in $(seq 1 30); do
     if curl -sf --max-time 3 http://localhost:3000/api/health >/dev/null 2>&1; then
       break
@@ -423,32 +426,57 @@ create_master() {
     sleep 3
   done
 
-  # Cria/atualiza o master via seed SQL
-  # Usa bcrypt hash pré-gerado para a senha (cost 12)
-  BCRYPT_HASH=$(docker run --rm node:20-alpine -e \
-    "const b=require('bcryptjs');b.hash('${MASTER_PASSWORD}',12).then(h=>process.stdout.write(h))" \
-    2>/dev/null || echo "")
+  info "Criando admin master via pgcrypto..."
 
-  if [[ -n "$BCRYPT_HASH" ]]; then
-    docker exec cardapio_postgres psql -U cardapio -d cardapio_saas << SQL >/dev/null 2>&1 || true
-INSERT INTO usuarios (id, nome, email, senha_hash, role, ativo)
+  # Email é normalizado pra lowercase pra bater com o login (z.string().email().toLowerCase())
+  MASTER_EMAIL_LC="${MASTER_EMAIL,,}"
+
+  # Escapa apóstrofo da senha pra não quebrar o SQL (PostgreSQL: '' = ')
+  MASTER_PASSWORD_ESC="${MASTER_PASSWORD//\'/\'\'}"
+
+  if docker exec -i cardapio_postgres psql -U cardapio -d cardapio_saas <<SQL >/dev/null 2>&1
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Garante que existe só 1 master e que está consistente
+DELETE FROM usuarios WHERE role='master' AND email <> '${MASTER_EMAIL_LC}';
+
+INSERT INTO usuarios (id, nome, email, senha_hash, role, ativo, tentativas_login)
 VALUES (
-  '00000000-0000-0000-0000-000000000000',
+  COALESCE(
+    (SELECT id FROM usuarios WHERE email='${MASTER_EMAIL_LC}'),
+    gen_random_uuid()
+  ),
   'Master Admin',
-  '${MASTER_EMAIL}',
-  '${BCRYPT_HASH}',
+  '${MASTER_EMAIL_LC}',
+  crypt('${MASTER_PASSWORD_ESC}', gen_salt('bf', 12)),
   'master',
-  true
+  true,
+  0
 )
 ON CONFLICT (email) DO UPDATE
-  SET senha_hash = EXCLUDED.senha_hash,
-      role       = 'master',
-      ativo      = true;
+  SET senha_hash       = crypt('${MASTER_PASSWORD_ESC}', gen_salt('bf', 12)),
+      role             = 'master',
+      ativo            = true,
+      deleted_at       = NULL,
+      bloqueado_ate    = NULL,
+      tentativas_login = 0;
 SQL
-    log "Admin master criado: ${MASTER_EMAIL}"
+  then
+    # Verifica se realmente bate
+    OK=$(docker exec -i cardapio_postgres psql -U cardapio -d cardapio_saas -tAc \
+      "SELECT (senha_hash = crypt('${MASTER_PASSWORD_ESC}', senha_hash)) FROM usuarios WHERE email='${MASTER_EMAIL_LC}';" 2>/dev/null)
+    if [[ "$OK" == "t" ]]; then
+      log "Admin master criado: ${MASTER_EMAIL_LC}"
+    else
+      warn "Master inserido mas senha não confere — confira manualmente"
+    fi
   else
-    warn "Não foi possível gerar hash bcrypt — use o seed manual após a instalação"
-    warn "Execute: node scripts/seed.js --master-email='${MASTER_EMAIL}' --master-password='${MASTER_PASSWORD}'"
+    warn "Falha ao criar admin master via SQL"
+    warn "Execute manualmente após a instalação:"
+    warn "  docker exec cardapio_postgres psql -U cardapio -d cardapio_saas -c \\"
+    warn "    \"INSERT INTO usuarios (id,nome,email,senha_hash,role,ativo)"
+    warn "     VALUES (gen_random_uuid(),'Master','${MASTER_EMAIL_LC}',"
+    warn "             crypt('${MASTER_PASSWORD}', gen_salt('bf', 12)),'master',true);\""
   fi
 }
 
