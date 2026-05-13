@@ -21,6 +21,7 @@ import {
 import { TrialBanner } from "@/components/painel/TrialBanner";
 import { OnboardingBanner } from "@/components/painel/OnboardingBanner";
 import { ImpersonateBanner } from "@/components/painel/ImpersonateBanner";
+import { LinksExternos } from "@/components/painel/LinksExternos";
 
 interface Stats {
   pedidos_hoje:      number;
@@ -282,6 +283,9 @@ function PainelDashboard() {
           </div>
         )}
       </div>
+
+      {/* Links externos do sistema */}
+      <LinksExternos />
     </div>
   );
 }

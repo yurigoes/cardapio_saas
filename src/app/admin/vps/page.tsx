@@ -20,6 +20,7 @@ import {
 import { VpsDashboard } from "@/components/admin/VpsDashboard";
 import { DiscosDetectados } from "@/components/admin/DiscosDetectados";
 import { DeployPanel } from "@/components/admin/DeployPanel";
+import { LinksExternos } from "@/components/painel/LinksExternos";
 
 interface Agent {
   id: string; nome: string; prefix: string; ativo: boolean;
@@ -323,6 +324,9 @@ sudo bash install-systemd.sh`}</pre>
           return null;
         }}
       />
+
+      {/* Links externos */}
+      <LinksExternos isMaster />
 
       {/* Deploy + backups */}
       <DeployPanel

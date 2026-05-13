@@ -1006,12 +1006,17 @@ export default function IntegracoesPage() {
       <section className="space-y-3">
         <SectionDivider label="Marketplaces" />
         <div className="grid gap-4 md:grid-cols-2">
-          <PlaceholderSection
-            name="iFood"
-            description="Integração com iFood em breve. Receba e gerencie pedidos do iFood diretamente pelo painel."
-            color="#ea1d2c"
-            initial="iF"
-          />
+          <a href="/painel/ifood" className="block rounded-2xl border border-[#ea1d2c]/30 bg-[#ea1d2c]/5 hover:bg-[#ea1d2c]/10 p-5 transition">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="rounded-lg bg-[#ea1d2c] p-2 text-white font-bold w-9 h-9 flex items-center justify-center">iF</div>
+              <h3 className="font-bold text-white">iFood</h3>
+              <span className="ml-auto rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-400">DISPONÍVEL</span>
+            </div>
+            <p className="text-sm text-slate-400">
+              Receba pedidos do iFood direto no painel. Configure suas credenciais e a sincronização é automática.
+            </p>
+            <p className="mt-3 text-xs text-emerald-400">→ Configurar agora</p>
+          </a>
           <PlaceholderSection
             name="Rappi"
             description="Integração com Rappi em breve. Sincronize seu cardápio e pedidos automaticamente."
