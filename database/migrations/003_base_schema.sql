@@ -261,12 +261,22 @@ CREATE TABLE IF NOT EXISTS security_events (
 CREATE TABLE IF NOT EXISTS sessoes (
   id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
   usuario_id      UUID         NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  refresh_hash    VARCHAR(255) NOT NULL,
-  ip_origem       INET,
+  refresh_token   TEXT         NOT NULL,
+  ip_address      INET,
   user_agent      TEXT,
-  expira_em       TIMESTAMPTZ  NOT NULL,
+  expires_at      TIMESTAMPTZ  NOT NULL,
+  revogado_em     TIMESTAMPTZ,
   created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+-- Garante colunas em instalações com schema antigo
+ALTER TABLE sessoes
+  ADD COLUMN IF NOT EXISTS refresh_token TEXT,
+  ADD COLUMN IF NOT EXISTS ip_address    INET,
+  ADD COLUMN IF NOT EXISTS user_agent    TEXT,
+  ADD COLUMN IF NOT EXISTS expires_at    TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS revogado_em   TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_sessoes_refresh ON sessoes (refresh_token) WHERE revogado_em IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sessoes_usuario ON sessoes (usuario_id);
 
 CREATE TABLE IF NOT EXISTS rate_limit_log (
   id          BIGSERIAL    PRIMARY KEY,
