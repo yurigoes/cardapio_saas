@@ -22,7 +22,7 @@ if errorlevel 1 (
   echo      Configuracao (config.json) preservada.
 )
 
-del "%~dp0run-hidden.vbs" >nul 2>nul
+REM runner.vbs nao e apagado (faz parte do agente, nao do servico)
 
 echo.
 pause

@@ -1,6 +1,6 @@
 {
   "name": "cardapio-print-agent",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Agente local de impressão para Cardápio SaaS — long-poll de jobs e envio ESC/POS por TCP",
   "main": "index.js",
   "bin": {
