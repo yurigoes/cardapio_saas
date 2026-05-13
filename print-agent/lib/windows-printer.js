@@ -69,7 +69,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 public class RawPrinterHelper {
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    public struct DOCINFOA {
+    public class DOCINFOA {
         [MarshalAs(UnmanagedType.LPWStr)] public string pDocName;
         [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;
         [MarshalAs(UnmanagedType.LPWStr)] public string pDataType;

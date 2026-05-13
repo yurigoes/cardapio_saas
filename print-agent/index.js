@@ -19,7 +19,7 @@ const path = require("path");
 const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.2.0";
+const VERSION     = "1.2.1";
 
 // ─── ESC/POS bytes ──────────────────────────────────────────
 const ESC = 0x1b;
