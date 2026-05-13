@@ -15,6 +15,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Server, HardDrive, Cpu, RefreshCw, Trash2, AlertTriangle, Check,
   Copy, Power, Database, Wrench, Wifi, Activity, Plus, X,
+  MessageCircle, Send, Stethoscope,
 } from "lucide-react";
 
 interface Agent {
@@ -26,6 +27,24 @@ interface Agent {
 interface ManutencaoCfg {
   ativo: boolean;
   mensagem?: string;
+}
+
+interface Alertas {
+  whatsapp: string | null;
+  ativo: boolean;
+  evolution_instance: string | null;
+  ultimo_envio: string | null;
+  ultimo_status: string | null;
+  ultimo_erro: string | null;
+}
+
+interface Diagnostico {
+  resultado: string;
+  resumo: string;
+  duracao_ms: number;
+  detalhes?: Record<string, unknown>;
+  avisos?: string[];
+  criticos?: string[];
 }
 
 const fmtData = (iso: string | null) =>
@@ -43,6 +62,9 @@ export default function VpsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [output, setOutput] = useState<{ titulo: string; conteudo: string } | null>(null);
   const [copiado, setCopiado] = useState(false);
+  const [alertas, setAlertas] = useState<Alertas | null>(null);
+  const [editandoAlertas, setEditandoAlertas] = useState(false);
+  const [diag, setDiag] = useState<Diagnostico | null>(null);
 
   const auth = () => ({
     Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("access_token") : ""}`,
@@ -50,12 +72,14 @@ export default function VpsPage() {
   });
 
   const carregar = useCallback(async () => {
-    const [a, m] = await Promise.all([
-      fetch("/api/admin/vps/agents",        { headers: auth() }).then(r => r.json()).catch(() => ({})),
+    const [a, m, al] = await Promise.all([
+      fetch("/api/admin/vps/agents",         { headers: auth() }).then(r => r.json()).catch(() => ({})),
       fetch("/api/admin/settings/manutencao",{ headers: auth() }).then(r => r.json()).catch(() => ({})),
+      fetch("/api/admin/vps/alertas",        { headers: auth() }).then(r => r.json()).catch(() => ({})),
     ]);
-    if (a.success) setAgents(a.data ?? []);
+    if (a.success)  setAgents(a.data ?? []);
     if (m.success && m.data?.valor) setManutencao(m.data.valor as ManutencaoCfg);
+    if (al.success) setAlertas(al.data as Alertas);
   }, []);
 
   useEffect(() => { carregar(); }, [carregar]);
@@ -104,6 +128,43 @@ export default function VpsPage() {
       body: JSON.stringify({ valor: novo }),
     }).then(r => r.json());
     if (r.success) setManutencao(novo);
+  }
+
+  async function rodarDiagnostico() {
+    setBusy("diag");
+    setDiag(null);
+    try {
+      const r = await fetch("/api/admin/vps/diagnosticos", {
+        method: "POST", headers: auth(),
+        body: JSON.stringify({ origem: "manual" }),
+      });
+      const d = await r.json();
+      if (d.success) setDiag(d.data as Diagnostico);
+    } finally { setBusy(null); }
+  }
+
+  async function salvarAlertas(novo: Partial<Alertas>) {
+    const merged = { ...alertas, ...novo };
+    const r = await fetch("/api/admin/vps/alertas", {
+      method: "PATCH", headers: auth(),
+      body: JSON.stringify(merged),
+    });
+    const d = await r.json();
+    if (d.success) {
+      setAlertas(merged as Alertas);
+      setEditandoAlertas(false);
+    }
+  }
+
+  async function enviarTeste() {
+    setBusy("teste-alerta");
+    try {
+      const r = await fetch("/api/admin/vps/alertas/teste", {
+        method: "POST", headers: auth(),
+      });
+      const d = await r.json();
+      alert(d.success ? d.data.mensagem : "Falha");
+    } finally { setBusy(null); }
   }
 
   function copiar(s: string) {
@@ -260,6 +321,99 @@ sudo bash install-systemd.sh`}</pre>
                onClick={() => confirm("Roda 'docker system prune --volumes -f'. Apaga imagens/volumes não usados. Continuar?") && exec("docker_prune", { volumes: true }, "Limpeza Docker")}
                busy={busy === "docker_prune"} />
         </div>
+      </section>
+
+      {/* Diagnóstico */}
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-400">
+            <Stethoscope className="h-4 w-4" /> Diagnóstico completo
+          </h2>
+          <button onClick={rodarDiagnostico} disabled={busy === "diag"}
+            className="rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+            {busy === "diag" ? "Verificando..." : "Rodar agora"}
+          </button>
+        </div>
+        <p className="text-xs text-slate-500">
+          Roda status + disco + docker_ps em paralelo, mais contagem de erros 24h. Classifica como OK / WARN / ERRO baseado em thresholds.
+          Agendado pra rodar todo dia às 02h via cron.
+        </p>
+        {diag && (
+          <div className={`rounded-xl border p-4 ${
+            diag.resultado === "ok"   ? "border-emerald-500/30 bg-emerald-500/10" :
+            diag.resultado === "warn" ? "border-amber-500/30 bg-amber-500/10" :
+                                          "border-red-500/30 bg-red-500/10"
+          }`}>
+            <p className="font-bold text-white whitespace-pre-line">{diag.resumo}</p>
+            <p className="text-xs text-slate-400 mt-1">Duração: {diag.duracao_ms}ms</p>
+          </div>
+        )}
+      </section>
+
+      {/* Alertas WhatsApp */}
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-400">
+            <MessageCircle className="h-4 w-4" /> Alertas via WhatsApp
+            {alertas?.ativo && <span className="text-emerald-400 text-xs">● ativo</span>}
+          </h2>
+          {!editandoAlertas && (
+            <button onClick={() => setEditandoAlertas(true)}
+              className="rounded-xl border border-white/10 hover:bg-white/5 px-3 py-1.5 text-xs text-slate-300">
+              Configurar
+            </button>
+          )}
+        </div>
+
+        {!editandoAlertas ? (
+          <div className="space-y-2 text-sm text-slate-300">
+            <p>Número: <code className="text-emerald-300">{alertas?.whatsapp || "(não configurado)"}</code></p>
+            <p>Instância Evolution: <code className="text-emerald-300">{alertas?.evolution_instance || "(não configurada)"}</code></p>
+            {alertas?.ultimo_envio && (
+              <p className="text-xs text-slate-500">
+                Último envio: {new Date(alertas.ultimo_envio).toLocaleString("pt-BR")}
+                {" "}({alertas.ultimo_status === "ok" ? "✓" : "✗ " + (alertas.ultimo_erro ?? "")})
+              </p>
+            )}
+            {alertas?.ativo && alertas?.whatsapp && alertas?.evolution_instance && (
+              <button onClick={enviarTeste} disabled={busy === "teste-alerta"}
+                className="mt-2 inline-flex items-center gap-2 rounded-xl bg-blue-500 hover:bg-blue-400 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+                <Send className="h-4 w-4" /> {busy === "teste-alerta" ? "Enviando..." : "Enviar teste"}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <label className="block">
+              <span className="text-xs font-medium text-slate-400 mb-1 block">WhatsApp (com DDI, ex: 5511999999999)</span>
+              <input type="text" defaultValue={alertas?.whatsapp ?? ""} id="whatsapp"
+                className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white" />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-slate-400 mb-1 block">Nome da instância na Evolution (ex: principal)</span>
+              <input type="text" defaultValue={alertas?.evolution_instance ?? ""} id="evolution_instance"
+                className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white" />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input type="checkbox" defaultChecked={alertas?.ativo} id="ativo" className="accent-emerald-500" />
+              Receber alertas
+            </label>
+            <div className="flex gap-2">
+              <button onClick={() => salvarAlertas({
+                whatsapp:           (document.getElementById("whatsapp") as HTMLInputElement).value || null,
+                evolution_instance: (document.getElementById("evolution_instance") as HTMLInputElement).value || null,
+                ativo:              (document.getElementById("ativo") as HTMLInputElement).checked,
+              })}
+                className="rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 py-2 text-sm font-bold text-white">
+                Salvar
+              </button>
+              <button onClick={() => setEditandoAlertas(false)}
+                className="rounded-xl border border-white/10 hover:bg-white/5 px-4 py-2 text-sm text-slate-300">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Output */}
