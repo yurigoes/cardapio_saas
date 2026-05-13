@@ -38,6 +38,7 @@ const PUBLIC_ROUTES = [
   "/api/v1",
   "/api/observability/error",
   "/api/ifood/poll",
+  "/api/agent",
   "/totem",
   "/rastrear",
   "/docs",
