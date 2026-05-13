@@ -26,10 +26,11 @@ export async function GET(req: NextRequest) {
     const pedidos = await query(
       `SELECT p.id, p.numero, p.total, p.status_entrega,
               p.cliente_nome, p.cliente_telefone, p.cliente_endereco,
-              p.tracking_token,
+              p.tracking_token, p.forma_pagamento,
               p.atribuido_em, p.coletado_em, p.entregue_em,
               p.valor_motoboy,
-              z.nome AS zona_nome
+              z.nome AS zona_nome,
+              EXISTS (SELECT 1 FROM pedido_pagamentos pp WHERE pp.pedido_id = p.id) AS pago
          FROM pedidos p
          LEFT JOIN zonas_entrega z ON z.id = p.zona_id
         WHERE p.empresa_id = $1

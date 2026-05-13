@@ -12,8 +12,9 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bike, MapPin, Navigation, Phone, CheckCircle2, Package,
-  LogOut, RefreshCw, Loader2, Wifi, WifiOff,
+  LogOut, RefreshCw, Loader2, Wifi, WifiOff, DollarSign,
 } from "lucide-react";
+import { FecharContaModal } from "@/components/pedidos/FecharContaModal";
 
 interface Endereco {
   rua?: string; numero?: string; complemento?: string;
@@ -29,6 +30,8 @@ interface PedidoMb {
   atribuido_em: string | null; coletado_em: string | null;
   valor_motoboy: string | null;
   zona_nome: string | null;
+  forma_pagamento: string | null;
+  pago: boolean;     // computado: true se pedido_pagamentos existe
 }
 
 const fmtBRL = (v: string | number) =>
@@ -39,6 +42,7 @@ export default function MotoboyPage() {
   const [pedidos, setPedidos] = useState<PedidoMb[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [pagandoPedido, setPagandoPedido] = useState<PedidoMb | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number; precisao?: number } | null>(null);
   const [gpsEnabled, setGpsEnabled] = useState(false);
   const [pingErro, setPingErro] = useState<string | null>(null);
@@ -270,13 +274,27 @@ export default function MotoboyPage() {
                     </button>
                   )}
                   {(p.status_entrega === "coletado" || p.status_entrega === "em_rota") && (
-                    <button
-                      onClick={() => atualizarStatus(p.id, "entregue")}
-                      disabled={updating === p.id}
-                      className="col-span-2 rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white hover:brightness-110 disabled:opacity-50"
-                    >
-                      {updating === p.id ? "..." : "🎉 Entreguei!"}
-                    </button>
+                    <>
+                      {/* Se tem cobrança pendente (pagar_entrega ou simplesmente sem pagamento), abre modal */}
+                      {(p.forma_pagamento === "pagar_entrega" || !p.pago) ? (
+                        <button
+                          onClick={() => setPagandoPedido(p)}
+                          disabled={updating === p.id}
+                          className="col-span-2 flex items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white hover:brightness-110 disabled:opacity-50"
+                        >
+                          <DollarSign className="h-4 w-4" />
+                          Receber e entregar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => atualizarStatus(p.id, "entregue")}
+                          disabled={updating === p.id}
+                          className="col-span-2 rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white hover:brightness-110 disabled:opacity-50"
+                        >
+                          {updating === p.id ? "..." : "🎉 Entreguei!"}
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -294,6 +312,27 @@ export default function MotoboyPage() {
           })
         )}
       </div>
+
+      {/* Modal de pagamento — abre ao "Receber e entregar" */}
+      {pagandoPedido && (
+        <FecharContaModal
+          pedido={{
+            id:           pagandoPedido.id,
+            numero:       pagandoPedido.numero,
+            total:        Number(pagandoPedido.total),
+            cliente_nome: pagandoPedido.cliente_nome,
+          }}
+          open={true}
+          authToken={localStorage.getItem("access_token") ?? ""}
+          onClose={() => setPagandoPedido(null)}
+          onClosed={async () => {
+            const id = pagandoPedido.id;
+            setPagandoPedido(null);
+            // Após receber pagamento, marca delivery como entregue
+            await atualizarStatus(id, "entregue");
+          }}
+        />
+      )}
     </div>
   );
 }

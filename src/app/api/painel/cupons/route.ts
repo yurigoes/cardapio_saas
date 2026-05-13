@@ -26,18 +26,28 @@ export async function GET(req: NextRequest) {
   const ativo  = searchParams.get("ativo");
   const offset = (page - 1) * limit;
 
-  const conditions: string[] = ["empresa_id = $1"];
+  // SELECT do cupons usa JOIN com clientes; alguns campos colidem (empresa_id,
+  // ativo). Prefixos 'c.' nas conditions evitam ambiguidade no SELECT principal,
+  // mas o COUNT é sem JOIN — então usa nomes simples lá.
+  const conditionsList: string[] = ["c.empresa_id = $1"];
+  const conditionsCount: string[] = ["empresa_id = $1"];
   const params: unknown[] = [empresaId];
   let idx = 2;
 
-  if (q) { conditions.push(`(codigo ILIKE $${idx} OR descricao ILIKE $${idx})`); params.push(`%${q}%`); idx++; }
-  if (ativo === "true")  { conditions.push(`ativo = true`); }
-  if (ativo === "false") { conditions.push(`ativo = false`); }
+  if (q) {
+    conditionsList.push(`(c.codigo ILIKE $${idx} OR c.descricao ILIKE $${idx})`);
+    conditionsCount.push(`(codigo ILIKE $${idx} OR descricao ILIKE $${idx})`);
+    params.push(`%${q}%`);
+    idx++;
+  }
+  if (ativo === "true")  { conditionsList.push(`c.ativo = true`);  conditionsCount.push(`ativo = true`); }
+  if (ativo === "false") { conditionsList.push(`c.ativo = false`); conditionsCount.push(`ativo = false`); }
 
-  const where = conditions.join(" AND ");
+  const where      = conditionsList.join(" AND ");
+  const whereCount = conditionsCount.join(" AND ");
 
   try {
-    const total = await queryCount(`SELECT COUNT(*) FROM cupons WHERE ${where}`, params);
+    const total = await queryCount(`SELECT COUNT(*) FROM cupons WHERE ${whereCount}`, params);
 
     const cupons = await query<Record<string, unknown>>(
       `SELECT

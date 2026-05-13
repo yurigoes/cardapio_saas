@@ -1343,6 +1343,8 @@ interface GatewayInfo {
   metodos: string[];
 }
 
+type FormaPagTotem = "pix" | "dinheiro" | "pagar_entrega";
+
 interface CartDrawerProps {
   cart:        CartItem[];
   mesaNumero:  number | null;
@@ -1350,17 +1352,20 @@ interface CartDrawerProps {
   slug:        string;
   idioma:      Idioma;
   isOnline:    boolean;
+  tipoConsumo: TipoConsumo;
   taxaInfo?:   { taxa: number; zona_nome: string | null; tempo_min: number | null; fallback: boolean } | null;
   onClose:     () => void;
   onUpdate:    (uid: string, delta: number) => void;
-  onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: "pix" | "dinheiro", cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null, cashbackUsar: number) => Promise<void>;
+  onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: FormaPagTotem, cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null, cashbackUsar: number) => Promise<void>;
 }
 
-function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, taxaInfo, onClose, onUpdate, onConfirm }: CartDrawerProps) {
+function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoConsumo, taxaInfo, onClose, onUpdate, onConfirm }: CartDrawerProps) {
   const [nome, setNome]           = useState(cliente?.nome ?? "");
   const [tel, setTel]             = useState(cliente?.telefone ?? "");
   const [obs, setObs]             = useState("");
-  const [formaPag, setFormaPag]   = useState<"pix" | "dinheiro">("dinheiro");
+  const [formaPag, setFormaPag]   = useState<FormaPagTotem>(
+    tipoConsumo === "delivery" ? "pagar_entrega" : "dinheiro"
+  );
   const [sending, setSending]     = useState(false);
 
   // Cashback (usar saldo)
@@ -1678,10 +1683,13 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, taxaInf
         {/* Forma de pagamento */}
         <div>
           <p className="mb-2 text-xs font-medium text-slate-400">{t(idioma, "pagamento_titulo")}</p>
-          <div className="grid grid-cols-2 gap-2">
-            {(["dinheiro", "pix"] as const).map((metodo) => {
+          <div className={`grid gap-2 ${tipoConsumo === "delivery" ? "grid-cols-3" : "grid-cols-2"}`}>
+            {(tipoConsumo === "delivery"
+              ? (["dinheiro", "pix", "pagar_entrega"] as const)
+              : (["dinheiro", "pix"] as const)).map((metodo) => {
               const ativo      = formaPag === metodo;
               const desabilitado = metodo === "pix" && !isOnline;
+              const labelEntrega = "Pagar na entrega";
               return (
                 <button
                   key={metodo}
@@ -1689,7 +1697,7 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, taxaInf
                   onClick={() => !desabilitado && setFormaPag(metodo)}
                   disabled={desabilitado}
                   title={desabilitado ? "PIX requer conexão com a internet" : undefined}
-                  className="flex flex-col items-center gap-1.5 rounded-xl border py-3 text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex flex-col items-center gap-1.5 rounded-xl border py-3 px-1 text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
                   style={ativo ? {
                     borderColor: "var(--color-primary-50, rgba(16,185,129,0.5))",
                     background:  "var(--color-primary-15, rgba(16,185,129,0.15))",
@@ -1700,8 +1708,14 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, taxaInf
                     color:       "rgb(148,163,184)",
                   }}
                 >
-                  {metodo === "pix" ? <QrCode className="h-5 w-5" /> : <Banknote className="h-5 w-5" />}
-                  {t(idioma, metodo === "pix" ? "pagamento_pix" : "pagamento_dinheiro")}
+                  {metodo === "pix"            ? <QrCode className="h-5 w-5" />
+                   : metodo === "dinheiro"    ? <Banknote className="h-5 w-5" />
+                   :                            <Bike className="h-5 w-5" />}
+                  <span className="text-center leading-tight">
+                    {metodo === "pix"           ? t(idioma, "pagamento_pix")
+                     : metodo === "dinheiro"   ? t(idioma, "pagamento_dinheiro")
+                     :                           labelEntrega}
+                  </span>
                   {desabilitado && (
                     <span className="text-[9px] font-normal text-slate-500 leading-tight">
                       requer internet
@@ -1711,6 +1725,12 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, taxaInf
               );
             })}
           </div>
+
+          {formaPag === "pagar_entrega" && (
+            <p className="mt-2 text-[10px] text-amber-400 leading-snug">
+              💵 Você escolherá a forma de pagamento com o entregador (PIX, dinheiro, cartão).
+            </p>
+          )}
 
           {/* Seletor de gateway PIX (só aparece se há 2+ gateways disponíveis E online) */}
           {isOnline && formaPag === "pix" && gateways.length > 1 && (
@@ -2812,6 +2832,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           slug={params.slug}
           idioma={idioma}
           isOnline={isOnline}
+          tipoConsumo={tipoConsumo}
           taxaInfo={tipoConsumo === "delivery" ? taxaEntrega : null}
           onClose={() => setCartOpen(false)}
           onUpdate={updateCart}
