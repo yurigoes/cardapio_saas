@@ -29,5 +29,4 @@ CREATE INDEX IF NOT EXISTS idx_error_log_empresa    ON error_log (empresa_id, cr
 CREATE INDEX IF NOT EXISTS idx_error_log_level      ON error_log (level, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_error_log_origem     ON error_log (origem, created_at DESC);
 
--- TTL 30 dias — limpeza periódica via cron
-CREATE INDEX IF NOT EXISTS idx_error_log_cleanup    ON error_log (created_at) WHERE created_at < NOW() - INTERVAL '30 days';
+-- (cleanup index removido — NOW() não é IMMUTABLE; cron usa idx_error_log_recent)
