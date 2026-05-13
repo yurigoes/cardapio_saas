@@ -15,6 +15,7 @@ import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 import { creditarCashbackPedido, debitarCashbackPedido } from "@/lib/cashback/movimento";
 import { notificarEvolution } from "@/lib/notify/evolution";
 import { lookupZonaParaEndereco } from "@/lib/delivery/lookup-zona";
+import { geocodeEndereco } from "@/lib/delivery/geocode";
 import crypto from "crypto";
 import type { PoolClient } from "pg";
 
@@ -287,6 +288,7 @@ export async function POST(
       let taxaEntrega = 0;
       let zonaId: string | null = null;
       let valorMotoboy = 0;
+      let enderecoComCoords = body.cliente_endereco;
       if (tipo === "delivery") {
         const zona = await lookupZonaParaEndereco(empresa.id, body.cliente_endereco ?? null);
         if (zona) {
@@ -295,6 +297,15 @@ export async function POST(
           valorMotoboy = zona.valor_motoboy;
         } else {
           taxaEntrega = Number(empresa.taxa_entrega);
+        }
+        // Geocode best-effort (Nominatim ~1s) — não bloqueia se falhar
+        if (body.cliente_endereco) {
+          try {
+            const coords = await geocodeEndereco(body.cliente_endereco);
+            if (coords) {
+              enderecoComCoords = { ...body.cliente_endereco, lat: coords.lat, lng: coords.lng };
+            }
+          } catch { /* ignore */ }
         }
       }
       const total = Math.max(0, subtotal + taxaEntrega - desconto);
@@ -333,7 +344,7 @@ export async function POST(
             body.cliente_id       ?? null,
             body.cliente_nome     ?? null,
             body.cliente_telefone ?? null,
-            body.cliente_endereco ? JSON.stringify(body.cliente_endereco) : null,
+            enderecoComCoords ? JSON.stringify(enderecoComCoords) : null,
             subtotal,
             desconto,
             taxaEntrega,

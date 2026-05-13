@@ -42,10 +42,15 @@ export async function GET(
     const pedido = await queryOne<Record<string, unknown>>(
       `SELECT p.*,
               m.numero as mesa_numero,
-              u.nome   as atendente_nome
+              u.nome   as atendente_nome,
+              mb.nome  as motoboy_nome,
+              mb.telefone as motoboy_telefone,
+              z.nome   as zona_nome
        FROM pedidos p
-       LEFT JOIN mesas    m ON m.id = p.mesa_id
-       LEFT JOIN usuarios u ON u.id = p.atendente_id
+       LEFT JOIN mesas    m  ON m.id  = p.mesa_id
+       LEFT JOIN usuarios u  ON u.id  = p.atendente_id
+       LEFT JOIN motoboys mb ON mb.id = p.motoboy_id
+       LEFT JOIN zonas_entrega z ON z.id = p.zona_id
        WHERE p.id = $1 AND p.empresa_id = $2 AND p.deleted_at IS NULL`,
       [params.id, empresaId]
     );

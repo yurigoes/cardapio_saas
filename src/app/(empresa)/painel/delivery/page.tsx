@@ -10,12 +10,24 @@ import {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Motoboy {
-  id:       string;
-  nome:     string;
-  telefone: string | null;
-  veiculo:  string | null;
-  placa:    string | null;
-  status:   "disponivel" | "em_rota" | "inativo";
+  id:             string;
+  nome:           string;
+  telefone:       string | null;
+  veiculo:        string | null;
+  placa:          string | null;
+  status:         "disponivel" | "em_rota" | "inativo";
+  usuario_id:     string | null;
+  usuario_email?: string | null;
+  lat_atual?:     string | null;
+  lng_atual?:     string | null;
+  localizado_em?: string | null;
+}
+
+interface UsuarioOption {
+  id:    string;
+  nome:  string;
+  email: string;
+  role:  string;
 }
 
 interface ZonaEntrega {
@@ -57,7 +69,7 @@ const STATUS_COLOR: Record<Motoboy["status"], string> = {
 
 // ── Default forms ─────────────────────────────────────────────────────────────
 
-const DEFAULT_MOTOBOY = { nome: "", telefone: "", veiculo: "", placa: "", status: "disponivel" as Motoboy["status"] };
+const DEFAULT_MOTOBOY = { nome: "", telefone: "", veiculo: "", placa: "", usuario_id: "", status: "disponivel" as Motoboy["status"] };
 const DEFAULT_ZONA = {
   nome: "", descricao: "",
   bairro: "", cep_inicio: "", cep_fim: "",
@@ -83,6 +95,18 @@ export default function DeliveryPage() {
 
   const [formMotoboy, setFormMotoboy] = useState(DEFAULT_MOTOBOY);
   const [formZona, setFormZona]       = useState(DEFAULT_ZONA);
+  const [usuariosMotoboy, setUsuariosMotoboy] = useState<UsuarioOption[]>([]);
+
+  // Carrega usuários com role=motoboy para vincular
+  const fetchUsuariosMotoboy = useCallback(async () => {
+    try {
+      const res  = await fetch("/api/painel/usuarios?role=motoboy&limit=200", { headers: authHeader() });
+      const data = await res.json();
+      if (data.success) {
+        setUsuariosMotoboy((data.data ?? []).filter((u: UsuarioOption) => u.role === "motoboy"));
+      }
+    } catch { /* opcional */ }
+  }, []);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
@@ -113,10 +137,10 @@ export default function DeliveryPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([fetchMotoboys(), fetchZonas()]);
+      await Promise.all([fetchMotoboys(), fetchZonas(), fetchUsuariosMotoboy()]);
       setLoading(false);
     })();
-  }, [fetchMotoboys, fetchZonas]);
+  }, [fetchMotoboys, fetchZonas, fetchUsuariosMotoboy]);
 
   // ── Motoboy CRUD ───────────────────────────────────────────────────────────
 
@@ -130,11 +154,12 @@ export default function DeliveryPage() {
   function openEditMotoboy(m: Motoboy) {
     setEditMotoboy(m);
     setFormMotoboy({
-      nome:     m.nome,
-      telefone: m.telefone ?? "",
-      veiculo:  m.veiculo  ?? "",
-      placa:    m.placa    ?? "",
-      status:   m.status,
+      nome:       m.nome,
+      telefone:   m.telefone ?? "",
+      veiculo:    m.veiculo  ?? "",
+      placa:      m.placa    ?? "",
+      status:     m.status,
+      usuario_id: m.usuario_id ?? "",
     });
     setError("");
     setModalMotoboy(true);
@@ -151,9 +176,10 @@ export default function DeliveryPage() {
         headers: { "Content-Type": "application/json", ...authHeader() },
         body:    JSON.stringify({
           ...formMotoboy,
-          telefone: formMotoboy.telefone || undefined,
-          veiculo:  formMotoboy.veiculo  || undefined,
-          placa:    formMotoboy.placa    || undefined,
+          telefone:    formMotoboy.telefone || undefined,
+          veiculo:     formMotoboy.veiculo  || undefined,
+          placa:       formMotoboy.placa    || undefined,
+          usuario_id:  formMotoboy.usuario_id || null,
         }),
       });
       const data = await res.json();
@@ -296,7 +322,23 @@ export default function DeliveryPage() {
                       className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_130px_120px_100px_100px_84px] items-center gap-x-4 px-6 py-4"
                     >
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-white">{m.nome}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate font-medium text-white">{m.nome}</p>
+                          {m.localizado_em && (() => {
+                            const ageMin = (Date.now() - new Date(m.localizado_em).getTime()) / 60000;
+                            const cor = ageMin < 2 ? "bg-emerald-400" : ageMin < 10 ? "bg-amber-400" : "bg-slate-600";
+                            const label = ageMin < 1 ? "agora" : ageMin < 60 ? `${Math.round(ageMin)}m` : `${Math.round(ageMin/60)}h`;
+                            return (
+                              <span className="flex items-center gap-1 text-[10px] text-slate-500" title={`Última posição GPS: ${label} atrás`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${cor} ${ageMin < 2 ? "animate-pulse" : ""}`} />
+                                GPS {label}
+                              </span>
+                            );
+                          })()}
+                          {!m.usuario_id && (
+                            <span className="text-[10px] text-slate-600" title="Sem login vinculado">⚠ sem login</span>
+                          )}
+                        </div>
                         <p className="mt-0.5 text-xs text-slate-400 sm:hidden">
                           {m.telefone ?? "—"} · {m.veiculo ?? "—"} · {m.placa ?? "—"}
                         </p>
@@ -441,6 +483,24 @@ export default function DeliveryPage() {
                       placeholder="ABC-1234"
                       className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none" />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">
+                    Vincular login (para usar app /motoboy com GPS)
+                  </label>
+                  <select
+                    value={formMotoboy.usuario_id}
+                    onChange={e => setFormMotoboy(f => ({ ...f, usuario_id: e.target.value }))}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-brand/50 focus:outline-none"
+                  >
+                    <option value="">— Sem login vinculado —</option>
+                    {usuariosMotoboy.map(u => (
+                      <option key={u.id} value={u.id}>{u.nome} ({u.email})</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Crie usuários com role &ldquo;motoboy&rdquo; em /painel/usuarios para aparecer aqui.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Status</label>

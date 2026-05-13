@@ -8,6 +8,7 @@ import {
 import { useNewOrderAlerts } from "@/lib/hooks/useNewOrderAlerts";
 import { useWebPush } from "@/lib/hooks/useWebPush";
 import { FecharContaModal } from "@/components/pedidos/FecharContaModal";
+import { DeliveryPanel } from "@/components/pedidos/DeliveryPanel";
 
 /** Abre janela de impressão térmica (popup com auto-print). */
 function abrirImpressao(pedidoId: string, tipo: "cliente" | "cozinha" | "comanda") {
@@ -48,6 +49,14 @@ interface PedidoDetalhe extends Pedido {
   taxa_entrega:      number;
   observacoes:       string | null;
   cliente_telefone:  string | null;
+  cliente_endereco:  Record<string, string> | null;
+  motoboy_id:        string | null;
+  motoboy_nome:      string | null;
+  motoboy_telefone:  string | null;
+  zona_nome:         string | null;
+  status_entrega:    string | null;
+  tracking_token:    string | null;
+  valor_motoboy:     number | string | null;
   itens: {
     id:             string;
     nome:           string;
@@ -339,6 +348,13 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
             </button>
           )}
         </div>
+
+        {/* Painel de delivery — atribuição motoboy + tracking */}
+        {pedido.tipo === "delivery" && !["entregue", "cancelado"].includes(pedido.status) && (
+          <div className="border-t border-white/5 p-4 bg-amber-500/5">
+            <DeliveryPanel pedido={pedido} onUpdate={() => { onUpdate(); }} />
+          </div>
+        )}
 
         {/* Ações */}
         {/* Fechar conta — disponível em qualquer status aberto */}

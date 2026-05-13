@@ -104,9 +104,12 @@ export default function RastrearPage() {
   const motoboy: PinPoint | null = data.motoboy?.lat && data.motoboy?.lng
     ? { lat: data.motoboy.lat, lng: data.motoboy.lng, label: data.motoboy.nome ?? "Entregador", color: "orange" }
     : null;
-  // Destino: sem geocoding dá pra mostrar o pino se tiver lat/lng salvos
-  // (atualmente endereço é texto, sem geocode — pino fica omitido)
-  const destino: PinPoint | null = null;
+  // Destino: lat/lng salvos no JSONB cliente_endereco (Nominatim ao criar pedido)
+  const destLat = ent.lat ? Number(ent.lat) : null;
+  const destLng = ent.lng ? Number(ent.lng) : null;
+  const destino: PinPoint | null = destLat && destLng
+    ? { lat: destLat, lng: destLng, label: "Você", color: "red" }
+    : null;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
