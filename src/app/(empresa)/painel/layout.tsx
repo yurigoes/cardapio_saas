@@ -24,7 +24,7 @@ const ALL_NAV = [
   { href: "/hub",                label: "Módulos",     icon: LayoutGrid,      modulo: null         },
   { href: "/painel",             label: "Dashboard",   icon: LayoutDashboard, modulo: null         },
   { href: "/painel/pedidos",     label: "Pedidos",     icon: ShoppingBag,     modulo: null         },
-  { href: "/garcom/pedido/novo", label: "PDV / Balcão", icon: Wallet,         modulo: "balcao"     },
+  { href: "/painel/pdv",         label: "PDV / Balcão", icon: Wallet,         modulo: "balcao"     },
   { href: "/painel/cardapio",    label: "Cardápio",    icon: UtensilsCrossed, modulo: null         },
   { href: "/painel/mesas",       label: "Mesas",       icon: MapPin,          modulo: "mesa"       },
   { href: "/painel/delivery",    label: "Delivery",    icon: Bike,            modulo: "delivery"   },
@@ -102,6 +102,12 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         />
       </div>
     );
+  }
+
+  // PDV é full-screen — sem sidebar visível
+  const fullScreenRoutes = ["/painel/pdv"];
+  if (fullScreenRoutes.some(r => pathname.startsWith(r))) {
+    return <>{children}</>;
   }
 
   return (
