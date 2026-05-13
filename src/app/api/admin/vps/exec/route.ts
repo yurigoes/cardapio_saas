@@ -17,6 +17,7 @@ const COMANDOS_VALIDOS = [
   "status", "disk", "docker_ps", "docker_prune", "lista_discos",
   "error_log_tail", "speedtest", "exec_migration", "backup_db",
   "restart_container", "discos_resumo", "formatar_e_montar_disco",
+  "deploy", "listar_backups",
 ];
 
 const schema = z.object({

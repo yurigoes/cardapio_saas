@@ -42,6 +42,7 @@ const PUBLIC_ROUTES = [
   "/api/ifood/poll",
   "/api/agent",
   "/api/admin/vps/jobs",
+  "/api/admin/vps/deploy/webhook",
   "/totem",
   "/rastrear",
   "/docs",

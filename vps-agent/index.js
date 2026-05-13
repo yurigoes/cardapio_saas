@@ -32,7 +32,7 @@ const { exec, spawn } = require("child_process");
 const os   = require("os");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.1.0";
+const VERSION     = "1.2.0";
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
@@ -257,6 +257,33 @@ const COMANDOS = {
       const out = await execCmd(`docker logs --tail ${linhas} ${container} 2>&1`);
       return { container, linhas, log: out };
     } catch (e) { return { erro: e.message }; }
+  },
+
+  /**
+   * Roda o deploy script (git pull + migrations + rebuild + health + rollback).
+   * Exit 0 = sucesso, !=0 = falha (rollback automático já aconteceu).
+   */
+  async deploy(params) {
+    const skipBackup = params?.skip_backup ? "--skip-backup" : "";
+    const projetoDir = process.env.CARDAPIO_DIR || "/opt/cardapio_saas";
+    const script = path.join(projetoDir, "scripts", "deploy.sh");
+    if (!fs.existsSync(script)) return { ok: false, erro: `script não encontrado: ${script}` };
+    try {
+      const out = await execCmd(`bash ${script} ${skipBackup}`, { timeout: 600_000 });
+      // Pega últimos 4KB do log
+      return { ok: true, log: out.slice(-4000) };
+    } catch (e) {
+      // deploy.sh sai != 0 se algo falhou — mas rollback já rodou
+      return { ok: false, erro: e.message.slice(-2000) };
+    }
+  },
+
+  async listar_backups() {
+    const projetoDir = process.env.CARDAPIO_DIR || "/opt/cardapio_saas";
+    try {
+      const out = await execCmd(`ls -lht ${projetoDir}/backups/*.sql.gz 2>/dev/null | head -20`);
+      return { backups: out.trim().split("\n").filter(Boolean) };
+    } catch { return { backups: [] }; }
   },
 
   async backup_db() {

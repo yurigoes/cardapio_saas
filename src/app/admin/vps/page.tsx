@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { VpsDashboard } from "@/components/admin/VpsDashboard";
 import { DiscosDetectados } from "@/components/admin/DiscosDetectados";
+import { DeployPanel } from "@/components/admin/DeployPanel";
 
 interface Agent {
   id: string; nome: string; prefix: string; ativo: boolean;
@@ -319,6 +320,21 @@ sudo bash install-systemd.sh`}</pre>
           });
           const d = await r.json();
           if (d.success && d.data?.status === "sucesso") return d.data.resultado;
+          return null;
+        }}
+      />
+
+      {/* Deploy + backups */}
+      <DeployPanel
+        agentOnline={algumOnline}
+        exec={async (comando, params) => {
+          const r = await fetch("/api/admin/vps/exec", {
+            method: "POST", headers: auth(),
+            body: JSON.stringify({ comando, params, timeout_s: 600 }),
+          });
+          const d = await r.json();
+          if (d.success && d.data?.status === "sucesso") return d.data.resultado;
+          if (d.success && d.data?.status === "erro")    return { ok: false, erro: d.data.erro };
           return null;
         }}
       />
