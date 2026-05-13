@@ -22,18 +22,20 @@ interface Endereco {
 }
 
 interface Cliente {
-  id:             string;
-  nome:           string;
-  telefone:       string | null;
-  email:          string | null;
-  cpf:            string | null;
-  pontos:         number;
-  total_pedidos:  number;
-  total_gasto:    number;
-  saldo_cashback: number;
-  endereco:       Endereco | null;
-  ultimo_pedido:  string | null;
-  rank?:          number;
+  id:                string;
+  nome:              string;
+  telefone:          string | null;
+  email:             string | null;
+  cpf:               string | null;
+  pontos:            number;
+  total_pedidos:     number;
+  total_gasto:       number;
+  saldo_cashback:    number;
+  limite_vale:       number;
+  saldo_vale_aberto: number;
+  endereco:          Endereco | null;
+  ultimo_pedido:     string | null;
+  rank?:             number;
 }
 
 interface Pedido {
@@ -170,6 +172,37 @@ export default function ClientesPage() {
   const [ajusteSaving, setAjusteSaving] = useState(false);
   const [ajusteOk, setAjusteOk]         = useState(false);
   const [ajusteErro, setAjusteErro]     = useState("");
+
+  // Limite de vale (crediário)
+  const [limiteValeInput, setLimiteValeInput] = useState("");
+  const [limiteSaving, setLimiteSaving]       = useState(false);
+  const [limiteMsg, setLimiteMsg]             = useState<string | null>(null);
+
+  async function salvarLimiteVale() {
+    if (!modalCliente) return;
+    const novo = parseFloat(limiteValeInput.replace(",", "."));
+    if (isNaN(novo) || novo < 0) {
+      setLimiteMsg("Valor inválido");
+      return;
+    }
+    setLimiteSaving(true); setLimiteMsg(null);
+    try {
+      const res = await fetch(`/api/painel/clientes/${modalCliente.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body:    JSON.stringify({ limite_vale: novo }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLimiteMsg("Limite atualizado!");
+        setModalCliente(prev => prev ? { ...prev, limite_vale: novo } : prev);
+        setClientes(prev => prev.map(c => c.id === modalCliente.id ? { ...c, limite_vale: novo } : c));
+        setTimeout(() => setLimiteMsg(null), 2500);
+      } else {
+        setLimiteMsg(data.error ?? "Falha ao salvar");
+      }
+    } finally { setLimiteSaving(false); }
+  }
 
   const LIMIT = 20;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -601,6 +634,53 @@ export default function ClientesPage() {
                     <StatCard label="Total Pedidos" value={String(modalCliente.total_pedidos)} />
                     <StatCard label="Total Gasto" value={formatBRL(modalCliente.total_gasto)} />
                     <StatCard label="Último Pedido" value={formatDate(modalCliente.ultimo_pedido)} />
+                  </div>
+
+                  {/* Crediário (vale) */}
+                  <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-amber-400">Crediário (Vale)</p>
+                        <p className="text-[11px] text-slate-500">Limite autorizado para compras a prazo</p>
+                      </div>
+                      <p className="text-2xl font-bold text-white font-mono">
+                        {formatBRL(modalCliente.limite_vale - modalCliente.saldo_vale_aberto)}
+                        <span className="text-xs text-slate-500 font-normal"> disp.</span>
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-xs mb-3">
+                      <div>
+                        <p className="text-slate-500">Limite total</p>
+                        <p className="font-mono font-semibold text-white">{formatBRL(modalCliente.limite_vale)}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500">Em aberto</p>
+                        <p className={`font-mono font-semibold ${modalCliente.saldo_vale_aberto > 0 ? "text-amber-300" : "text-slate-400"}`}>
+                          {formatBRL(modalCliente.saldo_vale_aberto)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text" inputMode="decimal"
+                        value={limiteValeInput}
+                        onChange={e => { setLimiteValeInput(e.target.value.replace(/[^0-9,.]/g, "")); setLimiteMsg(null); }}
+                        placeholder={`Atual: ${formatBRL(modalCliente.limite_vale)}`}
+                        className="flex-1 rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white font-mono text-right focus:border-amber-500/50 focus:outline-none"
+                      />
+                      <button
+                        onClick={salvarLimiteVale}
+                        disabled={limiteSaving || !limiteValeInput}
+                        className="rounded-lg bg-amber-500/15 border border-amber-500/30 px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/25 disabled:opacity-50 transition"
+                      >
+                        {limiteSaving ? "..." : "Salvar"}
+                      </button>
+                    </div>
+                    {limiteMsg && (
+                      <p className={`mt-2 text-xs ${limiteMsg.includes("atualizado") ? "text-emerald-400" : "text-red-400"}`}>
+                        {limiteMsg}
+                      </p>
+                    )}
                   </div>
 
                   {/* Endereço (delivery) */}

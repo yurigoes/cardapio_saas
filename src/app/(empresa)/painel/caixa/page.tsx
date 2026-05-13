@@ -147,8 +147,12 @@ export default function CaixaPage() {
   const [openFechar, setOpenFechar] = useState(false);
   const [valorFechamento, setValorFechamento] = useState("");
   const [obsFechamento, setObsFechamento] = useState("");
+  const [valoresPorForma, setValoresPorForma] = useState<Record<string, string>>({});
   const [resultadoFechamento, setResultadoFechamento] = useState<{
     valor_esperado: number; valor_fechamento: number; diferenca: number;
+    esperados_por_forma?:  Record<string, number> | null;
+    informados_por_forma?: Record<string, number> | null;
+    diferencas_por_forma?: Record<string, number> | null;
   } | null>(null);
 
   // Modal: sangria/reforço
@@ -242,21 +246,34 @@ export default function CaixaPage() {
     if (!caixa) return;
     setSaving(true);
     try {
-      const valor = parseFloat(valorFechamento.replace(",", ".")) || 0;
+      // Dinheiro: usa valor contado no input separado (gaveta física)
+      const valorDin = parseFloat((valoresPorForma.dinheiro ?? valorFechamento).replace(",", ".")) || 0;
+
+      // Demais formas
+      const informados: Record<string, number> = { dinheiro: valorDin };
+      for (const f of ["pix","credito","debito","vale","outro"]) {
+        const v = parseFloat((valoresPorForma[f] ?? "0").replace(",", ".")) || 0;
+        informados[f] = v;
+      }
+
       const res  = await fetch(`/api/painel/caixa/${caixa.id}/fechar`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", ...authHeader() },
         body:    JSON.stringify({
-          valor_fechamento:       valor,
+          valor_fechamento:       valorDin,
           observacoes_fechamento: obsFechamento || undefined,
+          valores_informados:     informados,
         }),
       });
       const data = await res.json();
       if (data.success) {
         setResultadoFechamento({
-          valor_esperado:   data.data.valor_esperado,
-          valor_fechamento: data.data.valor_fechamento,
-          diferenca:        data.data.diferenca,
+          valor_esperado:       data.data.valor_esperado,
+          valor_fechamento:     data.data.valor_fechamento,
+          diferenca:            data.data.diferenca,
+          esperados_por_forma:  data.data.esperados_por_forma,
+          informados_por_forma: data.data.informados_por_forma,
+          diferencas_por_forma: data.data.diferencas_por_forma,
         });
       } else {
         setToast({ type: "err", msg: data.error || "Erro ao fechar caixa" });
@@ -518,7 +535,7 @@ export default function CaixaPage() {
               Sangria
             </button>
             <button
-              onClick={() => { setValorFechamento(""); setObsFechamento(""); setResultadoFechamento(null); setOpenFechar(true); }}
+              onClick={() => { setValorFechamento(""); setObsFechamento(""); setValoresPorForma({}); setResultadoFechamento(null); setOpenFechar(true); }}
               className="flex items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 py-3 text-sm font-semibold text-red-300 hover:bg-red-500/20 transition"
             >
               <Lock className="h-4 w-4" />
@@ -688,14 +705,16 @@ export default function CaixaPage() {
       {openFechar && caixa && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={resultadoFechamento ? fecharModalFechamento : () => setOpenFechar(false)} />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6">
+          <div className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-slate-900 max-h-[90vh] overflow-auto">
             {resultadoFechamento ? (
-              // Tela de resultado
-              <>
+              // ── Tela de resultado ────────────────────────────────────────
+              <div className="p-6">
                 <h3 className="mb-4 text-lg font-bold text-white">Caixa fechado</h3>
+
+                {/* Resumo dinheiro (gaveta) */}
                 <div className="space-y-3 rounded-xl bg-white/5 p-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">Esperado</span>
+                    <span className="text-slate-400">Esperado em gaveta (dinheiro)</span>
                     <span className="font-bold text-white">{fmtBRL(resultadoFechamento.valor_esperado)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -710,61 +729,140 @@ export default function CaixaPage() {
                     <span>{resultadoFechamento.diferenca >= 0 ? "+" : ""}{fmtBRL(resultadoFechamento.diferenca)}</span>
                   </div>
                 </div>
+
+                {/* Detalhamento por forma */}
+                {resultadoFechamento.diferencas_por_forma && (
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Conferência por forma de pagamento
+                    </p>
+                    <div className="overflow-hidden rounded-xl border border-white/10">
+                      <table className="w-full text-xs">
+                        <thead className="bg-white/5">
+                          <tr className="text-left text-[10px] uppercase text-slate-500">
+                            <th className="px-3 py-2">Forma</th>
+                            <th className="px-3 py-2 text-right">Esperado</th>
+                            <th className="px-3 py-2 text-right">Informado</th>
+                            <th className="px-3 py-2 text-right">Diferença</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {(["pix","dinheiro","credito","debito","vale","outro"] as const).map(f => {
+                            const esp  = resultadoFechamento.esperados_por_forma?.[f]  ?? 0;
+                            const inf  = resultadoFechamento.informados_por_forma?.[f] ?? 0;
+                            const dif  = resultadoFechamento.diferencas_por_forma?.[f] ?? 0;
+                            const cor  = Math.abs(dif) < 0.01 ? "text-slate-400"
+                                       : dif > 0 ? "text-amber-300" : "text-red-400";
+                            return (
+                              <tr key={f}>
+                                <td className="px-3 py-2 capitalize text-slate-300">{f}</td>
+                                <td className="px-3 py-2 text-right font-mono text-slate-300">{fmtBRL(esp)}</td>
+                                <td className="px-3 py-2 text-right font-mono text-white">{fmtBRL(inf)}</td>
+                                <td className={`px-3 py-2 text-right font-mono font-semibold ${cor}`}>
+                                  {dif >= 0 ? "+" : ""}{fmtBRL(dif)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 {Math.abs(resultadoFechamento.diferenca) >= 0.01 && (
                   <p className={`mt-3 text-xs ${resultadoFechamento.diferenca > 0 ? "text-amber-400" : "text-red-400"}`}>
-                    {resultadoFechamento.diferenca > 0 ? "Sobra" : "Quebra"} de caixa registrada nas observações.
+                    {resultadoFechamento.diferenca > 0 ? "Sobra" : "Quebra"} de caixa em dinheiro registrada.
                   </p>
                 )}
                 <button onClick={fecharModalFechamento} className="mt-5 w-full rounded-xl bg-brand py-2.5 text-sm font-bold text-white hover:brightness-110">
                   OK
                 </button>
-              </>
+              </div>
             ) : (
-              // Form de fechamento
-              <form onSubmit={handleFechar}>
+              // ── Form de fechamento detalhado ─────────────────────────────
+              <form onSubmit={handleFechar} className="p-6">
                 <div className="mb-5 flex items-start justify-between">
                   <div>
                     <h3 className="text-lg font-bold text-white">Fechar caixa</h3>
                     <p className="mt-0.5 text-xs text-slate-400">
-                      Conte o dinheiro físico no caixa e informe o total
+                      Confira cada forma de pagamento. Dinheiro = gaveta física.
                     </p>
                   </div>
                   <button type="button" onClick={() => setOpenFechar(false)} className="text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
                 </div>
 
-                <div className="mb-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-200">
-                  <strong>Esperado em caixa:</strong> {fmtBRL(caixa.saldo_esperado)}
+                {/* Tabela por forma com inputs */}
+                <div className="mb-4 overflow-hidden rounded-xl border border-white/10">
+                  <table className="w-full text-sm">
+                    <thead className="bg-white/5">
+                      <tr className="text-left text-[10px] uppercase text-slate-500">
+                        <th className="px-3 py-2">Forma</th>
+                        <th className="px-3 py-2 text-right">Esperado</th>
+                        <th className="px-3 py-2 text-right">Informado</th>
+                        <th className="px-3 py-2 text-right">Diferença</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {(["pix","dinheiro","credito","debito","vale","outro"] as const).map(f => {
+                        const esperadoVendas = caixa.vendas_por_forma?.[f] ?? 0;
+                        // Para 'dinheiro', soma também abertura+reforços-sangrias-estornos
+                        const esperado = f === "dinheiro"
+                          ? caixa.saldo_esperado
+                          : esperadoVendas;
+                        const informadoStr = valoresPorForma[f] ?? "";
+                        const informadoNum = parseFloat(informadoStr.replace(",", ".")) || 0;
+                        const dif = informadoNum - esperado;
+                        const corDif = !informadoStr ? "text-slate-600"
+                                     : Math.abs(dif) < 0.01 ? "text-emerald-400"
+                                     : dif > 0 ? "text-amber-300" : "text-red-400";
+                        return (
+                          <tr key={f}>
+                            <td className="px-3 py-2 capitalize text-slate-300 font-medium">{f}</td>
+                            <td className="px-3 py-2 text-right font-mono text-slate-400">{fmtBRL(esperado)}</td>
+                            <td className="px-2 py-1.5 text-right">
+                              <input
+                                type="text" inputMode="decimal" placeholder="0,00"
+                                value={informadoStr}
+                                onChange={e => setValoresPorForma(prev => ({
+                                  ...prev, [f]: e.target.value.replace(/[^0-9,.]/g, "")
+                                }))}
+                                className="w-24 rounded border border-white/10 bg-slate-800 px-2 py-1 text-right font-mono text-white focus:border-brand/50 focus:outline-none"
+                              />
+                            </td>
+                            <td className={`px-3 py-2 text-right font-mono font-semibold ${corDif}`}>
+                              {informadoStr
+                                ? `${dif >= 0 ? "+" : ""}${fmtBRL(dif)}`
+                                : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Valor contado em dinheiro (R$)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={valorFechamento}
-                      onChange={(e) => setValorFechamento(e.target.value.replace(/[^0-9,.]/g, ""))}
-                      required
-                      placeholder="0,00"
-                      className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-3 text-2xl font-bold text-white text-center focus:border-brand/50 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Observações</label>
-                    <input
-                      value={obsFechamento}
-                      onChange={(e) => setObsFechamento(e.target.value)}
-                      placeholder="Ex: faltou X reais — investigar"
-                      className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
-                    />
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <button type="button" onClick={() => setOpenFechar(false)} className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5">Cancelar</button>
-                    <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-red-500 py-2.5 text-sm font-bold text-white hover:bg-red-400 disabled:opacity-50">
-                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-                      Fechar caixa
-                    </button>
-                  </div>
+                <div className="mb-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-200">
+                  <strong>Importante:</strong> diferença em dinheiro é sobra/quebra real.
+                  Outras formas mostram divergência entre sistema e relatório do gateway/maquininha.
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Observações</label>
+                  <input
+                    value={obsFechamento}
+                    onChange={(e) => setObsFechamento(e.target.value)}
+                    placeholder="Ex: divergência maquininha — abrir chamado"
+                    className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand/50 focus:outline-none"
+                  />
+                </div>
+
+                <div className="mt-5 flex gap-2">
+                  <button type="button" onClick={() => setOpenFechar(false)} className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5">Cancelar</button>
+                  <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-red-500 py-2.5 text-sm font-bold text-white hover:bg-red-400 disabled:opacity-50">
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                    Fechar caixa
+                  </button>
                 </div>
               </form>
             )}
