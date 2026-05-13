@@ -12,6 +12,7 @@ import {
 import { applyBrandColors } from "@/lib/theme";
 import { useTheme } from "@/lib/hooks/useTheme";
 import { PwaInstallPrompt } from "@/components/painel/PwaInstallPrompt";
+import { PrintAgentStatus } from "@/components/painel/PrintAgentStatus";
 
 interface Empresa {
   nome_fantasia:  string;
@@ -221,9 +222,12 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
               {empresa?.nome_fantasia}
             </span>
           </div>
-          <button className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 hover:border-white/20 transition">
-            <Bell className="h-4 w-4 text-slate-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            <PrintAgentStatus />
+            <button className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 hover:border-white/20 transition">
+              <Bell className="h-4 w-4 text-slate-400" />
+            </button>
+          </div>
         </header>
         <main className="flex-1 p-6">{children}</main>
       </div>
