@@ -30,6 +30,8 @@ export async function GET(req: NextRequest) {
          fidelidade_ativo, pontos_por_real, real_por_ponto,
          cashback_ativo, cashback_percentual,
          totem_bg_video_url, totem_bg_image_url, totem_cta_text, totem_slogan,
+         totem_logo_url, totem_cor_destaque, totem_promo_texto,
+         totem_pos_destaque, totem_atendimento,
          evolution_url, evolution_key, evolution_eventos,
          n8n_url, n8n_token, n8n_eventos,
          modulos_ativos, status
@@ -68,6 +70,8 @@ export async function PATCH(req: NextRequest) {
     "fidelidade_ativo", "pontos_por_real", "real_por_ponto",
     "cashback_ativo", "cashback_percentual",
     "totem_bg_video_url", "totem_bg_image_url", "totem_cta_text", "totem_slogan",
+    "totem_logo_url", "totem_cor_destaque", "totem_promo_texto",
+    "totem_pos_destaque", "totem_atendimento",
     "evolution_url", "evolution_key", "evolution_eventos",
     "n8n_url", "n8n_token", "n8n_eventos",
   ];

@@ -45,6 +45,11 @@ interface EmpresaConfig {
   totem_bg_image_url: string;
   totem_cta_text:     string;
   totem_slogan:       string;
+  totem_logo_url:     string;
+  totem_cor_destaque: string;
+  totem_promo_texto:  string;
+  totem_pos_destaque: "top" | "center" | "bottom";
+  totem_atendimento:  string;
 }
 
 type Tab = "identidade" | "contato" | "pagamentos" | "fidelidade" | "totem";
@@ -87,6 +92,11 @@ const DEFAULT_CONFIG: EmpresaConfig = {
   totem_bg_image_url: "",
   totem_cta_text:     "Toque para fazer seu pedido",
   totem_slogan:       "",
+  totem_logo_url:     "",
+  totem_cor_destaque: "",
+  totem_promo_texto:  "",
+  totem_pos_destaque: "center" as const,
+  totem_atendimento:  "",
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -1082,6 +1092,75 @@ export default function ConfigPage() {
                   value={form.totem_bg_image_url}
                   onChange={e => setForm(f => ({ ...f, totem_bg_image_url: e.target.value }))}
                   placeholder="https://exemplo.com/imagem.jpg"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-500/50 focus:outline-none"
+                />
+              </div>
+
+              {/* Logo dedicado do totem */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">Logo do totem (opcional)</label>
+                <input
+                  value={form.totem_logo_url}
+                  onChange={e => setForm(f => ({ ...f, totem_logo_url: e.target.value }))}
+                  placeholder="Vazio = usa logo principal da empresa"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-500/50 focus:outline-none"
+                />
+              </div>
+
+              {/* Cor de destaque + posição */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Cor de destaque (override)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={form.totem_cor_destaque || form.cor_primaria || "#10b981"}
+                      onChange={e => setForm(f => ({ ...f, totem_cor_destaque: e.target.value }))}
+                      className="h-10 w-14 rounded-lg cursor-pointer bg-slate-800 border border-white/10"
+                    />
+                    <input
+                      value={form.totem_cor_destaque}
+                      onChange={e => setForm(f => ({ ...f, totem_cor_destaque: e.target.value }))}
+                      placeholder="Vazio = cor primária"
+                      className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white font-mono placeholder-slate-500 focus:border-amber-500/50 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Posição do CTA</label>
+                  <select
+                    value={form.totem_pos_destaque}
+                    onChange={e => setForm(f => ({ ...f, totem_pos_destaque: e.target.value as "top" | "center" | "bottom" }))}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:border-amber-500/50 focus:outline-none"
+                  >
+                    <option value="top">Topo</option>
+                    <option value="center">Centro</option>
+                    <option value="bottom">Rodapé</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Faixa promocional */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">Faixa promocional (rolante)</label>
+                <input
+                  value={form.totem_promo_texto}
+                  onChange={e => setForm(f => ({ ...f, totem_promo_texto: e.target.value }))}
+                  placeholder="Ex: 🎉 Promoção: Pizza grande + refri por R$ 49,90"
+                  maxLength={200}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-500/50 focus:outline-none"
+                />
+                <p className="mt-1 text-[10px] text-slate-500">Aparece como banner rolante no topo do totem. Vazio = oculta.</p>
+              </div>
+
+              {/* Mensagem de atendimento */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5">Mensagem de atendimento</label>
+                <input
+                  value={form.totem_atendimento}
+                  onChange={e => setForm(f => ({ ...f, totem_atendimento: e.target.value }))}
+                  placeholder="Ex: Sirva-se · Aguarde no balcão"
+                  maxLength={100}
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-500/50 focus:outline-none"
                 />
               </div>
