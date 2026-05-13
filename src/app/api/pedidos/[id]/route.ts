@@ -8,12 +8,19 @@ import { notificarEvolution, type EvolutionEvento } from "@/lib/notify/evolution
 
 // Map de status do pedido → ID do evento Evolution (WA_EVENTOS no painel)
 const STATUS_TO_EVENTO: Partial<Record<PedidoStatus, EvolutionEvento>> = {
+  confirmado: "confirmado",
   em_preparo: "confirmado",
+  preparo:    "confirmado",
   pronto:     "pronto",
   cancelado:  "cancelado",
 };
 
-const STATUS_SEQUENCE = ["pendente", "em_preparo", "pronto", "entregue", "cancelado"] as const;
+// Aceita TODOS os nomes usados pelo frontend (PROXIMOS_STATUS em /painel/pedidos).
+// 'em_preparo' aceito como alias legado de 'preparo'.
+const STATUS_SEQUENCE = [
+  "pendente", "confirmado", "preparo", "em_preparo",
+  "pronto", "entregue", "cancelado",
+] as const;
 type PedidoStatus = typeof STATUS_SEQUENCE[number];
 
 const patchSchema = z.object({

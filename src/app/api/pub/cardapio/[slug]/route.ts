@@ -16,11 +16,15 @@ export async function GET(
       totem_cta_text: string | null; totem_slogan: string | null;
       horario_abertura: string | null; horario_fechamento: string | null;
       caixa_obrigatorio: boolean;
+      taxa_entrega: string; pedido_minimo: string; tempo_entrega_min: number | null;
     }>(
       `SELECT id, nome_fantasia, logo_url, cor_primaria, cor_secundaria, whatsapp, modulos_ativos,
               totem_bg_video_url, totem_bg_image_url, totem_cta_text, totem_slogan,
               horario_abertura::text, horario_fechamento::text,
-              COALESCE(caixa_obrigatorio, false) AS caixa_obrigatorio
+              COALESCE(caixa_obrigatorio, false) AS caixa_obrigatorio,
+              COALESCE(taxa_entrega, 0)          AS taxa_entrega,
+              COALESCE(pedido_minimo, 0)         AS pedido_minimo,
+              tempo_entrega_min
        FROM empresas
        WHERE slug = $1 AND deleted_at IS NULL AND ${EMPRESA_OPERACIONAL_SQL}`,
       [params.slug]
@@ -73,6 +77,9 @@ export async function GET(
         horario_fechamento:  empresa.horario_fechamento,
         caixa_obrigatorio:   empresa.caixa_obrigatorio,
         caixa_aberto:        caixaAberto,
+        taxa_entrega:        Number(empresa.taxa_entrega),
+        pedido_minimo:       Number(empresa.pedido_minimo),
+        tempo_entrega_min:   empresa.tempo_entrega_min,
       },
       categorias,
       produtos,

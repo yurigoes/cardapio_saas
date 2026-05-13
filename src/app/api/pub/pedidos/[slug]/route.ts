@@ -122,11 +122,13 @@ export async function POST(
       pontos_por_real:    number;
       fidelidade_ativo:   boolean;
       caixa_obrigatorio:  boolean;
+      taxa_entrega:       string;
     }>(
       `SELECT id,
               COALESCE(pontos_por_real, 0)        AS pontos_por_real,
               COALESCE(fidelidade_ativo, false)   AS fidelidade_ativo,
-              COALESCE(caixa_obrigatorio, false)  AS caixa_obrigatorio
+              COALESCE(caixa_obrigatorio, false)  AS caixa_obrigatorio,
+              COALESCE(taxa_entrega, 0)           AS taxa_entrega
        FROM empresas
        WHERE slug = $1 AND deleted_at IS NULL AND ${EMPRESA_OPERACIONAL_SQL}`,
       [params.slug]
@@ -270,8 +272,6 @@ export async function POST(
         // Se cupom inválido, prossegue sem desconto (não bloqueia o pedido)
       }
 
-      const total = Math.max(0, subtotal - desconto);
-
       // Mapeia tipo do pedido
       const tipo = body.mesa_id
         ? "mesa"
@@ -280,6 +280,10 @@ export async function POST(
           : body.tipo_consumo === "retirada"
             ? "balcao"
             : "totem";
+
+      // Taxa de entrega: aplica empresa.taxa_entrega quando delivery
+      const taxaEntrega = tipo === "delivery" ? Number(empresa.taxa_entrega) : 0;
+      const total = Math.max(0, subtotal + taxaEntrega - desconto);
 
       // Pontos calculados sobre o total (após desconto)
       let pontosGanhos = 0;
@@ -299,7 +303,7 @@ export async function POST(
               cliente_endereco,
               subtotal, desconto, taxa_entrega, total, pontos_ganhos, observacoes,
               forma_pagamento, tipo_consumo, cupom_id)
-           VALUES ($1,$2,'pendente',$3,$4,$5,$6,$7::jsonb,$8,$9,0,$10,$11,$12,$13,$14,$15)
+           VALUES ($1,$2,'pendente',$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12,$13,$14,$15,$16)
            RETURNING id, numero`,
           [
             empresa.id,
@@ -311,6 +315,7 @@ export async function POST(
             body.cliente_endereco ? JSON.stringify(body.cliente_endereco) : null,
             subtotal,
             desconto,
+            taxaEntrega,
             total,
             pontosGanhos,
             body.observacoes      ?? null,
