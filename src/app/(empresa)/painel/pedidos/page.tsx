@@ -10,16 +10,28 @@ import { useWebPush } from "@/lib/hooks/useWebPush";
 import { FecharContaModal } from "@/components/pedidos/FecharContaModal";
 import { DeliveryPanel } from "@/components/pedidos/DeliveryPanel";
 
-/** Abre janela de impressão térmica (popup com auto-print). */
-function abrirImpressao(pedidoId: string, tipo: "cliente" | "cozinha" | "comanda") {
+/**
+ * Envia ordem de impressão pro agente local (sem popup).
+ * tipo: 'cliente' = cupom recibo na impressora caixa
+ *       'cozinha' = pedido na impressora cozinha
+ *       'comanda' = ambos (cliente + cozinha)
+ */
+async function abrirImpressao(pedidoId: string, tipo: "cliente" | "cozinha" | "comanda") {
+  const tipoApi = tipo === "comanda" ? "ambos" : tipo;
   const token = localStorage.getItem("access_token") ?? "";
-  const sp = new URLSearchParams({ tipo, token });
-  const w = window.open(
-    `/imprimir/pedido/${pedidoId}?${sp}`,
-    "_blank",
-    "width=400,height=700,toolbar=no,menubar=no",
-  );
-  if (!w) alert("Permita popups para imprimir.");
+  try {
+    const r = await fetch(`/api/painel/pedidos/${pedidoId}/imprimir`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ tipo: tipoApi }),
+    });
+    const d = await r.json();
+    if (!d.success) {
+      console.warn("[imprimir]", d.error);
+    }
+  } catch (e) {
+    console.warn("[imprimir]", e);
+  }
 }
 
 interface Pedido {
@@ -459,24 +471,15 @@ export default function PedidosPage() {
       .catch(() => {});
   }, []);
 
-  // Detecta novos pedidos e imprime cupom automaticamente
+  // Auto-print do cupom desabilitado no FRONT — agora o backend dispatcha
+  // automaticamente via /api/pedidos POST → enqueuePrint pro agente local.
+  // Mantém apenas o tracking pra não duplicar.
   useEffect(() => {
     if (!firstFetchDone.current) {
-      // Primeira passagem: marca tudo como já impresso (não imprime backlog)
       pedidos.forEach((p) => printedIdsRef.current.add(p.id));
       firstFetchDone.current = true;
-      return;
     }
-    if (!imprimirCupomAuto) {
-      pedidos.forEach((p) => printedIdsRef.current.add(p.id));
-      return;
-    }
-    const novos = pedidos.filter((p) => !printedIdsRef.current.has(p.id));
-    novos.forEach((p, i) => {
-      printedIdsRef.current.add(p.id);
-      setTimeout(() => abrirImpressao(p.id, "cliente"), i * 250);
-    });
-  }, [pedidos, imprimirCupomAuto]);
+  }, [pedidos]);
 
   const LIMIT = 20;
 

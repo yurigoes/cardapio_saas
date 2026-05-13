@@ -211,14 +211,19 @@ function PedidoCard({ pedido, onUpdate, onChamar, updating, chamando }: CardProp
 
       {/* Actions */}
       <div className="flex gap-2">
-        {/* Imprimir comanda da cozinha */}
+        {/* Imprimir comanda da cozinha (via agente, sem popup) */}
         <button
-          onClick={() => {
+          onClick={async () => {
             const token = localStorage.getItem("access_token") ?? "";
-            const sp = new URLSearchParams({ tipo: "cozinha", token });
-            window.open(`/imprimir/pedido/${pedido.id}?${sp}`, "_blank", "width=400,height=700");
+            try {
+              await fetch(`/api/painel/pedidos/${pedido.id}/imprimir`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ tipo: "cozinha" }),
+              });
+            } catch {}
           }}
-          title="Imprimir comanda para a cozinha"
+          title="Reimprimir comanda na cozinha (via agente)"
           className="flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-400 hover:bg-white/10 hover:text-white transition"
         >
           <Printer className="h-3.5 w-3.5" />
@@ -305,14 +310,17 @@ export default function CozinhaPage() {
       .catch(() => {});
   }, []);
 
-  /** Abre popup de impressão para um pedido. Inclui throttling porque
-   *  navegadores bloqueiam várias janelas em sequência rápida. */
+  /** Envia pedido pra cozinha via agente local (sem popup). */
   function imprimirPedidoCozinha(pedidoId: string, delayMs = 0) {
-    setTimeout(() => {
+    setTimeout(async () => {
       const token = getToken();
-      const sp = new URLSearchParams({ tipo: "cozinha", token });
-      window.open(`/imprimir/pedido/${pedidoId}?${sp}`, `_print_${pedidoId}`,
-        "width=400,height=700,toolbar=no,menubar=no");
+      try {
+        await fetch(`/api/painel/pedidos/${pedidoId}/imprimir`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ tipo: "cozinha" }),
+        });
+      } catch {}
     }, delayMs);
   }
 

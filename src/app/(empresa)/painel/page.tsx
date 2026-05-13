@@ -67,8 +67,10 @@ const TIPO_LABEL: Record<string, string> = {
   totem: "Totem", whatsapp: "WhatsApp", app: "App",
 };
 
-function fmtBRL(v: number) {
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+function fmtBRL(v: number | string | null | undefined) {
+  const n = typeof v === "number" ? v : Number(v ?? 0);
+  if (!Number.isFinite(n)) return "R$ 0,00";
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function PainelDashboard() {

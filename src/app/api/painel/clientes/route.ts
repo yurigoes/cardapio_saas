@@ -119,12 +119,17 @@ export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return badRequest("JSON inválido"); }
 
-  const { nome, telefone, cpf, email } = body as {
+  const { nome, telefone, cpf, email, data_nascimento } = body as {
     nome?: string; telefone?: string; cpf?: string; email?: string;
+    data_nascimento?: string;
   };
 
-  if (!telefone && !cpf && !email) {
-    return badRequest("Informe telefone, CPF ou e-mail para identificar o cliente");
+  // Obrigatórios: nome + telefone (cpf/email são opcionais)
+  if (!nome || !nome.trim()) {
+    return badRequest("Nome é obrigatório");
+  }
+  if (!telefone || !telefone.trim()) {
+    return badRequest("Telefone é obrigatório");
   }
 
   try {
@@ -156,10 +161,11 @@ export async function POST(req: NextRequest) {
 
     // Cria novo cliente
     const novo = await queryOne<{ id: string; pontos: number }>(
-      `INSERT INTO clientes (empresa_id, nome, telefone, cpf, email)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO clientes (empresa_id, nome, telefone, cpf, email, data_nascimento)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, pontos`,
-      [empresaId, nome || null, telefone || null, cpf || null, email || null]
+      [empresaId, nome || null, telefone || null, cpf || null, email || null,
+       data_nascimento || null]
     );
 
     // WhatsApp ao dono (best-effort)

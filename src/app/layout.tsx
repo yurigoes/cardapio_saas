@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ErrorReporter } from "@/components/ErrorReporter";
+import { SessionExpiredModal } from "@/components/SessionExpiredModal";
 
 export const metadata: Metadata = {
   title: {
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         {children}
         <ErrorReporter />
+        <SessionExpiredModal />
       </body>
     </html>
   );

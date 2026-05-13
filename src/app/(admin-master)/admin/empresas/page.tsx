@@ -433,21 +433,18 @@ function ModalConfigurar({
               </div>
             </div>
 
-            {/* Instruções rápidas */}
+            {/* Instruções rápidas — print agent */}
             <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4 space-y-2">
-              <p className="text-xs font-semibold text-slate-400">Instalação rápida</p>
-              <div>
-                <p className="text-xs text-slate-500 mb-1">Linux (Ubuntu/Debian):</p>
-                <code className="block text-xs text-emerald-400 font-mono bg-black/30 rounded-lg px-3 py-2">
-                  curl -sSL https://cardapio.yugochat.com.br/install.sh | bash
-                </code>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 mb-1">Windows:</p>
-                <code className="block text-xs text-emerald-400 font-mono bg-black/30 rounded-lg px-3 py-2">
-                  Baixar o instalador .exe no painel admin
-                </code>
-              </div>
+              <p className="text-xs font-semibold text-slate-400">Agente local de impressão</p>
+              <p className="text-xs text-slate-500">
+                Vai em <a href="/painel/impressoras" className="text-emerald-400 underline">/painel/impressoras</a>,
+                gera uma key e baixa o agente. Funciona em Windows (.tar.gz com setup.bat)
+                e Linux (Node + systemd).
+              </p>
+              <a href="/painel/impressoras"
+                className="inline-block mt-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/25">
+                Abrir painel de impressoras →
+              </a>
             </div>
           </div>
 

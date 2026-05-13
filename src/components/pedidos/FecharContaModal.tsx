@@ -77,8 +77,20 @@ export function FecharContaModal({ pedido, open, onClose, onClosed, authToken }:
     setPagamentos(prev => prev.filter((_, idx) => idx !== i));
   }
 
-  function imprimir() {
-    window.open(`/imprimir/pedido/${pedido.id}`, "_blank", "width=420,height=700");
+  async function imprimir() {
+    try {
+      const r = await fetch(`/api/painel/pedidos/${pedido.id}/imprimir`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ tipo: "cliente" }),
+      });
+      const d = await r.json();
+      if (!d.success) {
+        alert(d.error?.message ?? "Falha ao enviar pra impressora");
+      }
+    } catch (e) {
+      alert("Falha de rede ao imprimir");
+    }
   }
 
   async function fechar() {
