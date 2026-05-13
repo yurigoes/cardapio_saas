@@ -21,7 +21,8 @@ export async function GET(
 
   try {
     const usuarios = await query(
-      `SELECT id, nome, email, role, telefone, ativo, created_at, ultimo_login
+      `SELECT id, nome, email, role, telefone, ativo, created_at, ultimo_login,
+              bloqueado_ate, tentativas_login
        FROM usuarios
        WHERE empresa_id = $1 AND deleted_at IS NULL
        ORDER BY nome ASC`,
