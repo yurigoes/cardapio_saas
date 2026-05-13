@@ -36,6 +36,7 @@ const PUBLIC_ROUTES = [
   "/api/health",
   "/api/pub",
   "/api/v1",
+  "/api/observability/error",
   "/totem",
   "/rastrear",
   "/docs",
