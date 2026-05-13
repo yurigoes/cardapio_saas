@@ -32,7 +32,7 @@ const { exec, spawn } = require("child_process");
 const os   = require("os");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.0.0";
+const VERSION     = "1.1.0";
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
@@ -156,6 +156,98 @@ const COMANDOS = {
       const out = await execCmd("lsblk -J -O");
       return JSON.parse(out);
     } catch (e) { return { erro: e.message }; }
+  },
+
+  /**
+   * Lista discos físicos (não loop, não rom) com info simplificada
+   * pra UI: nome, tamanho, montado, particionado, é candidato a uso novo.
+   */
+  async discos_resumo() {
+    try {
+      const out = await execCmd("lsblk -J -b -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,LABEL,MODEL,SERIAL,RM");
+      const data = JSON.parse(out);
+      const devs = (data.blockdevices || []).filter(d => d.type === "disk" && d.rm === false);
+      return devs.map(d => {
+        const filhos = d.children || [];
+        const montados = filhos.filter(c => c.mountpoint).length;
+        const temFs    = filhos.filter(c => c.fstype).length;
+        return {
+          nome:        `/dev/${d.name}`,
+          tamanho_gb:  Math.round(Number(d.size) / 1024 / 1024 / 1024),
+          modelo:      d.model || null,
+          serial:      d.serial || null,
+          tem_particao: filhos.length > 0,
+          tem_filesystem: temFs > 0,
+          montado:     montados > 0,
+          particoes: filhos.map(c => ({
+            nome:       `/dev/${c.name}`,
+            tamanho_gb: Math.round(Number(c.size) / 1024 / 1024 / 1024),
+            fstype:     c.fstype,
+            mountpoint: c.mountpoint,
+            label:      c.label,
+          })),
+          // Disco "novo" = sem filesystem nenhum em nenhuma partição
+          candidato_novo: filhos.length === 0 || temFs === 0,
+        };
+      });
+    } catch (e) { return { erro: e.message }; }
+  },
+
+  /**
+   * Formata e monta um disco. EXIGE confirmação explícita via params.
+   * Cria 1 partição ext4 ocupando 100% e monta em /mnt/cardapio-data-N.
+   *
+   * params: { disco: "/dev/sdb", confirmar_apagar_dados: true }
+   */
+  async formatar_e_montar_disco(params) {
+    const disco = String(params?.disco ?? "");
+    if (!disco.match(/^\/dev\/sd[a-z]$|^\/dev\/nvme\dn\d$|^\/dev\/vd[a-z]$/)) {
+      return { ok: false, erro: "nome de disco inválido (use /dev/sdX, /dev/nvmeNnN ou /dev/vdX)" };
+    }
+    if (params?.confirmar_apagar_dados !== true) {
+      return { ok: false, erro: "params.confirmar_apagar_dados deve ser true (proteção)" };
+    }
+    if (disco === "/dev/sda" || disco === "/dev/vda" || disco === "/dev/nvme0n1") {
+      return { ok: false, erro: "disco do sistema não pode ser formatado" };
+    }
+    try {
+      const out = [];
+      // 1) Confere que existe e não tem mountpoint ativo
+      const check = await execCmd(`lsblk -J ${disco}`);
+      const dev = JSON.parse(check).blockdevices?.[0];
+      if (!dev) return { ok: false, erro: "disco não encontrado" };
+      if (dev.children?.some(c => c.mountpoint)) {
+        return { ok: false, erro: "disco tem partição já montada — desmonte primeiro" };
+      }
+
+      // 2) Cria tabela GPT + 1 partição
+      out.push(await execCmd(`parted -s ${disco} mklabel gpt`));
+      out.push(await execCmd(`parted -s ${disco} mkpart primary ext4 0% 100%`));
+      // Aguarda kernel reler
+      await execCmd(`partprobe ${disco}`);
+      await new Promise(r => setTimeout(r, 2000));
+
+      const part = `${disco}1`.includes("nvme") ? `${disco}p1` : `${disco}1`;
+      const partFinal = disco.includes("nvme") ? `${disco}p1` : `${disco}1`;
+
+      // 3) Formata ext4
+      out.push(await execCmd(`mkfs.ext4 -F -L cardapio-data ${partFinal}`, { timeout: 300_000 }));
+
+      // 4) Cria mountpoint + monta
+      const mountpoint = `/mnt/cardapio-data`;
+      await execCmd(`mkdir -p ${mountpoint}`);
+      out.push(await execCmd(`mount ${partFinal} ${mountpoint}`));
+
+      // 5) Adiciona em /etc/fstab pra persistir no boot
+      const uuid = (await execCmd(`blkid -s UUID -o value ${partFinal}`)).trim();
+      const fstabLine = `UUID=${uuid} ${mountpoint} ext4 defaults,nofail 0 2`;
+      const fstab = await execCmd(`cat /etc/fstab`);
+      if (!fstab.includes(uuid)) {
+        await execCmd(`echo "${fstabLine}" >> /etc/fstab`);
+      }
+
+      return { ok: true, particao: partFinal, uuid, mountpoint, log: out.join("\n").slice(-2000) };
+    } catch (e) { return { ok: false, erro: e.message }; }
   },
 
   async error_log_tail(params) {

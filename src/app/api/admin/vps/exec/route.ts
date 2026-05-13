@@ -16,7 +16,7 @@ import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
 const COMANDOS_VALIDOS = [
   "status", "disk", "docker_ps", "docker_prune", "lista_discos",
   "error_log_tail", "speedtest", "exec_migration", "backup_db",
-  "restart_container",
+  "restart_container", "discos_resumo", "formatar_e_montar_disco",
 ];
 
 const schema = z.object({
