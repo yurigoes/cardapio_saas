@@ -78,6 +78,8 @@ export async function GET(req: NextRequest) {
               e.email, e.whatsapp, e.plano_id, e.modulos_ativos,
               e.created_at, e.assinatura_expira_em,
               e.trial_inicio, e.trial_fim, e.trial_dias,
+              e.slave_ativo, e.slave_ultimo_sync,
+              (e.slave_key IS NOT NULL) AS tem_slave_key,
               p.nome as plano_nome,
               (SELECT COUNT(*) FROM usuarios u WHERE u.empresa_id = e.id AND u.deleted_at IS NULL) as total_usuarios,
               (SELECT COUNT(*) FROM pedidos pd WHERE pd.empresa_id = e.id AND pd.deleted_at IS NULL) as total_pedidos

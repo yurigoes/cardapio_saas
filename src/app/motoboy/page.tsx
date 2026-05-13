@@ -43,6 +43,9 @@ export default function MotoboyPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [pagandoPedido, setPagandoPedido] = useState<PedidoMb | null>(null);
+  const [resumo, setResumo] = useState<{
+    corridas_hoje: number; total_hoje: number; em_aberto: number; tempo_medio_min: number;
+  } | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number; precisao?: number } | null>(null);
   const [gpsEnabled, setGpsEnabled] = useState(false);
   const [pingErro, setPingErro] = useState<string | null>(null);
@@ -55,16 +58,20 @@ export default function MotoboyPage() {
     if (!t) router.push("/login");
   }, [router]);
 
-  // Carrega pedidos
+  // Carrega pedidos + resumo do dia
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
       const t = localStorage.getItem("access_token");
-      const r = await fetch("/api/motoboy/pedidos", {
-        headers: { Authorization: `Bearer ${t}` },
-      });
-      const d = await r.json();
-      if (d.success) setPedidos(d.data.pedidos ?? []);
+      const headers = { Authorization: `Bearer ${t}` };
+      const [rPed, rRes] = await Promise.all([
+        fetch("/api/motoboy/pedidos", { headers }),
+        fetch("/api/motoboy/resumo",  { headers }),
+      ]);
+      const dPed = await rPed.json();
+      const dRes = await rRes.json();
+      if (dPed.success) setPedidos(dPed.data.pedidos ?? []);
+      if (dRes.success) setResumo(dRes.data);
     } finally { setLoading(false); }
   }, []);
 
@@ -202,6 +209,33 @@ export default function MotoboyPage() {
           <p className="mt-2 text-xs text-red-400 text-center">{pingErro}</p>
         )}
       </div>
+
+      {/* Resumo do dia */}
+      {resumo && (resumo.corridas_hoje > 0 || resumo.em_aberto > 0) && (
+        <div className="px-4 pb-2">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-center">
+              <p className="text-[10px] uppercase tracking-wider text-emerald-400">Hoje</p>
+              <p className="text-2xl font-bold text-white mt-0.5">{resumo.corridas_hoje}</p>
+              <p className="text-[10px] text-slate-500">corridas</p>
+            </div>
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-center">
+              <p className="text-[10px] uppercase tracking-wider text-amber-400">A receber</p>
+              <p className="text-xl font-bold text-white mt-0.5">
+                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(resumo.total_hoje)}
+              </p>
+              <p className="text-[10px] text-slate-500">do dia</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500">Em aberto</p>
+              <p className="text-2xl font-bold text-white mt-0.5">{resumo.em_aberto}</p>
+              <p className="text-[10px] text-slate-500">
+                {resumo.tempo_medio_min > 0 ? `~${resumo.tempo_medio_min}min/entrega` : ""}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pedidos */}
       <div className="px-4 space-y-3">
