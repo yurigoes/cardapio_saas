@@ -98,12 +98,15 @@ CREATE TABLE IF NOT EXISTS produtos (
   tipo          VARCHAR(20)   DEFAULT 'comida',
   destaque      BOOLEAN       DEFAULT false,
   disponivel    BOOLEAN       NOT NULL DEFAULT true,
+  ativo         BOOLEAN       NOT NULL DEFAULT true,    -- alias legado de 'disponivel'
   tempo_preparo INTEGER,
   pontos_fidelidade INTEGER   DEFAULT 0,
   created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   deleted_at    TIMESTAMPTZ
 );
+-- Garante 'ativo' em instalações onde a tabela já existia
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT true;
 CREATE INDEX IF NOT EXISTS idx_produtos_empresa   ON produtos(empresa_id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_produtos_categoria ON produtos(categoria_id);
 
@@ -191,6 +194,28 @@ CREATE TABLE IF NOT EXISTS motoboys (
   deleted_at  TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_motoboys_empresa ON motoboys(empresa_id);
+
+-- ── gateways_config (estendido pelas migrations 009/011) ─────────────────────
+CREATE TABLE IF NOT EXISTS gateways_config (
+  id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id      UUID          NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  slug            VARCHAR(50)   NOT NULL,
+  nome            VARCHAR(100),
+  ambiente        VARCHAR(20)   DEFAULT 'producao',
+  ativo           BOOLEAN       NOT NULL DEFAULT false,
+  padrao          BOOLEAN       NOT NULL DEFAULT false,
+  client_id       TEXT,
+  client_secret   TEXT,
+  api_key         TEXT,
+  token           TEXT,
+  configuracoes   JSONB         DEFAULT '{}'::jsonb,
+  created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  deleted_at      TIMESTAMPTZ,
+  CONSTRAINT gateways_empresa_slug_uniq UNIQUE (empresa_id, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_gateways_empresa ON gateways_config(empresa_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_gateways_slug    ON gateways_config(slug, ativo) WHERE deleted_at IS NULL;
 
 -- ── zonas_entrega (legado básico, estendido pela 031) ────────────────────────
 CREATE TABLE IF NOT EXISTS zonas_entrega (
