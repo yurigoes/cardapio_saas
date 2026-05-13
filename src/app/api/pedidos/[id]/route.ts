@@ -5,6 +5,7 @@ import { query, queryOne } from "@/lib/db/client";
 import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { notificarEvolution, type EvolutionEvento } from "@/lib/notify/evolution";
+import { cancelarJobsPedido } from "@/lib/print/queue";
 
 // Map de status do pedido → ID do evento Evolution (WA_EVENTOS no painel)
 const STATUS_TO_EVENTO: Partial<Record<PedidoStatus, EvolutionEvento>> = {
@@ -123,6 +124,12 @@ export async function PATCH(
         `UPDATE mesas SET status = 'livre', pedido_ativo_id = NULL WHERE id = $1`,
         [pedido.mesa_id]
       );
+    }
+
+    // Cancela jobs de impressão pendentes se pedido foi cancelado
+    if (body.status === "cancelado" && pedido.status !== "cancelado") {
+      cancelarJobsPedido(params.id)
+        .catch(e => console.warn("[Pedidos/PATCH] cancel print:", e));
     }
 
     // WhatsApp ao cliente em transições relevantes (best-effort)

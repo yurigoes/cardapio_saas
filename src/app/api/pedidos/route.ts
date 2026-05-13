@@ -11,6 +11,7 @@ import { checkRateLimitByRequest, API_RATE_LIMIT } from "@/lib/security/rate-lim
 import { isDuplicateKeyError } from "@/lib/utils/errors";
 import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import { notificarEvolution } from "@/lib/notify/evolution";
+import { dispatchCupomCozinha } from "@/lib/print/dispatch";
 import type { PoolClient } from "pg";
 
 // ─────────────────────────────────────────────
@@ -302,6 +303,11 @@ export async function POST(req: NextRequest) {
         total:        body.itens.reduce((a, i) => a + i.preco_unitario * i.quantidade, 0),
       }).catch(e => console.warn("[Pedidos/POST] notify:", e));
     }
+
+    // Dispara impressão na cozinha (best-effort, jobs ficam pendentes
+    // até o agente local pegar; sem impressora cadastrada, vira no-op)
+    dispatchCupomCozinha(empresaId, result.id)
+      .catch(e => console.warn("[Pedidos/POST] print:", e));
 
     return created(result);
   } catch (err) {

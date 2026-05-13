@@ -22,6 +22,7 @@ import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError, conflict } from "@/lib/utils/response";
 import { auditLog } from "@/lib/security/audit";
 import { notificarEvolution } from "@/lib/notify/evolution";
+import { dispatchCupomCliente } from "@/lib/print/dispatch";
 import type { PoolClient } from "pg";
 
 const FORMAS = ["pix", "dinheiro", "credito", "debito", "vale", "outro"] as const;
@@ -240,6 +241,12 @@ export async function POST(
         total:        result.total,
       }).catch(e => console.warn("[Pedidos/Fechar] notify:", e));
     }
+
+    // Cupom do cliente para impressora do caixa/balcão (best-effort)
+    const formaPrincipal = body.pagamentos
+      .slice().sort((a, b) => b.valor - a.valor)[0]?.forma;
+    dispatchCupomCliente(empresaId, params.id, formaPrincipal)
+      .catch(e => console.warn("[Pedidos/Fechar] print:", e));
 
     return ok(result);
   } catch (err) {
