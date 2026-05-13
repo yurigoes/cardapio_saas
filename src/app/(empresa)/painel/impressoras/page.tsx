@@ -29,6 +29,7 @@ interface Agent {
   prefix:      string;
   ativo:       boolean;
   ultimo_ping: string | null;
+  pingou_ha_seg: number | null;
   ultimo_ip:   string | null;
   versao:      string | null;
   created_at:  string;
@@ -41,9 +42,9 @@ const fmtDate = (iso: string | null) => {
   return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 };
 
-function isOnline(ts: string | null) {
-  if (!ts) return false;
-  return Date.now() - new Date(ts).getTime() < 60_000;
+function isOnline(a: { pingou_ha_seg?: number | null; ultimo_ping?: string | null }) {
+  if (a.pingou_ha_seg != null) return a.pingou_ha_seg < 60;
+  return a.ultimo_ping ? Date.now() - new Date(a.ultimo_ping).getTime() < 60_000 : false;
 }
 
 export default function ImpressorasPage() {
@@ -264,7 +265,7 @@ export default function ImpressorasPage() {
           ) : (
             <div className="divide-y divide-white/5">
               {agents.map(a => {
-                const online = isOnline(a.ultimo_ping);
+                const online = isOnline(a);
                 return (
                   <div key={a.id} className="p-4 flex items-center gap-3">
                     {online

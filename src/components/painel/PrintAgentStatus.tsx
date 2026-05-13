@@ -14,14 +14,21 @@ import { Printer } from "lucide-react";
 
 type Status = "online" | "offline" | "vazio" | "loading";
 
-interface AgentRow { ultimo_ping: string | null; ativo: boolean }
+interface AgentRow {
+  ultimo_ping: string | null;
+  pingou_ha_seg?: number | null;
+  ativo: boolean;
+}
 
 function classify(rows: AgentRow[]): Status {
   if (rows.length === 0) return "vazio";
   const ativos = rows.filter(a => a.ativo);
   if (ativos.length === 0) return "vazio";
   const agora = Date.now();
-  const algumOnline = ativos.some(a => a.ultimo_ping && (agora - new Date(a.ultimo_ping).getTime() < 60_000));
+  const algumOnline = ativos.some(a => {
+    if (a.pingou_ha_seg != null) return a.pingou_ha_seg < 60;
+    return a.ultimo_ping && (agora - new Date(a.ultimo_ping).getTime() < 60_000);
+  });
   return algumOnline ? "online" : "offline";
 }
 

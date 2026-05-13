@@ -17,10 +17,13 @@ import {
   Copy, Power, Database, Wrench, Wifi, Activity, Plus, X,
   MessageCircle, Send, Stethoscope,
 } from "lucide-react";
+import { VpsDashboard } from "@/components/admin/VpsDashboard";
 
 interface Agent {
   id: string; nome: string; prefix: string; ativo: boolean;
-  ultimo_ping: string | null; ultimo_ip: string | null;
+  ultimo_ping: string | null;
+  pingou_ha_seg: number | null;
+  ultimo_ip: string | null;
   versao: string | null; hostname: string | null;
 }
 
@@ -50,8 +53,11 @@ interface Diagnostico {
 const fmtData = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("pt-BR") : "—";
 
-function isOnline(ts: string | null) {
-  return ts ? Date.now() - new Date(ts).getTime() < 60_000 : false;
+// Usa pingou_ha_seg calculado pelo servidor (evita problemas de clock skew
+// entre browser e VPS). Fallback: parsing direto de ultimo_ping.
+function isOnline(a: { pingou_ha_seg?: number | null; ultimo_ping?: string | null }) {
+  if (a.pingou_ha_seg != null) return a.pingou_ha_seg < 60;
+  return a.ultimo_ping ? Date.now() - new Date(a.ultimo_ping).getTime() < 60_000 : false;
 }
 
 export default function VpsPage() {
@@ -174,7 +180,7 @@ export default function VpsPage() {
     });
   }
 
-  const algumOnline = agents.some(a => a.ativo && isOnline(a.ultimo_ping));
+  const algumOnline = agents.some(a => a.ativo && isOnline(a));
 
   return (
     <div className="space-y-6 pb-12 max-w-6xl">
@@ -279,7 +285,7 @@ sudo bash install-systemd.sh`}</pre>
           ) : (
             <div className="divide-y divide-white/5">
               {agents.map(a => {
-                const on = isOnline(a.ultimo_ping);
+                const on = isOnline(a);
                 return (
                   <div key={a.id} className="p-4 flex items-center gap-3">
                     <Server className={`h-5 w-5 ${on ? "text-emerald-400" : "text-slate-500"}`} />
@@ -302,10 +308,24 @@ sudo bash install-systemd.sh`}</pre>
         </div>
       </section>
 
+      {/* Dashboard visual */}
+      <VpsDashboard
+        agentOnline={algumOnline}
+        exec={async (comando, params) => {
+          const r = await fetch("/api/admin/vps/exec", {
+            method: "POST", headers: auth(),
+            body: JSON.stringify({ comando, params, timeout_s: 30 }),
+          });
+          const d = await r.json();
+          if (d.success && d.data?.status === "sucesso") return d.data.resultado;
+          return null;
+        }}
+      />
+
       {/* Comandos */}
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-400">
-          <Activity className="h-4 w-4" /> Comandos
+          <Activity className="h-4 w-4" /> Comandos avançados
         </h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <Btn icon={Cpu}   label="Status" onClick={() => exec("status",     {}, "Status do servidor")} busy={busy === "status"} />

@@ -20,7 +20,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const rows = await query(
-      `SELECT id, nome, prefix, ativo, ultimo_ping, ultimo_ip::text AS ultimo_ip,
+      `SELECT id, nome, prefix, ativo,
+              ultimo_ping,
+              EXTRACT(EPOCH FROM (NOW() - ultimo_ping))::int AS pingou_ha_seg,
+              ultimo_ip::text AS ultimo_ip,
               versao, created_at
          FROM print_agents
         WHERE empresa_id = $1

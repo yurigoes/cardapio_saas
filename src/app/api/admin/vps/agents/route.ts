@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
   if (auth.payload.role !== "master") return forbidden();
   try {
     const rows = await query(
-      `SELECT id, nome, prefix, ativo, ultimo_ping, ultimo_ip::text AS ultimo_ip,
+      `SELECT id, nome, prefix, ativo,
+              ultimo_ping,
+              EXTRACT(EPOCH FROM (NOW() - ultimo_ping))::int AS pingou_ha_seg,
+              ultimo_ip::text AS ultimo_ip,
               versao, hostname, ultimo_status, created_at
          FROM vps_agents ORDER BY created_at DESC`
     );
