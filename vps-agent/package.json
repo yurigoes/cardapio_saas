@@ -1,0 +1,13 @@
+{
+  "name": "cardapio-vps-agent",
+  "version": "1.0.0",
+  "description": "Agente local na VPS — executa comandos whitelisted (df, docker, lsblk) sob demanda do painel master",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "setup": "node setup.js"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT",
+  "dependencies": {}
+}

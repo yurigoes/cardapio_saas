@@ -41,6 +41,7 @@ const PUBLIC_ROUTES = [
   "/api/observability/error",
   "/api/ifood/poll",
   "/api/agent",
+  "/api/admin/vps/jobs",
   "/totem",
   "/rastrear",
   "/docs",
@@ -139,6 +140,12 @@ export async function middleware(req: NextRequest) {
   if (isPublicRoute(pathname)) {
     return response;
   }
+
+  // ─────────────────────────────────────────────
+  // Modo manutenção — bloqueia POST de pedidos quando ativo
+  // (Aplicado no handler /api/pedidos POST, não aqui — o middleware
+  // só decide auth. Ver src/lib/security/manutencao.ts)
+  // ─────────────────────────────────────────────
 
   // ─────────────────────────────────────────────
   // Rotas que exigem autenticação (apenas no servidor)

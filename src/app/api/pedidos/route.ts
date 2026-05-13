@@ -12,6 +12,7 @@ import { isDuplicateKeyError } from "@/lib/utils/errors";
 import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import { notificarEvolution } from "@/lib/notify/evolution";
 import { dispatchCupomCozinha } from "@/lib/print/dispatch";
+import { emManutencao } from "@/lib/security/manutencao";
 import type { PoolClient } from "pg";
 
 // ─────────────────────────────────────────────
@@ -100,6 +101,12 @@ export async function POST(req: NextRequest) {
 
   if (!temPermissao(role, "pedido:criar")) {
     return forbidden("Sem permissão para criar pedidos");
+  }
+
+  // Modo manutenção — bloqueia criação de pedidos novos
+  const manutencao = await emManutencao();
+  if (manutencao.ativo) {
+    return forbidden(manutencao.mensagem || "Sistema em manutenção. Voltamos em breve.");
   }
 
   // Rate limit por empresa
