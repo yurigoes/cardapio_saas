@@ -2545,15 +2545,31 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
       }`}
     >
       {/* Override de utilities Tailwind hardcoded — usa cor de destaque
-          configurada pelo restaurante (totem_cor_destaque ou cor_primaria) */}
+          configurada pelo restaurante (totem_cor_destaque ou cor_primaria).
+          Usa color-mix() pra derivar variantes claras/escuras SEM filter:
+          brightness(), que cria stacking context e degrada anti-aliasing
+          de texto/bordas (causa "serrilhado" no totem). */}
       <style jsx global>{`
-        [data-totem] .bg-emerald-500    { background-color: var(--color-primary) !important; }
-        [data-totem] .bg-emerald-400    { background-color: var(--color-primary) !important; filter: brightness(1.1); }
-        [data-totem] .hover\\:bg-emerald-400:hover { background-color: var(--color-primary) !important; filter: brightness(1.1); }
+        [data-totem] {
+          /* Variantes pré-calculadas via color-mix — sem filter() */
+          --color-primary-200: color-mix(in srgb, var(--color-primary), white 50%);
+          --color-primary-300: color-mix(in srgb, var(--color-primary), white 30%);
+          --color-primary-400: color-mix(in srgb, var(--color-primary), white 15%);
+          --color-primary-600: color-mix(in srgb, var(--color-primary), black 15%);
+        }
+
+        /* Backgrounds sólidos */
+        [data-totem] .bg-emerald-500 { background-color: var(--color-primary) !important; }
+        [data-totem] .bg-emerald-400 { background-color: var(--color-primary-400) !important; }
+        [data-totem] .hover\\:bg-emerald-400:hover { background-color: var(--color-primary-400) !important; }
         [data-totem] .hover\\:bg-emerald-500:hover { background-color: var(--color-primary) !important; }
-        [data-totem] .text-emerald-400  { color: var(--color-primary) !important; }
-        [data-totem] .text-emerald-300  { color: var(--color-primary) !important; filter: brightness(1.15); }
-        [data-totem] .text-emerald-200  { color: var(--color-primary) !important; filter: brightness(1.25); }
+
+        /* Texto — sem filter, cor sólida real */
+        [data-totem] .text-emerald-400 { color: var(--color-primary) !important; }
+        [data-totem] .text-emerald-300 { color: var(--color-primary-300) !important; }
+        [data-totem] .text-emerald-200 { color: var(--color-primary-200) !important; }
+
+        /* Bordas + bg translúcidos via rgb() com alpha */
         [data-totem] .border-emerald-500\\/30 { border-color: rgb(var(--color-primary-rgb) / 0.3) !important; }
         [data-totem] .border-emerald-500\\/40 { border-color: rgb(var(--color-primary-rgb) / 0.4) !important; }
         [data-totem] .border-emerald-500\\/50 { border-color: rgb(var(--color-primary-rgb) / 0.5) !important; }
@@ -2563,8 +2579,15 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         [data-totem] .bg-emerald-500\\/25  { background-color: rgb(var(--color-primary-rgb) / 0.25) !important; }
         [data-totem] .focus\\:border-emerald-500\\/50:focus { border-color: rgb(var(--color-primary-rgb) / 0.5) !important; }
         [data-totem] .hover\\:border-emerald-500\\/40:hover { border-color: rgb(var(--color-primary-rgb) / 0.4) !important; }
-        [data-totem] .hover\\:bg-emerald-500\\/15:hover     { background-color: rgb(var(--color-primary-rgb) / 0.15) !important; }
-        [data-totem] .hover\\:bg-emerald-500\\/20:hover     { background-color: rgb(var(--color-primary-rgb) / 0.2) !important; }
+        [data-totem] .hover\\:bg-emerald-500\\/15:hover { background-color: rgb(var(--color-primary-rgb) / 0.15) !important; }
+        [data-totem] .hover\\:bg-emerald-500\\/20:hover { background-color: rgb(var(--color-primary-rgb) / 0.2) !important; }
+
+        /* Anti-aliasing: melhora renderização de texto em qualquer cor */
+        [data-totem] {
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          text-rendering: optimizeLegibility;
+        }
       `}</style>
 
       {/* ── Caixa fechado (só se exigido e for tipo presencial) ─────────── */}
