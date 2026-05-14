@@ -59,7 +59,19 @@ export function tooManyRequests(rateLimit: RateLimitResult): NextResponse<ApiRes
   );
 }
 
-export function serverError(error?: string): NextResponse<ApiResponse> {
+export function serverError(error?: string, ctx?: { rota?: string; metodo?: string; empresaId?: string; usuarioId?: string }): NextResponse<ApiResponse> {
+  // Best-effort: insere no error_log pra aparecer em /admin/erros
+  // (não bloqueia resposta — fire-and-forget)
+  if (error) {
+    import("@/lib/db/client").then(({ query }) => {
+      query(
+        `INSERT INTO error_log (level, origem, message, rota, metodo, empresa_id, usuario_id)
+         VALUES ('error', 'server', $1, $2, $3, $4, $5)`,
+        [error.slice(0, 2000), ctx?.rota ?? null, ctx?.metodo ?? null,
+         ctx?.empresaId ?? null, ctx?.usuarioId ?? null]
+      ).catch(() => {});
+    }).catch(() => {});
+  }
   return NextResponse.json(
     { success: false, error: error || "Erro interno do servidor", code: "INTERNAL_ERROR" },
     { status: 500 }

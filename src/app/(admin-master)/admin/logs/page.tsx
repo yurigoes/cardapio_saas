@@ -1,5 +1,10 @@
-import EmBreve from "@/components/EmBreve";
-import { Terminal } from "lucide-react";
+"use client";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+// Logs = página de Erros (já existe e tem a UI completa)
 export default function AdminLogsPage() {
-  return <EmBreve titulo="Logs do Sistema" descricao="Logs técnicos, erros de aplicação e eventos de infraestrutura." icone={Terminal} />;
+  const router = useRouter();
+  useEffect(() => { router.replace("/admin/erros"); }, [router]);
+  return <div className="p-8 text-slate-400">Redirecionando para /admin/erros…</div>;
 }
