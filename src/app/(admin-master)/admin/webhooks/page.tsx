@@ -12,6 +12,7 @@ import {
   Webhook, RefreshCw, Filter, X, Calendar,
   CheckCircle2, XCircle, AlertCircle, Clock, Building2, Repeat,
 } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface WebhookEntry {
   id: string; gateway_slug: string; evento: string | null;
@@ -82,7 +83,7 @@ export default function AdminWebhooksPage() {
   const REPLAY_SUPORTADOS = new Set(["mercadopago", "pagarme", "asaas", "stone"]);
   const [replayingId, setReplayingId] = useState<string | null>(null);
   async function reenviar(id: string) {
-    if (!confirm("Reenviar este webhook?\n\nO processamento gerará um novo registro no log.")) return;
+    if (!await confirmar({ titulo: "Reenviar este webhook?", mensagem: "O processamento gerará um novo registro no log.", okLabel: "Reenviar" })) return;
     setReplayingId(id);
     try {
       const token = localStorage.getItem("access_token");
@@ -92,10 +93,10 @@ export default function AdminWebhooksPage() {
       });
       const d = await res.json();
       if (d.success) {
-        alert(`Reenviado. Status: ${d.data.replay_status}`);
+        await alertar({ titulo: "Reenviado", mensagem: `Status: ${d.data.replay_status}`, tipo: "sucesso" });
         fetchLog(page);
       } else {
-        alert(d.error?.message ?? "Falha no reenvio");
+        await alertar({ titulo: "Falha no reenvio", mensagem: d.error?.message ?? "", tipo: "perigo" });
       }
     } finally { setReplayingId(null); }
   }

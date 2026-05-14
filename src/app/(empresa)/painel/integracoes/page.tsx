@@ -5,6 +5,7 @@ import {
   Zap, Wifi, WifiOff, Clock, RefreshCw, Plus, Trash2,
   CheckCircle, AlertCircle, Loader2, Link2, Key, Eye, EyeOff, Save,
 } from "lucide-react";
+import { confirmar } from "@/components/ui/ConfirmModal";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -309,7 +310,7 @@ function WhatsAppSection({
   }
 
   async function handleRemover() {
-    if (!confirm("Remover a instância do WhatsApp? Isso desconectará o número.")) return;
+    if (!await confirmar({ titulo: "Remover instância do WhatsApp?", mensagem: "Isso desconectará o número.", okLabel: "Remover", perigo: true })) return;
     setActing(true);
     try {
       const res  = await fetch("/api/painel/whatsapp/instancia", {

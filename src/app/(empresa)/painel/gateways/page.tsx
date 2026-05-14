@@ -6,6 +6,7 @@ import {
   ChevronDown, Info, Save, Loader2, AlertCircle, CheckCircle2,
   Plus, Trash2, Star, X, Copy, Check, ExternalLink, Edit2,
 } from "lucide-react";
+import { confirmar } from "@/components/ui/ConfirmModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -323,7 +324,7 @@ export default function GatewaysPage() {
   }
 
   async function excluirGateway(gw: GatewayItem) {
-    if (!confirm(`Excluir o gateway "${gw.nome}"? As cobranças existentes não serão afetadas.`)) return;
+    if (!await confirmar({ titulo: `Excluir gateway "${gw.nome}"?`, mensagem: "As cobranças existentes não serão afetadas.", okLabel: "Excluir", perigo: true })) return;
     const res = await fetch(`/api/gateways/${gw.id}`, {
       method: "DELETE",
       headers: authHeader(),

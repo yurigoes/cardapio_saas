@@ -8,6 +8,7 @@ import {
   ShieldCheck, Building2, Plus, X, ChevronDown, Trash2,
   Eye, EyeOff, Tag, Monitor,
 } from "lucide-react";
+import { confirmar } from "@/components/ui/ConfirmModal";
 
 /* ─── módulos por role ───────────────────────── */
 interface ModuloCard {
@@ -267,7 +268,7 @@ function MasterView({ usuario }: { usuario: Usuario }) {
 
   async function removerUsuario(userId: string) {
     if (!empresaSel) return;
-    if (!confirm("Remover este usuário?")) return;
+    if (!await confirmar({ titulo: "Remover este usuário?", okLabel: "Remover", perigo: true })) return;
     await fetch(`/api/admin/empresas/${empresaSel.id}/usuarios?userId=${userId}`, {
       method: "DELETE", headers: { Authorization: `Bearer ${token}` },
     });

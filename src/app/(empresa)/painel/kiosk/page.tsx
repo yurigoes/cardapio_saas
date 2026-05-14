@@ -8,6 +8,7 @@ import {
   Tv2, ChefHat, Bike, Printer, Plus, Copy, Check, Trash2,
   ExternalLink, RefreshCw, AlertTriangle,
 } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface Token {
   id:         string;
@@ -52,7 +53,7 @@ export default function KioskPage() {
   useEffect(() => { carregar(); }, [carregar]);
 
   async function gerar(tipo: string) {
-    if (!confirm(`Gerar URL kiosk para ${tipo}? Se já existe uma, será substituída.`)) return;
+    if (!await confirmar({ titulo: `Gerar URL kiosk para ${tipo}?`, mensagem: "Se já existe uma, será substituída." })) return;
     setBusy(tipo);
     try {
       const r = await fetch("/api/painel/kiosk-tokens", {
@@ -63,7 +64,7 @@ export default function KioskPage() {
       if (d.success) {
         setNovaUrl({ tipo, url: d.data.url });
         carregar();
-      } else alert(d.error?.message ?? "Falha");
+      } else await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "", tipo: "perigo" });
     } finally { setBusy(null); }
   }
 

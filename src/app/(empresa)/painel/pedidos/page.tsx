@@ -9,6 +9,7 @@ import { useNewOrderAlerts } from "@/lib/hooks/useNewOrderAlerts";
 import { useWebPush } from "@/lib/hooks/useWebPush";
 import { FecharContaModal } from "@/components/pedidos/FecharContaModal";
 import { DeliveryPanel } from "@/components/pedidos/DeliveryPanel";
+import { alertar } from "@/components/ui/ConfirmModal";
 
 /**
  * Envia ordem de impressão pro agente local (sem popup).
@@ -183,7 +184,7 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
       });
       const data = await res.json();
       if (!data.success) {
-        alert(data.error || "Erro ao reabrir");
+        await alertar({ titulo: "Erro ao reabrir", mensagem: String(data.error ?? ""), tipo: "perigo" });
         return;
       }
       onUpdate();

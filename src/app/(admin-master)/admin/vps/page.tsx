@@ -21,6 +21,7 @@ import { VpsDashboard } from "@/components/admin/VpsDashboard";
 import { DiscosDetectados } from "@/components/admin/DiscosDetectados";
 import { DeployPanel } from "@/components/admin/DeployPanel";
 import { LinksExternos } from "@/components/painel/LinksExternos";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface Agent {
   id: string; nome: string; prefix: string; ativo: boolean;
@@ -107,7 +108,7 @@ export default function VpsPage() {
       setKeyCriada({ nome: r.data.nome, key: r.data.agent_key });
       setNovoNome("");
       carregar();
-    } else alert(r.error?.message ?? "Falha");
+    } else await alertar({ titulo: "Falha", mensagem: r.error?.message ?? "", tipo: "perigo" });
   }
 
   async function exec(comando: string, params?: Record<string, unknown>, titulo?: string) {
@@ -172,7 +173,11 @@ export default function VpsPage() {
         method: "POST", headers: auth(),
       });
       const d = await r.json();
-      alert(d.success ? d.data.mensagem : "Falha");
+      await alertar({
+        titulo: d.success ? "Teste enviado" : "Falha",
+        mensagem: d.success ? String(d.data.mensagem ?? "") : "",
+        tipo: d.success ? "sucesso" : "perigo",
+      });
     } finally { setBusy(null); }
   }
 
@@ -370,10 +375,18 @@ sudo bash install-systemd.sh`}</pre>
           <Btn icon={Activity} label="Speed test" onClick={() => exec("speedtest", {}, "Teste de internet")} busy={busy === "speedtest"} />
           <Btn icon={Database} label="Backup banco" onClick={() => exec("backup_db", {}, "Backup Postgres")} busy={busy === "backup_db"} />
           <Btn icon={Power} label="Restart app" variant="warning"
-               onClick={() => confirm("Reiniciar cardapio_app? Vai dar downtime de ~10s.") && exec("restart_container", { nome: "cardapio_app" }, "Restart cardapio_app")}
+               onClick={async () => {
+                 if (await confirmar({ titulo: "Reiniciar cardapio_app?", mensagem: "Vai dar downtime de ~10s.", okLabel: "Reiniciar", perigo: true })) {
+                   exec("restart_container", { nome: "cardapio_app" }, "Restart cardapio_app");
+                 }
+               }}
                busy={busy === "restart_container"} />
           <Btn icon={Trash2} label="Limpar Docker" variant="danger"
-               onClick={() => confirm("Roda 'docker system prune --volumes -f'. Apaga imagens/volumes não usados. Continuar?") && exec("docker_prune", { volumes: true }, "Limpeza Docker")}
+               onClick={async () => {
+                 if (await confirmar({ titulo: "Limpar Docker?", mensagem: "Roda 'docker system prune --volumes -f'. Apaga imagens/volumes não usados.", okLabel: "Limpar", perigo: true })) {
+                   exec("docker_prune", { volumes: true }, "Limpeza Docker");
+                 }
+               }}
                busy={busy === "docker_prune"} />
         </div>
       </section>

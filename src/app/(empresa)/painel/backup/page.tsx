@@ -13,6 +13,7 @@ import { useState } from "react";
 import {
   Database, Download, Upload, AlertTriangle, CheckCircle, Loader2, FileText,
 } from "lucide-react";
+import { confirmar } from "@/components/ui/ConfirmModal";
 
 interface RestoreStats {
   empresa_atualizada:    boolean;
@@ -56,14 +57,17 @@ export default function BackupPage() {
   }
 
   async function importar(file: File) {
-    if (!confirm(
-      "ATENÇÃO: o restore vai mesclar a configuração do arquivo com a empresa atual.\n" +
-      "• Categorias/produtos/cupons existentes (mesmo nome) são atualizados\n" +
-      "• Novos itens são criados\n" +
-      "• Nada é apagado\n" +
-      "• Pedidos, clientes, pagamentos e credenciais NÃO são tocados\n\n" +
-      "Deseja continuar?"
-    )) return;
+    if (!await confirmar({
+      titulo: "Restaurar configuração?",
+      mensagem:
+        "ATENÇÃO: o restore vai mesclar a configuração do arquivo com a empresa atual.\n" +
+        "• Categorias/produtos/cupons existentes (mesmo nome) são atualizados\n" +
+        "• Novos itens são criados\n" +
+        "• Nada é apagado\n" +
+        "• Pedidos, clientes, pagamentos e credenciais NÃO são tocados",
+      okLabel: "Restaurar",
+      perigo: true,
+    })) return;
 
     setImporting(true);
     setErro("");

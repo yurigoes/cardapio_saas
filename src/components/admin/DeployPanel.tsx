@@ -5,6 +5,7 @@
  */
 import { useEffect, useState, useCallback } from "react";
 import { GitBranch, Loader2, Copy, Check, RotateCcw, Database, Clock } from "lucide-react";
+import { confirmar } from "@/components/ui/ConfirmModal";
 
 interface Props {
   agentOnline: boolean;
@@ -30,15 +31,18 @@ export function DeployPanel({ agentOnline, exec }: Props) {
   useEffect(() => { carregarBackups(); }, [carregarBackups]);
 
   async function deploy() {
-    if (!confirm(
-      "Iniciar deploy?\n\n" +
-      "1. Backup do banco automático\n" +
-      "2. Modo manutenção ativado\n" +
-      "3. git pull + migrations + rebuild\n" +
-      "4. Health check (rollback se falhar)\n" +
-      "5. Modo manutenção desligado\n\n" +
-      "Tempo médio: 3-8 minutos. Pedidos novos serão bloqueados."
-    )) return;
+    if (!await confirmar({
+      titulo: "Iniciar deploy?",
+      mensagem:
+        "1. Backup do banco automático\n" +
+        "2. Modo manutenção ativado\n" +
+        "3. git pull + migrations + rebuild\n" +
+        "4. Health check (rollback se falhar)\n" +
+        "5. Modo manutenção desligado\n\n" +
+        "Tempo médio: 3-8 minutos. Pedidos novos serão bloqueados.",
+      okLabel: "Iniciar deploy",
+      perigo: true,
+    })) return;
 
     setBusy("deploy");
     setLog("Iniciando deploy...");

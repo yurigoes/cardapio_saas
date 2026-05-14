@@ -6,6 +6,7 @@ import {
   MapPin, Plus, Users, Clock, CheckCircle, X, RefreshCw, Eye, QrCode, Copy, Check,
   XCircle, ArrowLeftRight, Trash2, AlertCircle, Loader2, History,
 } from "lucide-react";
+import { confirmar } from "@/components/ui/ConfirmModal";
 
 interface Mesa {
   id:                     string;
@@ -417,7 +418,7 @@ export default function MesasPage() {
   // ── Ações ────────────────────────────────────────────────────────────────
 
   async function handleFechar(mesa: Mesa) {
-    if (!confirm(`Fechar mesa ${mesa.numero}? O pedido será marcado como entregue e a mesa liberada.`)) return;
+    if (!await confirmar({ titulo: `Fechar mesa ${mesa.numero}?`, mensagem: "O pedido será marcado como entregue e a mesa liberada.", okLabel: "Fechar mesa" })) return;
     const token = localStorage.getItem("access_token");
     const res = await fetch(`/api/mesas/${mesa.id}/fechar`, {
       method: "POST",
@@ -477,7 +478,7 @@ export default function MesasPage() {
   }
 
   async function handleExcluir(mesa: Mesa) {
-    if (!confirm(`Excluir mesa ${mesa.numero}? Esta ação não pode ser desfeita.`)) return;
+    if (!await confirmar({ titulo: `Excluir mesa ${mesa.numero}?`, mensagem: "Esta ação não pode ser desfeita.", okLabel: "Excluir", perigo: true })) return;
     const token = localStorage.getItem("access_token");
     const res = await fetch(`/api/mesas/${mesa.id}`, {
       method: "DELETE",

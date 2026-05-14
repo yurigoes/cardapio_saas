@@ -14,6 +14,7 @@ import {
   Shield, KeyRound, Users, LogOut, Trash2, AlertTriangle,
   RefreshCw, Activity, Pause, Play, Database, ArrowLeft,
 } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface Empresa {
   id: string; nome_fantasia: string; status: string;
@@ -85,7 +86,7 @@ export default function GerenciarEmpresaPage() {
   async function resetarSenha(usuario: Usuario) {
     const senha = prompt(`Nova senha para ${usuario.email} (mínimo 8 chars):`);
     if (!senha) return;
-    if (senha.length < 8) { alert("Mínimo 8 caracteres"); return; }
+    if (senha.length < 8) { await alertar({ titulo: "Senha muito curta", mensagem: "Mínimo 8 caracteres.", tipo: "alerta" }); return; }
     await executar("reset-senha-usuario", { usuario_id: usuario.id, nova_senha: senha },
       `Senha de ${usuario.email} resetada para "${senha}"`);
   }
@@ -97,14 +98,14 @@ export default function GerenciarEmpresaPage() {
       `Pra confirmar, digite o nome da empresa:`
     );
     if (confirm1 !== empresa?.nome_fantasia) {
-      if (confirm1 !== null) alert("Nome não confere — cancelado");
+      if (confirm1 !== null) await alertar({ titulo: "Nome não confere", mensagem: "Cancelado.", tipo: "alerta" });
       return;
     }
     await executar("zerar-dados-operacionais", {}, "Dados operacionais zerados");
   }
 
   async function suspender() {
-    if (!confirm(`Suspender "${empresa?.nome_fantasia}"? Usuários não conseguirão logar.`)) return;
+    if (!await confirmar({ titulo: `Suspender "${empresa?.nome_fantasia}"?`, mensagem: "Usuários não conseguirão logar.", okLabel: "Suspender", perigo: true })) return;
     await executar("suspender", {}, "Empresa suspensa");
   }
 
@@ -113,7 +114,7 @@ export default function GerenciarEmpresaPage() {
   }
 
   async function forcarLogout() {
-    if (!confirm("Forçar logout de TODOS os usuários desta empresa?")) return;
+    if (!await confirmar({ titulo: "Forçar logout de TODOS os usuários?", mensagem: "Todas as sessões ativas dessa empresa serão revogadas.", okLabel: "Forçar logout", perigo: true })) return;
     await executar("forcar-logout-todos", {}, "Sessões revogadas");
   }
 
@@ -128,15 +129,15 @@ export default function GerenciarEmpresaPage() {
       `Pra confirmar, digite EXATAMENTE: APAGAR ${empresa?.nome_fantasia}`
     );
     if (txt !== `APAGAR ${empresa?.nome_fantasia}`) {
-      if (txt !== null) alert("Texto não confere — cancelado");
+      if (txt !== null) await alertar({ titulo: "Texto não confere", mensagem: "Cancelado.", tipo: "alerta" });
       return;
     }
     setBusy("delete");
     const r = await fetch(`/api/admin/empresas/${id}`, { method: "DELETE", headers: auth() });
     const d = await r.json();
     setBusy(null);
-    if (d.success) { alert("Empresa apagada"); router.push("/admin/empresas"); }
-    else alert(d.error?.message ?? "Falha");
+    if (d.success) { await alertar({ titulo: "Empresa apagada", tipo: "sucesso" }); router.push("/admin/empresas"); }
+    else await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "", tipo: "perigo" });
   }
 
   async function impersonar() {
@@ -146,7 +147,7 @@ export default function GerenciarEmpresaPage() {
       localStorage.setItem("access_token", d.data.access_token);
       window.location.href = "/painel";
     } else {
-      alert(d.error?.message ?? "Falha ao impersonar");
+      await alertar({ titulo: "Falha ao impersonar", mensagem: d.error?.message ?? "", tipo: "perigo" });
     }
   }
 

@@ -7,6 +7,7 @@ import {
   Search, Gift, Award, Loader2, X, ChevronDown, Calendar,
   ChevronLeft, ChevronRight,
 } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -200,7 +201,7 @@ export default function CuponsPage() {
   // ── Delete ──────────────────────────────────────────────────────────────────
 
   async function deleteCupom(id: string) {
-    if (!confirm("Excluir este cupom? Isso não pode ser desfeito.")) return;
+    if (!await confirmar({ titulo: "Excluir cupom?", mensagem: "Isso não pode ser desfeito.", okLabel: "Excluir", perigo: true })) return;
     setDeleting(id);
     try {
       const res  = await fetch(`/api/painel/cupons/${id}`, {
@@ -212,7 +213,7 @@ export default function CuponsPage() {
         setCupons(prev => prev.filter(c => c.id !== id));
         setTotal(prev => prev - 1);
       } else {
-        alert(data.error ?? "Erro ao excluir cupom.");
+        await alertar({ titulo: "Erro ao excluir cupom", mensagem: String(data.error ?? ""), tipo: "perigo" });
       }
     } finally {
       setDeleting(null);

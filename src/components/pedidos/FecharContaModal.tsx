@@ -14,6 +14,7 @@ import {
   X, Plus, Trash2, Printer, CheckCircle2, Loader2,
   Banknote, CreditCard, QrCode, Wallet, MoreHorizontal,
 } from "lucide-react";
+import { alertar } from "@/components/ui/ConfirmModal";
 
 export type FormaPagamento = "pix" | "dinheiro" | "credito" | "debito" | "vale" | "outro";
 
@@ -92,12 +93,12 @@ export function FecharContaModal({ pedido, open, onClose, onClosed, authToken }:
       });
       const d = await r.json();
       if (!d.success) {
-        alert(d.error?.message ?? (ehDelivery ? "Falha ao enviar WhatsApp" : "Falha ao enviar pra impressora"));
+        await alertar({ titulo: ehDelivery ? "Falha ao enviar WhatsApp" : "Falha ao enviar pra impressora", mensagem: d.error?.message ?? "", tipo: "perigo" });
       } else if (ehDelivery) {
-        alert(d.data.mensagem ?? "Conta enviada pelo WhatsApp do cliente");
+        await alertar({ titulo: "Conta enviada", mensagem: d.data.mensagem ?? "Conta enviada pelo WhatsApp do cliente", tipo: "sucesso" });
       }
-    } catch (e) {
-      alert("Falha de rede");
+    } catch {
+      await alertar({ titulo: "Falha de rede", tipo: "perigo" });
     }
   }
 

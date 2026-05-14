@@ -15,6 +15,7 @@ import {
   LogOut, RefreshCw, Loader2, Wifi, WifiOff, DollarSign,
 } from "lucide-react";
 import { FecharContaModal } from "@/components/pedidos/FecharContaModal";
+import { alertar } from "@/components/ui/ConfirmModal";
 
 interface Endereco {
   rua?: string; numero?: string; complemento?: string;
@@ -140,7 +141,7 @@ export default function MotoboyPage() {
       });
       const d = await r.json();
       if (d.success) carregar();
-      else alert(d.error?.message ?? "Falha");
+      else await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "", tipo: "perigo" });
     } finally { setUpdating(null); }
   }
 

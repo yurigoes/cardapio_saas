@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Package, Plus, X, Users, ShoppingBag, Check, LayoutGrid, Calendar, Pencil, Trash2, Power } from "lucide-react";
 import { MODULOS_REGISTRY } from "@/lib/modules/registry";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface Plano {
   id:             string;
@@ -105,25 +106,25 @@ export default function PlanosPage() {
     });
     const d = await r.json();
     if (d.success) fetchPlanos();
-    else alert(d.error ?? "Falha");
+    else await alertar({ titulo: "Falha", mensagem: String(d.error ?? ""), tipo: "perigo" });
   }
 
   /** Excluir — backend protege (vira inativo se tem empresa) */
   async function excluir(p: Plano) {
-    if (!confirm(`Excluir plano "${p.nome}"?\n\nSe houver empresas usando, ele será apenas DESATIVADO (não excluído).`)) return;
+    if (!await confirmar({ titulo: `Excluir plano "${p.nome}"?`, mensagem: "Se houver empresas usando, ele será apenas DESATIVADO (não excluído).", okLabel: "Excluir", perigo: true })) return;
     const r = await fetch(`/api/admin/planos/${p.id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${getToken()}` },
     });
     const d = await r.json();
     if (d.success) {
-      alert("Plano excluído");
+      await alertar({ titulo: "Plano excluído", tipo: "sucesso" });
       fetchPlanos();
     } else if (d.code === "CONFLICT") {
-      alert(d.error + (d.data?.empresas_vinculadas ? `\n\n${d.data.empresas_vinculadas} empresa(s) vinculadas.` : ""));
+      await alertar({ titulo: String(d.error ?? "Conflito"), mensagem: d.data?.empresas_vinculadas ? `${d.data.empresas_vinculadas} empresa(s) vinculadas.` : "", tipo: "alerta" });
       fetchPlanos();
     } else {
-      alert(d.error ?? "Falha");
+      await alertar({ titulo: "Falha", mensagem: String(d.error ?? ""), tipo: "perigo" });
     }
   }
 

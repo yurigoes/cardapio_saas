@@ -12,6 +12,7 @@
  * Não usa drag-and-drop para evitar dependência externa; usa setas.
  */
 import { useState, useCallback } from "react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 import {
   Plus, Trash2, ArrowUp, ArrowDown, GripVertical, ChevronDown,
 } from "lucide-react";
@@ -105,8 +106,8 @@ export default function VariacoesEditor({ value, onChange }: Props) {
     onChange({ grupos: next });
   }, [grupos, onChange]);
 
-  const removeGrupo = useCallback((idx: number) => {
-    if (!confirm(`Remover o grupo "${grupos[idx].nome}"?`)) return;
+  const removeGrupo = useCallback(async (idx: number) => {
+    if (!await confirmar({ titulo: `Remover o grupo "${grupos[idx].nome}"?`, perigo: true, okLabel: "Remover" })) return;
     onChange({ grupos: grupos.filter((_, i) => i !== idx) });
   }, [grupos, onChange]);
 
@@ -127,10 +128,10 @@ export default function VariacoesEditor({ value, onChange }: Props) {
     updateGrupo(idxGrupo, { opcoes });
   }, [grupos, updateGrupo]);
 
-  const removeOpcao = useCallback((idxGrupo: number, idxOp: number) => {
+  const removeOpcao = useCallback(async (idxGrupo: number, idxOp: number) => {
     const grupo = grupos[idxGrupo];
     if (grupo.opcoes.length === 1) {
-      alert("Cada grupo precisa ter ao menos 1 opção. Remova o grupo todo se necessário.");
+      await alertar({ titulo: "Não é possível remover", mensagem: "Cada grupo precisa ter ao menos 1 opção. Remova o grupo todo se necessário.", tipo: "alerta" });
       return;
     }
     updateGrupo(idxGrupo, { opcoes: grupo.opcoes.filter((_, i) => i !== idxOp) });

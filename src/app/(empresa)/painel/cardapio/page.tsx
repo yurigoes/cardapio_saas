@@ -7,6 +7,7 @@ import {
   ToggleLeft, ToggleRight, Star, Clock, ChevronDown, Upload, ImageOff,
 } from "lucide-react";
 import VariacoesEditor, { Variacoes } from "./_VariacoesEditor";
+import { confirmar } from "@/components/ui/ConfirmModal";
 
 interface Categoria {
   id:            string;
@@ -166,7 +167,7 @@ export default function CardapioPage() {
   }
 
   async function deleteCat(id: string) {
-    if (!confirm("Excluir esta categoria? Os produtos não serão excluídos.")) return;
+    if (!await confirmar({ titulo: "Excluir categoria?", mensagem: "Os produtos não serão excluídos.", okLabel: "Excluir", perigo: true })) return;
     await fetch(`/api/painel/categorias/${id}`, { method: "DELETE", headers: authHeader() });
     fetchCategorias();
   }
@@ -267,7 +268,7 @@ export default function CardapioPage() {
   }
 
   async function deleteProd(id: string) {
-    if (!confirm("Excluir este produto?")) return;
+    if (!await confirmar({ titulo: "Excluir produto?", okLabel: "Excluir", perigo: true })) return;
     await fetch(`/api/painel/produtos/${id}`, { method: "DELETE", headers: authHeader() });
     fetchProdutos(page);
   }

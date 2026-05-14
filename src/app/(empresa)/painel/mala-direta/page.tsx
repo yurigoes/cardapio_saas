@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Mail, Plus, RefreshCw, Send, AlertTriangle, Clock, Check, Loader2, Users,
 } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface Campanha {
   id: string; nome: string; canal: string; mensagem: string;
@@ -79,17 +80,17 @@ export default function MalaDiretaPage() {
       });
       const d = await r.json();
       if (d.success) {
-        alert(d.data.mensagem);
+        await alertar({ titulo: "Campanha criada", mensagem: d.data.mensagem, tipo: "sucesso" });
         setForm({ ...form, nome: "" });
         carregar();
       } else {
-        alert(d.error?.message ?? "Falha");
+        await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "", tipo: "perigo" });
       }
     } finally { setCriando(false); }
   }
 
   async function iniciar(c: Campanha) {
-    if (!confirm(`Iniciar envio da campanha "${c.nome}" pra ${c.total_alvo} pessoa(s)?`)) return;
+    if (!await confirmar({ titulo: "Iniciar envio da campanha?", mensagem: `"${c.nome}" será enviada para ${c.total_alvo} pessoa(s).`, okLabel: "Iniciar envio" })) return;
     setBusy(c.id);
     try {
       const r = await fetch(`/api/painel/mala-direta/${c.id}/iniciar`, {
@@ -97,10 +98,10 @@ export default function MalaDiretaPage() {
       });
       const d = await r.json();
       if (d.success) {
-        alert(d.data.mensagem);
+        await alertar({ titulo: "Envio iniciado", mensagem: d.data.mensagem, tipo: "sucesso" });
         carregar();
       } else {
-        alert(d.error?.message ?? "Falha");
+        await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "", tipo: "perigo" });
       }
     } finally { setBusy(null); }
   }

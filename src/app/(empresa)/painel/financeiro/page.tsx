@@ -15,6 +15,7 @@ import {
   Banknote, QrCode, CreditCard, Wallet, Package, Trophy, Clock,
   RotateCcw, AlertCircle, Download,
 } from "lucide-react";
+import { alertar } from "@/components/ui/ConfirmModal";
 
 interface RelatorioFinanceiro {
   periodo: { from: string; to: string };
@@ -105,7 +106,7 @@ export default function FinanceiroPage() {
         headers: authHeader(),
       });
       if (!res.ok) {
-        alert("Erro ao gerar CSV");
+        await alertar({ titulo: "Erro ao gerar CSV", tipo: "perigo" });
         return;
       }
       const blob = await res.blob();
@@ -119,7 +120,7 @@ export default function FinanceiroPage() {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("[Export CSV]", e);
-      alert("Erro ao baixar CSV");
+      await alertar({ titulo: "Erro ao baixar CSV", tipo: "perigo" });
     }
   }
 

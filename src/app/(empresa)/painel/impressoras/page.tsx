@@ -9,6 +9,7 @@ import {
   Printer, Plus, Trash2, Copy, Check, AlertTriangle, RefreshCw,
   Wifi, WifiOff, Cpu, Download,
 } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface Impressora {
   id:           string;
@@ -99,7 +100,7 @@ export default function ImpressorasPage() {
       setNovaImp({ nome: "", setor: "cozinha", tipo: "tcp", ip: "", porta: 9100, largura_cols: 48 });
       carregar();
     } else {
-      alert(r.error?.message ?? "Falha");
+      await alertar({ titulo: "Falha ao adicionar impressora", mensagem: r.error?.message ?? "", tipo: "perigo" });
     }
   }
 
@@ -114,7 +115,7 @@ export default function ImpressorasPage() {
   }
 
   async function removerImp(imp: Impressora) {
-    if (!confirm(`Remover impressora "${imp.nome}"?`)) return;
+    if (!await confirmar({ titulo: `Remover impressora "${imp.nome}"?`, okLabel: "Remover", perigo: true })) return;
     const t = localStorage.getItem("access_token") ?? "";
     await fetch(`/api/painel/impressoras/${imp.id}`, {
       method: "DELETE",
@@ -134,7 +135,7 @@ export default function ImpressorasPage() {
   }
 
   async function removerAgent(a: Agent) {
-    if (!confirm(`Remover agente "${a.nome}"? A key fica inválida imediatamente.`)) return;
+    if (!await confirmar({ titulo: `Remover agente "${a.nome}"?`, mensagem: "A key fica inválida imediatamente.", okLabel: "Remover", perigo: true })) return;
     const t = localStorage.getItem("access_token") ?? "";
     await fetch(`/api/painel/print-agents/${a.id}`, {
       method: "DELETE",
@@ -156,7 +157,7 @@ export default function ImpressorasPage() {
       setNovoAgentNome("");
       carregar();
     } else {
-      alert(r.error?.message ?? "Falha");
+      await alertar({ titulo: "Falha ao criar agente", mensagem: r.error?.message ?? "", tipo: "perigo" });
     }
   }
 

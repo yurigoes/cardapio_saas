@@ -8,6 +8,7 @@ import {
   Settings, Check, Eye, EyeOff, Copy, RefreshCw, Wifi, WifiOff,
 } from "lucide-react";
 import { MODULOS_REGISTRY } from "@/lib/modules/registry";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface Empresa {
   id:                  string;
@@ -117,7 +118,7 @@ function ModalConfigurar({
   }
 
   async function handleRegenKey() {
-    if (!confirm("Regenerar a chave irá invalidar o slave atual. Confirma?")) return;
+    if (!await confirmar({ titulo: "Regenerar chave?", mensagem: "Isso irá invalidar o slave atual.", okLabel: "Regenerar", perigo: true })) return;
     setRegenLoading(true);
     try {
       // Primeiro revoga
@@ -708,7 +709,7 @@ export default function EmpresasPage() {
 
                         <button
                           onClick={async () => {
-                            if (!confirm(`Operar como "${empresa.nome_fantasia}"?\n\nVocê será redirecionado ao painel da empresa. Banner amarelo aparece pra voltar.`)) return;
+                            if (!await confirmar({ titulo: `Operar como "${empresa.nome_fantasia}"?`, mensagem: "Você será redirecionado ao painel da empresa. Banner amarelo aparece pra voltar.", okLabel: "Operar como" })) return;
                             try {
                               const t = localStorage.getItem("access_token");
                               const r = await fetch(`/api/admin/empresas/${empresa.id}/impersonar`, {
@@ -716,13 +717,13 @@ export default function EmpresasPage() {
                                 headers: { Authorization: `Bearer ${t}` },
                               });
                               const d = await r.json();
-                              if (!d.success) { alert(d.error?.message ?? "Falha"); return; }
+                              if (!d.success) { await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "", tipo: "perigo" }); return; }
                               // Salva token original em backup + troca pelo novo
                               localStorage.setItem("master_token_backup", t ?? "");
                               localStorage.setItem("access_token", d.data.access_token);
                               window.location.href = "/painel";
                             } catch (e) {
-                              alert("Erro: " + (e as Error).message);
+                              await alertar({ titulo: "Erro", mensagem: (e as Error).message, tipo: "perigo" });
                             }
                           }}
                           className="rounded-lg p-1.5 text-slate-400 hover:bg-amber-500/20 hover:text-amber-400 transition"

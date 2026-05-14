@@ -8,6 +8,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Key, Plus, Trash2, Copy, Check, AlertTriangle, RefreshCw, ExternalLink,
 } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface ApiKey {
   id:           string;
@@ -65,13 +66,13 @@ export default function ApiKeysPage() {
         setNovosScopes(["read"]);
         carregar();
       } else {
-        alert(d.error?.message ?? "Falha");
+        await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "", tipo: "perigo" });
       }
     } finally { setCriando(false); }
   }
 
   async function revogar(k: ApiKey) {
-    if (!confirm(`Revogar a key "${k.nome}"? Aplicações usando essa key vão parar de funcionar imediatamente.`)) return;
+    if (!await confirmar({ titulo: `Revogar key "${k.nome}"?`, mensagem: "Aplicações usando essa key vão parar de funcionar imediatamente.", okLabel: "Revogar", perigo: true })) return;
     const t = localStorage.getItem("access_token") ?? "";
     const r = await fetch(`/api/painel/api-keys/${k.id}`, {
       method: "DELETE",

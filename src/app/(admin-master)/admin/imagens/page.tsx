@@ -8,6 +8,7 @@
  */
 import { useState } from "react";
 import { Image as ImageIcon, PlayCircle, AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface Resultado {
   dryRun:  boolean;
@@ -40,13 +41,17 @@ export default function AdminImagensPage() {
   const [loading, setLoading]     = useState(false);
 
   async function rodar(dryRun: boolean) {
-    if (!dryRun && !confirm(
-      "APLICAR re-compressão?\n\nIsso irá:\n" +
-      "• converter PNG/JPEG para WebP\n" +
-      "• atualizar URLs no banco\n" +
-      "• manter arquivos originais no MinIO\n\n" +
-      "Operação não-destrutiva mas irreversível sem rollback manual."
-    )) return;
+    if (!dryRun && !await confirmar({
+      titulo: "Aplicar re-compressão?",
+      mensagem:
+        "Isso irá:\n" +
+        "• converter PNG/JPEG para WebP\n" +
+        "• atualizar URLs no banco\n" +
+        "• manter arquivos originais no MinIO\n\n" +
+        "Operação não-destrutiva mas irreversível sem rollback manual.",
+      okLabel: "Aplicar",
+      perigo: true,
+    })) return;
 
     setLoading(true);
     try {
@@ -62,7 +67,7 @@ export default function AdminImagensPage() {
       });
       const j = await res.json();
       if (j.success) setData(j.data);
-      else alert(j.error?.message ?? "Falha");
+      else await alertar({ titulo: "Falha", mensagem: j.error?.message ?? "", tipo: "perigo" });
     } finally { setLoading(false); }
   }
 

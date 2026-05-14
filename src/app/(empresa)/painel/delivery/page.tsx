@@ -7,6 +7,7 @@ import {
   Phone, Car, ToggleLeft, ToggleRight, AlertCircle,
 } from "lucide-react";
 import { PedidosAndamento } from "@/components/delivery/PedidosAndamento";
+import { confirmar } from "@/components/ui/ConfirmModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -200,7 +201,7 @@ export default function DeliveryPage() {
   }
 
   async function deleteMotoboy(id: string) {
-    if (!confirm("Remover este motoboy?")) return;
+    if (!await confirmar({ titulo: "Remover este motoboy?", okLabel: "Remover", perigo: true })) return;
     await fetch(`/api/painel/motoboys/${id}`, { method: "DELETE", headers: authHeader() });
     fetchMotoboys();
   }
@@ -238,7 +239,7 @@ export default function DeliveryPage() {
   }
 
   async function deleteZona(id: string) {
-    if (!confirm("Remover esta zona de entrega?")) return;
+    if (!await confirmar({ titulo: "Remover esta zona de entrega?", okLabel: "Remover", perigo: true })) return;
     await fetch(`/api/painel/zonas-entrega/${id}`, { method: "DELETE", headers: authHeader() });
     fetchZonas();
   }

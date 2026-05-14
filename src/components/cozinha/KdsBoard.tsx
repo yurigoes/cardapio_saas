@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChefHat, Clock, RefreshCw, Search, Wifi, WifiOff } from "lucide-react";
 import KdsOrderCard, { imprimirPedido } from "@/components/cozinha/KdsOrderCard";
+import { alertar } from "@/components/ui/ConfirmModal";
 
 const API =
   process.env.NEXT_PUBLIC_CONNECT_API ||
@@ -275,7 +276,7 @@ export default function KdsBoard({ empresaId }: { empresaId: string }) {
         )
       );
     } catch (error: any) {
-      alert(error?.message || "Erro ao alterar status.");
+      await alertar({ titulo: "Erro ao alterar status", mensagem: error?.message ?? "", tipo: "perigo" });
     }
   }
 
@@ -293,7 +294,7 @@ export default function KdsBoard({ empresaId }: { empresaId: string }) {
 
       await carregarPedidos(true);
     } catch (error: any) {
-      alert(error?.message || "Erro ao chamar no painel.");
+      await alertar({ titulo: "Erro ao chamar no painel", mensagem: error?.message ?? "", tipo: "perigo" });
     }
   }
 

@@ -6,6 +6,7 @@ import {
   Shield, Download, Trash2, AlertTriangle, ExternalLink, Mail,
   Loader2, Check,
 } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 export default function LgpdPage() {
   const [exportando, setExportando] = useState(false);
@@ -40,8 +41,8 @@ export default function LgpdPage() {
   }
 
   async function excluir() {
-    if (!confirmacao.trim()) { alert("Digite o slug da empresa pra confirmar"); return; }
-    if (!confirm(`ÚLTIMA CONFIRMAÇÃO\n\nVai SUSPENDER o acesso imediatamente e EXCLUIR DEFINITIVAMENTE em 30 dias.\n\nProsseguir?`)) return;
+    if (!confirmacao.trim()) { await alertar({ titulo: "Confirmação obrigatória", mensagem: "Digite o slug da empresa pra confirmar.", tipo: "alerta" }); return; }
+    if (!await confirmar({ titulo: "ÚLTIMA CONFIRMAÇÃO", mensagem: "Vai SUSPENDER o acesso imediatamente e EXCLUIR DEFINITIVAMENTE em 30 dias.\n\nProsseguir?", okLabel: "Suspender e agendar exclusão", perigo: true })) return;
     setExcluindo(true);
     setResultado(null);
     try {

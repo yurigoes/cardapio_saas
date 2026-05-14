@@ -5,6 +5,7 @@ import {
   Users, Plus, Search, Edit2, Trash2, Key, X, Check,
   Shield, ChefHat, User, Coffee, DollarSign, Bike, Package,
 } from "lucide-react";
+import { confirmar } from "@/components/ui/ConfirmModal";
 
 interface Usuario {
   id:           string;
@@ -393,7 +394,7 @@ export default function UsuariosPage() {
   useEffect(() => { setPage(1); }, [q, roleFilter]);
 
   async function handleDelete(id: string) {
-    if (!confirm("Confirma a exclusão deste usuário?")) return;
+    if (!await confirmar({ titulo: "Excluir usuário?", okLabel: "Excluir", perigo: true })) return;
     setDeletando(id);
     try {
       const token = localStorage.getItem("access_token");
