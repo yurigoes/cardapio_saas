@@ -14,9 +14,15 @@ const DEFAULT = {
 };
 
 const HEADERS = {
-  "Cache-Control": "no-store, max-age=0, must-revalidate",
-  "Pragma":        "no-cache",
+  "Cache-Control":     "no-store, max-age=0, must-revalidate",
+  "CDN-Cache-Control": "no-store",
+  "Cloudflare-CDN-Cache-Control": "no-store",
+  "Pragma":            "no-cache",
 };
+
+// Força Next a não pré-renderizar / cachear no edge
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
