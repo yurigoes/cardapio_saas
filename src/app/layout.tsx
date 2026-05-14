@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ErrorReporter } from "@/components/ErrorReporter";
 import { SessionExpiredModal } from "@/components/SessionExpiredModal";
+import { ManutencaoBanner } from "@/components/ManutencaoBanner";
+import { ConfirmModalRoot } from "@/components/ui/ConfirmModal";
 
 export const metadata: Metadata = {
   title: {
@@ -27,9 +29,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" href="/favicon.ico" sizes="any" />
       </head>
       <body className="antialiased">
+        <ManutencaoBanner />
         {children}
         <ErrorReporter />
         <SessionExpiredModal />
+        <ConfirmModalRoot />
       </body>
     </html>
   );

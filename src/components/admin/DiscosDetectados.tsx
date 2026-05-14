@@ -9,16 +9,20 @@
  */
 import { useEffect, useState, useCallback } from "react";
 import { HardDrive, AlertTriangle, Plus, Loader2, Check } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface Disco {
   nome: string;
   tamanho_gb: number;
   modelo: string | null;
+  vendor?: string | null;
   serial: string | null;
+  rotacional?: boolean;
   tem_particao: boolean;
   tem_filesystem: boolean;
   montado: boolean;
   candidato_novo: boolean;
+  smart?: { saude: string; modelo: string | null; capacidade: string | null } | null;
   particoes: Array<{
     nome: string;
     tamanho_gb: number;
@@ -57,10 +61,16 @@ export function DiscosDetectados({ agentOnline, exec }: Props) {
 
   async function formatar(disco: Disco) {
     if (confirmacao !== disco.nome) {
-      alert(`Digite EXATAMENTE: ${disco.nome}`);
+      await alertar({ titulo: "Confirmação inválida", mensagem: `Digite EXATAMENTE: ${disco.nome}`, tipo: "alerta" });
       return;
     }
-    if (!confirm(`Última confirmação:\n\nVai APAGAR todos os dados de ${disco.nome} (${disco.tamanho_gb} GB).\nFormatar como ext4 e montar em /mnt/cardapio-data.\n\nProsseguir?`)) return;
+    const ok = await confirmar({
+      titulo:   "Apagar e formatar disco?",
+      mensagem: `Vai APAGAR todos os dados de ${disco.nome} (${disco.tamanho_gb} GB).\n\nFormatar como ext4 e montar em /mnt/cardapio-data.\n\nEsta ação é irreversível.`,
+      okLabel:  "Apagar e formatar",
+      perigo:   true,
+    });
+    if (!ok) return;
 
     setFormatando(true);
     setResultado(null);
@@ -147,6 +157,12 @@ export function DiscosDetectados({ agentOnline, exec }: Props) {
               )}
               {!d.montado && d.tem_filesystem && (
                 <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-300">FS NÃO MONTADO</span>
+              )}
+              {d.smart?.saude === "ok" && (
+                <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-400" title="SMART: PASSED">❤ SMART OK</span>
+              )}
+              {d.smart?.saude === "alerta" && (
+                <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] text-red-300" title="SMART: FAILED — disco com problema">⚠ SMART</span>
               )}
               {d.candidato_novo && (
                 <button onClick={() => { setShowFormat(d.nome); setResultado(null); }}

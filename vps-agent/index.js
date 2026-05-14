@@ -32,7 +32,7 @@ const { exec, spawn } = require("child_process");
 const os   = require("os");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.2.0";
+const VERSION     = "1.3.0";
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
@@ -159,26 +159,90 @@ const COMANDOS = {
   },
 
   /**
-   * Lista discos físicos (não loop, não rom) com info simplificada
-   * pra UI: nome, tamanho, montado, particionado, é candidato a uso novo.
+   * Lista discos físicos com info reforçada via smartctl quando disponível.
+   * Detecta HDs novos (sem fs) e mostra saúde SMART se smartmontools instalado.
    */
   async discos_resumo() {
     try {
-      const out = await execCmd("lsblk -J -b -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,LABEL,MODEL,SERIAL,RM");
+      // 1. lsblk pra estrutura básica
+      const out = await execCmd("lsblk -J -b -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,LABEL,MODEL,SERIAL,RM,ROTA,VENDOR");
       const data = JSON.parse(out);
       const devs = (data.blockdevices || []).filter(d => d.type === "disk" && d.rm === false);
-      return devs.map(d => {
+
+      // 2. Tem smartctl?
+      let temSmartctl = false;
+      try { await execCmd("which smartctl"); temSmartctl = true; } catch {}
+
+      // 3. smartctl --scan pra descobrir TODOS os discos físicos (inclusive sem partições)
+      let scanedDevices = [];
+      if (temSmartctl) {
+        try {
+          const scan = await execCmd("smartctl --scan");
+          // ex: /dev/sda -d sat # /dev/sda [SAT], ATA device
+          scanedDevices = scan.trim().split("\n")
+            .map(l => l.match(/^(\/dev\/\S+)/))
+            .filter(Boolean).map(m => m[1]);
+        } catch {}
+      }
+
+      // 4. Funde lsblk (rico em particoes) com smartctl --scan (encontra novos discos)
+      const knownNames = new Set(devs.map(d => `/dev/${d.name}`));
+      for (const dev of scanedDevices) {
+        if (!knownNames.has(dev)) {
+          // Disco que lsblk não viu (sem particoes/fs)
+          devs.push({
+            name: dev.replace("/dev/", ""), size: 0, type: "disk",
+            children: [], rm: false, model: null, serial: null,
+          });
+        }
+      }
+
+      // 5. Pra cada disco, monta resumo
+      const result = await Promise.all(devs.map(async d => {
         const filhos = d.children || [];
         const montados = filhos.filter(c => c.mountpoint).length;
         const temFs    = filhos.filter(c => c.fstype).length;
+        const dispositivo = `/dev/${d.name}`;
+
+        // Saúde SMART (se disponível)
+        let smart = null;
+        if (temSmartctl) {
+          try {
+            const info = await execCmd(`smartctl -H -i ${dispositivo} 2>&1 || true`);
+            const linhas = info.split("\n");
+            const health = linhas.find(l => /SMART overall-health/i.test(l));
+            const modelo = linhas.find(l => /^Model Number|^Device Model|^Model Family/i.test(l));
+            const capacidade = linhas.find(l => /^User Capacity/i.test(l));
+            const serial = linhas.find(l => /^Serial Number/i.test(l));
+            smart = {
+              saude:      health ? (health.includes("PASSED") ? "ok" : "alerta") : "indisponivel",
+              modelo:     modelo ? modelo.split(":").slice(1).join(":").trim() : null,
+              serial:     serial ? serial.split(":").slice(1).join(":").trim() : null,
+              capacidade: capacidade ? capacidade.split(":").slice(1).join(":").trim() : null,
+            };
+          } catch {}
+        }
+
+        // Tenta obter tamanho real via blockdev se size for 0
+        let tamanho = Number(d.size) || 0;
+        if (tamanho === 0) {
+          try {
+            const t = await execCmd(`blockdev --getsize64 ${dispositivo}`);
+            tamanho = parseInt(t.trim(), 10) || 0;
+          } catch {}
+        }
+
         return {
-          nome:        `/dev/${d.name}`,
-          tamanho_gb:  Math.round(Number(d.size) / 1024 / 1024 / 1024),
-          modelo:      d.model || null,
-          serial:      d.serial || null,
-          tem_particao: filhos.length > 0,
+          nome:           dispositivo,
+          tamanho_gb:     Math.round(tamanho / 1024 / 1024 / 1024),
+          modelo:         d.model || smart?.modelo || null,
+          vendor:         d.vendor || null,
+          serial:         d.serial || smart?.serial || null,
+          rotacional:     d.rota === true,
+          tem_particao:   filhos.length > 0,
           tem_filesystem: temFs > 0,
-          montado:     montados > 0,
+          montado:        montados > 0,
+          smart:          smart,
           particoes: filhos.map(c => ({
             nome:       `/dev/${c.name}`,
             tamanho_gb: Math.round(Number(c.size) / 1024 / 1024 / 1024),
@@ -186,10 +250,11 @@ const COMANDOS = {
             mountpoint: c.mountpoint,
             label:      c.label,
           })),
-          // Disco "novo" = sem filesystem nenhum em nenhuma partição
           candidato_novo: filhos.length === 0 || temFs === 0,
         };
-      });
+      }));
+
+      return result;
     } catch (e) { return { erro: e.message }; }
   },
 

@@ -26,6 +26,17 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
+        // Modo manutenção: 503 com code MANUTENCAO
+        if (res.status === 503 && data.code === "MANUTENCAO") {
+          const { alertar } = await import("@/components/ui/ConfirmModal");
+          await alertar({
+            titulo:   "🔧 Sistema em manutenção",
+            mensagem: data.error + "\n\nApenas administradores master conseguem acessar agora. Tente novamente em alguns minutos.",
+            tipo:     "alerta",
+          });
+          setErro("Sistema em manutenção — acesso bloqueado");
+          return;
+        }
         setErro(data.error || "Erro ao fazer login");
         return;
       }

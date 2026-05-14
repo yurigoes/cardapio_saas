@@ -8,6 +8,8 @@ import { checkRateLimitByRequest, AUTH_RATE_LIMIT } from "@/lib/security/rate-li
 import { logSecurityEvent, incrementLoginFailures, resetLoginFailures } from "@/lib/security/audit";
 import { ok, unauthorized, tooManyRequests, badRequest, serverError } from "@/lib/utils/response";
 import { getClientIp } from "@/lib/auth/middleware";
+import { emManutencao } from "@/lib/security/manutencao";
+import { NextResponse } from "next/server";
 
 const loginSchema = z.object({
   email: z.string().email().toLowerCase().max(255),
@@ -88,6 +90,23 @@ export async function POST(req: NextRequest) {
         detalhes:  { tentativas },
       });
       return unauthorized("E-mail ou senha incorretos");
+    }
+
+    // Modo manutenção: só master pode logar
+    if (usuario.role !== "master") {
+      const m = await emManutencao();
+      if (m.ativo) {
+        await logSecurityEvent({
+          tipo: "login_falha", ipAddress: ip, usuarioId: usuario.id,
+          detalhes: { motivo: "manutencao" },
+        });
+        return NextResponse.json({
+          success: false,
+          code: "MANUTENCAO",
+          error: m.mensagem || "Sistema em manutenção. Estamos realizando varredura de segurança anti-hacking. Previsão: 30 minutos a 2 horas.",
+          data:  { previsao: "30 minutos a 2 horas" },
+        }, { status: 503 });
+      }
     }
 
     // Login bem-sucedido
