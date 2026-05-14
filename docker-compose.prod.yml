@@ -286,6 +286,19 @@ services:
       # Admin master
       MASTER_EMAIL:    ${MASTER_EMAIL}
       MASTER_PASSWORD: ${MASTER_PASSWORD}
+      # Cron + observability + Mercado Pago (legado — agora vem do DB via /admin/billing)
+      CRON_SECRET:                ${CRON_SECRET}
+      METRICS_TOKEN:              ${METRICS_TOKEN:-}
+      MERCADOPAGO_ACCESS_TOKEN:   ${MERCADOPAGO_ACCESS_TOKEN:-}
+      MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+      # Web Push (notificações de pedido pra staff)
+      VAPID_PUBLIC_KEY:  ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_EMAIL:       ${VAPID_EMAIL:-mailto:admin@example.com}
+      # Backup R2 (vps-agent precisa, mas app expõe pra UI)
+      BACKUP_R2_BUCKET:        ${BACKUP_R2_BUCKET:-}
+      BACKUP_R2_PATH:          ${BACKUP_R2_PATH:-}
+      BACKUP_RETENTION_DAYS:   ${BACKUP_RETENTION_DAYS:-30}
     depends_on:
       postgres:
         condition: service_healthy
