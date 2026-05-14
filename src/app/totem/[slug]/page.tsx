@@ -146,6 +146,7 @@ interface EmpresaInfo {
   totem_bg_image_url: string | null;
   totem_cta_text: string | null;
   totem_slogan: string | null;
+  totem_cor_destaque?: string | null;
   horario_abertura: string | null;
   horario_fechamento: string | null;
   caixa_obrigatorio?: boolean;
@@ -2206,7 +2207,8 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         setCategorias(data.data.categorias);
         setProdutos(data.data.produtos);
         // Apply brand colors (incl. --color-primary-rgb p/ Tailwind brand)
-        applyBrandColors({ primary: emp.cor_primaria });
+        // Prefere totem_cor_destaque (config específica do totem) se houver
+        applyBrandColors({ primary: emp.totem_cor_destaque || emp.cor_primaria });
       } catch {
         setNotFound(true);
       } finally {
@@ -2516,6 +2518,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
   return (
     <div
+      data-totem
       data-totem-tema={(empresa as { totem_tema?: string })?.totem_tema ?? "escuro"}
       className={`relative min-h-screen overflow-hidden ${
         (empresa as { totem_tema?: string })?.totem_tema === "claro"
@@ -2523,6 +2526,28 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           : "bg-slate-950 text-white"
       }`}
     >
+      {/* Override de utilities Tailwind hardcoded — usa cor de destaque
+          configurada pelo restaurante (totem_cor_destaque ou cor_primaria) */}
+      <style jsx global>{`
+        [data-totem] .bg-emerald-500    { background-color: var(--color-primary) !important; }
+        [data-totem] .bg-emerald-400    { background-color: var(--color-primary) !important; filter: brightness(1.1); }
+        [data-totem] .hover\\:bg-emerald-400:hover { background-color: var(--color-primary) !important; filter: brightness(1.1); }
+        [data-totem] .hover\\:bg-emerald-500:hover { background-color: var(--color-primary) !important; }
+        [data-totem] .text-emerald-400  { color: var(--color-primary) !important; }
+        [data-totem] .text-emerald-300  { color: var(--color-primary) !important; filter: brightness(1.15); }
+        [data-totem] .text-emerald-200  { color: var(--color-primary) !important; filter: brightness(1.25); }
+        [data-totem] .border-emerald-500\\/30 { border-color: rgb(var(--color-primary-rgb) / 0.3) !important; }
+        [data-totem] .border-emerald-500\\/40 { border-color: rgb(var(--color-primary-rgb) / 0.4) !important; }
+        [data-totem] .border-emerald-500\\/50 { border-color: rgb(var(--color-primary-rgb) / 0.5) !important; }
+        [data-totem] .bg-emerald-500\\/10  { background-color: rgb(var(--color-primary-rgb) / 0.1) !important; }
+        [data-totem] .bg-emerald-500\\/15  { background-color: rgb(var(--color-primary-rgb) / 0.15) !important; }
+        [data-totem] .bg-emerald-500\\/20  { background-color: rgb(var(--color-primary-rgb) / 0.2) !important; }
+        [data-totem] .bg-emerald-500\\/25  { background-color: rgb(var(--color-primary-rgb) / 0.25) !important; }
+        [data-totem] .focus\\:border-emerald-500\\/50:focus { border-color: rgb(var(--color-primary-rgb) / 0.5) !important; }
+        [data-totem] .hover\\:border-emerald-500\\/40:hover { border-color: rgb(var(--color-primary-rgb) / 0.4) !important; }
+        [data-totem] .hover\\:bg-emerald-500\\/15:hover     { background-color: rgb(var(--color-primary-rgb) / 0.15) !important; }
+        [data-totem] .hover\\:bg-emerald-500\\/20:hover     { background-color: rgb(var(--color-primary-rgb) / 0.2) !important; }
+      `}</style>
 
       {/* ── Caixa fechado (só se exigido e for tipo presencial) ─────────── */}
       {empresa?.caixa_obrigatorio && empresa?.caixa_aberto === false && fase !== "start" && (
@@ -2674,14 +2699,19 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
             <div className="sticky top-0 z-10 border-b border-white/5 bg-slate-950/90 backdrop-blur">
               <div className="flex items-center gap-3 px-4 py-3">
                 {empresa.logo_url ? (
-                  <img src={empresa.logo_url} alt="" className="h-9 w-9 rounded-xl object-cover" />
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={empresa.logo_url}
+                    alt={empresa.nome_fantasia}
+                    className="h-12 w-auto max-w-[180px] object-contain"
+                  />
                 ) : (
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20">
                     <ChefHat className="h-4 w-4 text-emerald-400" />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="truncate font-bold">{empresa.nome_fantasia}</p>
+                  {!empresa.logo_url && <p className="truncate font-bold">{empresa.nome_fantasia}</p>}
                   {mesaNumeroReal ? (
                     <p className="text-xs text-emerald-400 flex items-center gap-1">
                       <MapPin className="h-3 w-3" /> Mesa {mesaNumeroReal}

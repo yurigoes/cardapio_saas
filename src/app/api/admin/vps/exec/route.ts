@@ -21,10 +21,11 @@ const COMANDOS_VALIDOS = [
   "backup_to_r2", "backup_to_r2_check",
 ];
 
+// Backup/deploy podem demorar — permitir até 10 minutos.
 const schema = z.object({
   comando: z.enum(COMANDOS_VALIDOS as [string, ...string[]]),
   params:  z.record(z.unknown()).optional(),
-  timeout_s: z.number().int().min(1).max(300).optional(),
+  timeout_s: z.number().int().min(1).max(600).optional(),
 });
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
     return ok({
       job_id: job.id, status: "timeout",
-      mensagem: "Agente não respondeu em 60s. Job continua na fila — verifique se o vps-agent está rodando.",
+      mensagem: `Agente não respondeu em ${Math.round(timeout / 1000)}s. Job continua na fila — verifique se o vps-agent está rodando.`,
     });
   } catch (err) {
     console.error("[VPS/Exec]", err);

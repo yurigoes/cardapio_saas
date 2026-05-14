@@ -238,6 +238,7 @@ function ModalCriarUsuario({
 
 /* ─── visão master ────────────────────────────── */
 function MasterView({ usuario }: { usuario: Usuario }) {
+  const branding                        = useSaasBranding();
   const [empresas, setEmpresas]         = useState<EmpresaLista[]>([]);
   const [empresaSel, setEmpresaSel]     = useState<EmpresaLista | null>(null);
   const [usuarios, setUsuarios]         = useState<UsuarioEmpresa[]>([]);
@@ -560,7 +561,6 @@ function OperadorView({ usuario, empresa }: { usuario: Usuario; empresa: Empresa
 
 /* ─── página principal ───────────────────────── */
 export default function HubPage() {
-  const branding = useSaasBranding();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [loading, setLoading] = useState(true);
