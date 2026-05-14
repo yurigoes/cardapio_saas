@@ -5,8 +5,10 @@
  * Pública (sem auth) — só descreve a API.
  */
 import { useEffect } from "react";
+import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 
 export default function ApiDocsPage() {
+  const branding = useSaasBranding();
   useEffect(() => {
     // Carrega Swagger UI CSS + JS via CDN
     if (!document.querySelector('link[href*="swagger-ui"]')) {
@@ -44,7 +46,7 @@ export default function ApiDocsPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
-        <h1 className="text-xl font-bold text-zinc-900">Cardápio SaaS — API v1</h1>
+        <h1 className="text-xl font-bold text-zinc-900">{branding.nome} — API v1</h1>
         <p className="mt-1 text-sm text-zinc-600">
           Documentação interativa. Para usar, gere uma API key em{" "}
           <a href="/painel/api-keys" className="text-emerald-600 hover:underline">/painel/api-keys</a>{" "}

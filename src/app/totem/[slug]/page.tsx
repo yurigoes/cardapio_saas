@@ -326,21 +326,24 @@ function StartScreen({
           {/* Logo + name */}
           <div className="flex items-center gap-3">
             {empresa.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={empresa.logo_url}
                 alt={empresa.nome_fantasia}
-                className="h-14 w-14 rounded-xl object-cover shadow-xl ring-1 ring-white/20"
+                className="h-16 w-auto max-w-[260px] object-contain drop-shadow-lg"
               />
             ) : (
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 shadow-xl ring-1 ring-white/20 backdrop-blur">
-                <ChefHat className="h-7 w-7 text-white" />
-              </div>
+              <>
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 shadow-xl ring-1 ring-white/20 backdrop-blur">
+                  <ChefHat className="h-7 w-7 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold tracking-wide text-white/90">
+                    {empresa.nome_fantasia}
+                  </p>
+                </div>
+              </>
             )}
-            <div>
-              <p className="text-sm font-semibold tracking-wide text-white/90">
-                {empresa.nome_fantasia}
-              </p>
-            </div>
           </div>
 
           {/* Right: lang switcher + open badge */}

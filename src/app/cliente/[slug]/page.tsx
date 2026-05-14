@@ -285,7 +285,12 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
         {/* Header */}
         <header className="flex items-center gap-3 border-b border-white/5 px-6 py-4">
           {empresa?.logo_url ? (
-            <img src={empresa.logo_url} alt="" className="h-10 w-10 rounded-lg object-cover" />
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={empresa.logo_url}
+              alt={empresa.nome_fantasia ?? ""}
+              className="h-12 w-auto max-w-[200px] object-contain"
+            />
           ) : (
             <div
               className="flex h-10 w-10 items-center justify-center rounded-lg"
@@ -380,7 +385,12 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/5 bg-slate-950/95 px-5 py-4 backdrop-blur">
         <div className="flex items-center gap-3 min-w-0">
           {empresa?.logo_url ? (
-            <img src={empresa.logo_url} alt="" className="h-9 w-9 flex-shrink-0 rounded-lg object-cover" />
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={empresa.logo_url}
+              alt={empresa.nome_fantasia ?? ""}
+              className="h-11 w-auto max-w-[180px] flex-shrink-0 object-contain"
+            />
           ) : (
             <div
               className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg"

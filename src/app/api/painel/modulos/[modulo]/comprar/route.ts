@@ -13,6 +13,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { queryOne } from "@/lib/db/client";
 import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
 import { MODULOS } from "../../route";
+import { getSaasBranding } from "@/lib/branding/server";
 import { criarPreferencia, isSandbox } from "@/lib/billing/mercadopago";
 
 export async function POST(
@@ -46,11 +47,12 @@ export async function POST(
     let avisoMP: string | null = null;
 
     if (process.env.MERCADOPAGO_ACCESS_TOKEN) {
+      const branding = await getSaasBranding();
       try {
         const pref = await criarPreferencia({
           items: [{
             id:           modulo,
-            title:        `Módulo ${def.nome} — Cardápio SaaS`,
+            title:        `Módulo ${def.nome} — ${branding.nome}`,
             description:  `Acesso mensal ao módulo ${def.nome}`,
             quantity:     1,
             unit_price:   Number(compra.valor),

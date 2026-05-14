@@ -4,10 +4,12 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ChefHat, Check, ArrowRight, AlertTriangle, Loader2 } from "lucide-react";
+import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 
 interface Plano { id: string; nome: string; preco_mensal: string | number }
 
 function CadastroForm() {
+  const branding    = useSaasBranding();
   const router      = useRouter();
   const searchParams = useSearchParams();
   const planoIdInicial = searchParams.get("plano");
@@ -90,8 +92,19 @@ function CadastroForm() {
       <header className="border-b border-white/5">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <ChefHat className="h-5 w-5 text-emerald-400" />
-            <span className="font-bold">Cardápio SaaS</span>
+            {branding.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={branding.logo_url}
+                alt={branding.nome}
+                className="h-9 w-auto max-w-[160px] object-contain"
+              />
+            ) : (
+              <>
+                <ChefHat className="h-5 w-5 text-emerald-400" />
+                <span className="font-bold">{branding.nome}</span>
+              </>
+            )}
           </Link>
           <Link href="/login" className="text-sm text-slate-400 hover:text-white">
             Já tenho conta

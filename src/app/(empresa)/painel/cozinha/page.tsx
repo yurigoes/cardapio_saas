@@ -278,6 +278,8 @@ export default function CozinhaPage() {
   const [soundOn,   setSoundOn]   = useState(true);
   const [lastCount, setLastCount] = useState(0);
   const [slug,      setSlug]      = useState<string>("");
+  const [empresaLogo, setEmpresaLogo] = useState<string | null>(null);
+  const [empresaNome, setEmpresaNome] = useState<string>("");
   const [toast,     setToast]     = useState<ToastState | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -299,7 +301,11 @@ export default function CozinhaPage() {
     fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((data) => {
-        if (data.success) setSlug(data.data?.empresa?.slug || "");
+        if (data.success) {
+          setSlug(data.data?.empresa?.slug || "");
+          setEmpresaLogo(data.data?.empresa?.logo_url ?? null);
+          setEmpresaNome(data.data?.empresa?.nome_fantasia ?? "");
+        }
       })
       .catch(() => {});
     fetch("/api/painel/config", { headers: { Authorization: `Bearer ${token}` } })
@@ -461,9 +467,17 @@ export default function CozinhaPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <ChefHat className="h-6 w-6 text-brand" />
+          {empresaLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={empresaLogo} alt={empresaNome}
+              className="h-10 w-auto max-w-[180px] object-contain" />
+          ) : (
+            <ChefHat className="h-6 w-6 text-brand" />
+          )}
           <div>
-            <h1 className="text-2xl font-bold">Cozinha / KDS</h1>
+            <h1 className="text-2xl font-bold">
+              {empresaNome ? `${empresaNome} · Cozinha` : "Cozinha / KDS"}
+            </h1>
             <p className="text-xs text-slate-500">
               {counts.pendente} pendente{counts.pendente !== 1 ? "s" : ""} ·{" "}
               {counts.confirmado} confirmado{counts.confirmado !== 1 ? "s" : ""} ·{" "}

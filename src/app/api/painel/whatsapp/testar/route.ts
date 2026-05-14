@@ -10,6 +10,7 @@ import { NextRequest } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { queryOne } from "@/lib/db/client";
 import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
+import { getSaasBranding } from "@/lib/branding/server";
 
 const ALLOWED = ["master", "admin", "gerente"];
 
@@ -47,13 +48,14 @@ export async function POST(req: NextRequest) {
   const evoKey = process.env.EVOLUTION_API_KEY;
   if (!evoKey) return serverError("EVOLUTION_API_KEY não configurada no servidor");
 
+  const branding = await getSaasBranding();
   try {
     const r = await fetch(`${evoUrl}/message/sendText/${instanceName}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "apikey": evoKey },
       body: JSON.stringify({
         number: numero,
-        text:   `🧪 Teste do Cardápio SaaS\n\nSe você recebeu esta mensagem, sua integração com o WhatsApp está funcionando corretamente.\n\nHora: ${new Date().toLocaleString("pt-BR")}`,
+        text:   `🧪 Teste do ${branding.nome}\n\nSe você recebeu esta mensagem, sua integração com o WhatsApp está funcionando corretamente.\n\nHora: ${new Date().toLocaleString("pt-BR")}`,
       }),
     });
     const data = await r.json().catch(() => ({}));

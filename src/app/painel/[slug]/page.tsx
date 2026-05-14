@@ -211,7 +211,12 @@ export default function PainelTVPage({ params }: { params: { slug: string } }) {
       >
         <div className="flex items-center gap-4">
           {empresa?.logo_url ? (
-            <img src={empresa.logo_url} alt="" className="h-12 w-12 rounded-xl object-cover" />
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={empresa.logo_url}
+              alt={empresa.nome_fantasia ?? ""}
+              className="h-14 w-auto max-w-[220px] object-contain"
+            />
           ) : (
             <div
               className="flex h-12 w-12 items-center justify-center rounded-xl"
