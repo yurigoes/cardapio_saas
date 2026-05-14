@@ -24,11 +24,13 @@ Implementado:
   `/recuperar-senha` (escolhe email ou WhatsApp, código 6 dígitos, TTL 15min)
 
 Pendências futuras (não bloqueantes):
-- Templates pra: fatura, pagamento_falhou, manutencao, trial_expirando
-- Hooks automáticos pra esses eventos
-- Página `/admin/email/templates` (editor visual)
-- Página `/admin/email/logs` (consulta de jobs)
-- Criptografia da `smtp_config.password` (hoje plaintext)
+- ~~Templates pra: fatura, pagamento_falhou, manutencao, trial_expirando~~ ✅
+- ~~Hooks automáticos pra esses eventos~~ ✅ (pagamento OK/falhou via webhook MP-modulos, trial_expirando via cron)
+- ~~Página `/admin/email/templates` (editor visual)~~ ✅
+- ~~Página `/admin/email/logs` (consulta de jobs + retry)~~ ✅
+- ~~Criptografia da `smtp_config.password` (hoje plaintext)~~ ✅ AES-256-GCM via `@/lib/security/encrypt`
+- Hook automático pra "manutencao_aviso" (botão admin pra disparar pra todas empresas)
+- Webhook de bounce/spam complaint (SES/Mailgun report pra marcar emails como inválidos)
 
 Como configurar:
 1. `/admin/email` → preencher SMTP (host/port/user/pwd/from) → ativar

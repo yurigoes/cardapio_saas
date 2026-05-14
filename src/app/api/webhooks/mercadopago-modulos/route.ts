@@ -10,6 +10,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryOne } from "@/lib/db/client";
 import { buscarPagamento } from "@/lib/billing/mercadopago";
+import { enfileirar as enfileirarEmail, smtpAtivo } from "@/lib/email/smtp";
+
+const MOTIVOS_FALHA: Record<string, string> = {
+  cancelled:    "Pagamento cancelado",
+  rejected:     "Cartão recusado pela operadora",
+  refunded:     "Pagamento estornado",
+  charged_back: "Chargeback",
+};
 
 export async function POST(req: NextRequest) {
   let body: { type?: string; action?: string; data?: { id?: string | number } };
@@ -56,6 +64,35 @@ export async function POST(req: NextRequest) {
         [compraId, paymentId]
       );
       console.info(`[MP-Modulos] ✓ ${compra.modulo} APROVADO empresa=${compra.empresa_id}`);
+
+      // Email de confirmação (best-effort)
+      if (await smtpAtivo()) {
+        const dadosEmail = await queryOne<{
+          empresa_nome: string; email: string | null; valor: string;
+        }>(
+          `SELECT e.nome_fantasia AS empresa_nome, e.email, mc.valor::text
+             FROM modulo_compras mc
+             JOIN empresas e ON e.id = mc.empresa_id
+            WHERE mc.id = $1`,
+          [compraId]
+        ).catch(() => null);
+
+        if (dadosEmail?.email) {
+          enfileirarEmail({
+            para:    dadosEmail.email,
+            evento:  "pagamento_ok",
+            vars: {
+              empresa_nome:   dadosEmail.empresa_nome,
+              descricao:      `Módulo ${compra.modulo} (30 dias)`,
+              valor:          Number(dadosEmail.valor).toFixed(2).replace(".", ","),
+              data_pagamento: new Date().toLocaleString("pt-BR"),
+              transacao_id:   String(paymentId),
+              painel_url:     `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/painel`,
+            },
+            contexto: { empresa_id: compra.empresa_id, compra_id: compraId, tipo: "pagamento_ok" },
+          }).catch(e => console.warn("[MP-Modulos] email pagamento_ok:", e));
+        }
+      }
     } else if (["cancelled", "rejected", "refunded", "charged_back"].includes(pagamento.status)) {
       const novoStatus = pagamento.status === "cancelled" ? "cancelado" : "expirado";
       await queryOne(
@@ -63,6 +100,34 @@ export async function POST(req: NextRequest) {
         [novoStatus, compraId]
       );
       console.info(`[MP-Modulos] ${compra.modulo} → ${novoStatus} empresa=${compra.empresa_id}`);
+
+      // Email de falha (best-effort) — só pra rejected/cancelled (não pra refund de admin)
+      if (["cancelled", "rejected"].includes(pagamento.status) && await smtpAtivo()) {
+        const dadosEmail = await queryOne<{
+          empresa_nome: string; email: string | null; valor: string;
+        }>(
+          `SELECT e.nome_fantasia AS empresa_nome, e.email, mc.valor::text
+             FROM modulo_compras mc
+             JOIN empresas e ON e.id = mc.empresa_id
+            WHERE mc.id = $1`,
+          [compraId]
+        ).catch(() => null);
+
+        if (dadosEmail?.email) {
+          enfileirarEmail({
+            para:    dadosEmail.email,
+            evento:  "pagamento_falhou",
+            vars: {
+              empresa_nome: dadosEmail.empresa_nome,
+              descricao:    `Módulo ${compra.modulo}`,
+              valor:        Number(dadosEmail.valor).toFixed(2).replace(".", ","),
+              motivo:       MOTIVOS_FALHA[pagamento.status] ?? pagamento.status,
+              painel_url:   `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/painel/modulos`,
+            },
+            contexto: { empresa_id: compra.empresa_id, compra_id: compraId, tipo: "pagamento_falhou" },
+          }).catch(e => console.warn("[MP-Modulos] email pagamento_falhou:", e));
+        }
+      }
     }
 
     return NextResponse.json({ ok: true, status: pagamento.status });

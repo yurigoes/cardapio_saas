@@ -6,7 +6,7 @@
 import { NextRequest } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { query, queryOne } from "@/lib/db/client";
-import { ok, forbidden, serverError } from "@/lib/utils/response";
+import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -52,6 +52,35 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error("[Email/Logs]", err);
+    return serverError();
+  }
+}
+
+/**
+ * POST /api/admin/email/logs?id=<uuid>&action=retry
+ * Reseta job pra pendente, zera tentativas, agenda envio imediato.
+ */
+export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+  if (auth.payload.role !== "master") return forbidden();
+
+  const url    = new URL(req.url);
+  const id     = url.searchParams.get("id");
+  const action = url.searchParams.get("action");
+
+  if (!id || action !== "retry") return badRequest("?id=<uuid>&action=retry obrigatórios");
+
+  try {
+    await queryOne(
+      `UPDATE email_jobs
+          SET status = 'pendente', tentativas = 0, proximo_em = NOW(), erro = NULL
+        WHERE id = $1`,
+      [id]
+    );
+    return ok({ retried: true });
+  } catch (err) {
+    console.error("[Email/Logs/POST]", err);
     return serverError();
   }
 }

@@ -8,6 +8,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { queryOne } from "@/lib/db/client";
 import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
 import { invalidarCacheSmtp } from "@/lib/email/smtp";
+import { encrypt } from "@/lib/security/encrypt";
 
 interface SmtpRow {
   host: string | null; port: number; secure: boolean;
@@ -65,6 +66,16 @@ export async function PATCH(req: NextRequest) {
   // Se password = "********" (mascarada), não sobrescreve
   const updates: Record<string, unknown> = { ...body };
   if (updates.password === "********") delete updates.password;
+
+  // Criptografa password se foi enviada (string não-vazia)
+  if (typeof updates.password === "string" && updates.password.length > 0) {
+    try {
+      updates.password = encrypt(updates.password);
+    } catch (err) {
+      console.error("[Email/Config/PATCH] encrypt:", err);
+      return serverError("Falha ao criptografar senha — verifique ENCRYPTION_KEY no .env");
+    }
+  }
 
   if (Object.keys(updates).length === 0) return badRequest("Nada para atualizar");
 

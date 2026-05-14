@@ -13,6 +13,7 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { query, queryOne } from "@/lib/db/client";
 import { getSaasBranding } from "@/lib/branding/server";
+import { decryptIfNeeded } from "@/lib/security/encrypt";
 
 interface SmtpConfig {
   host: string | null; port: number; secure: boolean;
@@ -40,7 +41,10 @@ async function getTransporter(): Promise<{ transporter: Transporter; cfg: SmtpCo
   const cfg = await getConfig();
   if (!cfg || !cfg.ativo || !cfg.host || !cfg.from_email) return null;
 
-  const hash = `${cfg.host}:${cfg.port}:${cfg.secure}:${cfg.username}:${cfg.password}`;
+  // Senha vem criptografada (formato iv:tag:enc) ou plaintext (compat legado)
+  const senhaPlain = cfg.password ? (decryptIfNeeded(cfg.password) ?? cfg.password) : null;
+
+  const hash = `${cfg.host}:${cfg.port}:${cfg.secure}:${cfg.username}:${senhaPlain}`;
   if (cachedTransporter && cachedConfigHash === hash) {
     return { transporter: cachedTransporter, cfg };
   }
@@ -49,8 +53,8 @@ async function getTransporter(): Promise<{ transporter: Transporter; cfg: SmtpCo
     host:   cfg.host,
     port:   cfg.port,
     secure: cfg.secure,
-    auth:   cfg.username && cfg.password
-      ? { user: cfg.username, pass: cfg.password }
+    auth:   cfg.username && senhaPlain
+      ? { user: cfg.username, pass: senhaPlain }
       : undefined,
     // Timeout protetor pra não pendurar request
     connectionTimeout: 10_000,
