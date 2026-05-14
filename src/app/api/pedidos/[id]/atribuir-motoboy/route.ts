@@ -13,6 +13,7 @@ import { transaction } from "@/lib/db/client";
 import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { auditLog } from "@/lib/security/audit";
+import { enviarLinkRastreio } from "@/lib/delivery/rastreio";
 import type { PoolClient } from "pg";
 
 const bodySchema = z.object({
@@ -92,6 +93,15 @@ export async function POST(
       dadosNovos: { motoboy_id: body.motoboy_id },
       usuario:    { sub, empresaId },
     });
+
+    // Quando atribui motoboy, dispara link de rastreio pro cliente
+    // (best-effort — não bloqueia resposta).
+    // O fluxo /status-entrega também envia, mas atribuir-motoboy é a
+    // primeira hora que cliente deveria saber: agora tem motoboy.
+    if (body.motoboy_id) {
+      enviarLinkRastreio(empresaId, params.id)
+        .catch(e => console.warn("[AtribuirMotoboy] rastreio:", e));
+    }
 
     return ok(result);
   } catch (err) {

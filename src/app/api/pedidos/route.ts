@@ -322,11 +322,10 @@ export async function POST(req: NextRequest) {
     });
 
     // WhatsApp para o dono (best-effort, não bloqueia resposta).
-    // SÓ dispara se o pedido tem cliente identificado — venda de balcão
-    // anônima não notifica (spam pro dono). Dono identifica cliente apenas
-    // em delivery/totem/whatsapp; PDV puro normalmente não.
-    const temCliente = !!(body.cliente_id || body.cliente_nome || body.cliente_telefone);
-    if (!result.acumulado && temCliente) {
+    // SÓ dispara se o pedido tem cliente IDENTIFICADO no CRM (cliente_id).
+    // Walk-in anônimos do PDV não disparam (anti-spam pro dono).
+    // Delivery/totem com cliente cadastrado vem com cliente_id (clientes/upsert).
+    if (!result.acumulado && body.cliente_id) {
       notificarEvolution(empresaId, "novo_pedido", {
         clienteNome:  body.cliente_nome ?? null,
         pedidoNumero: result.numero,

@@ -22,7 +22,7 @@ import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError, conflict } from "@/lib/utils/response";
 import { auditLog } from "@/lib/security/audit";
 import { notificarEvolution } from "@/lib/notify/evolution";
-import { dispatchCupomCliente } from "@/lib/print/dispatch";
+import { dispatchCupomCliente, dispatchCupomCozinha } from "@/lib/print/dispatch";
 import type { PoolClient } from "pg";
 
 const FORMAS = ["pix", "dinheiro", "credito", "debito", "vale", "outro"] as const;
@@ -258,11 +258,17 @@ export async function POST(
       }).catch(e => console.warn("[Pedidos/Fechar] notify:", e));
     }
 
-    // Cupom do cliente para impressora do caixa/balcão (best-effort)
+    // Imprime AMBOS cupons ao fechar (best-effort):
+    //   1. Cozinha — caso ainda não tenha sido impresso (fluxo PDV pula
+    //      PATCH confirmado, então fechar é a primeira hora que cozinha
+    //      sabe do pedido)
+    //   2. Cliente — recibo da venda com pagamento
     const formaPrincipal = body.pagamentos
       .slice().sort((a, b) => b.valor - a.valor)[0]?.forma;
+    dispatchCupomCozinha(empresaId, params.id)
+      .catch(e => console.warn("[Pedidos/Fechar] print cozinha:", e));
     dispatchCupomCliente(empresaId, params.id, formaPrincipal)
-      .catch(e => console.warn("[Pedidos/Fechar] print:", e));
+      .catch(e => console.warn("[Pedidos/Fechar] print cliente:", e));
 
     return ok(result);
   } catch (err) {

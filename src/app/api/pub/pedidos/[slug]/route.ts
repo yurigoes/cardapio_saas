@@ -491,9 +491,9 @@ export async function POST(
         (a, i) => a + i.preco_unitario * i.quantidade, 0
       ) - (body.desconto ?? 0) - (body.cashback_usar ?? 0);
 
-      // novo_pedido só dispara se houver cliente identificado (anti-spam dono)
-      const temCliente = !!(body.cliente_id || body.cliente_nome || body.cliente_telefone);
-      if (temCliente) {
+      // novo_pedido só dispara se houver cliente identificado no CRM (cliente_id).
+      // Walk-in anônimos não disparam — evita spam pro dono.
+      if (body.cliente_id) {
         notificarEvolution(empresa.id, "novo_pedido", {
           clienteNome:  body.cliente_nome ?? null,
           pedidoNumero: pedido.numero,
@@ -505,8 +505,9 @@ export async function POST(
       // pagar_entrega, cartão pinpad). PIX/cartão online aguardam o
       // webhook do gateway aprovar — senão a cozinha imprime pedido que
       // o cliente nunca pagou.
-      const formaSincrona = !body.forma_pagamento ||
-        ["dinheiro", "pagar_entrega", "pinpad", "cartao_maquina"].includes(body.forma_pagamento);
+      // NOTA: forma indefinida = NÃO imprime (segurança — assume async).
+      const SINCRONAS = new Set(["dinheiro", "pagar_entrega", "pinpad", "cartao_maquina"]);
+      const formaSincrona = !!body.forma_pagamento && SINCRONAS.has(body.forma_pagamento);
 
       if (formaSincrona) {
         dispatchCupomCozinha(empresa.id, pedido.id)
@@ -515,7 +516,7 @@ export async function POST(
           .catch(e => console.warn("[Pub/Pedidos] print cliente:", e));
       } else {
         console.info(
-          `[Pub/Pedidos] pedido=${pedido.id} forma=${body.forma_pagamento} ` +
+          `[Pub/Pedidos] pedido=${pedido.id} forma=${body.forma_pagamento ?? "(indefinida)"} ` +
           `aguarda webhook pra imprimir`
         );
       }
