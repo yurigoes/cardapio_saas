@@ -57,9 +57,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Insere preco_mensal = preco (mantém os 2 campos sincronizados)
     const plano = await queryOne<{ id: string }>(
-      `INSERT INTO planos (nome, descricao, preco, periodo, modulos, limites, ativo, destaque)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO planos (nome, descricao, preco, preco_mensal, periodo, modulos, limites, ativo, destaque)
+       VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
         body.nome,

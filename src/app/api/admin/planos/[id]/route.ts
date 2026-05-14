@@ -71,6 +71,14 @@ export async function PATCH(
     } else {
       sets.push(`${k} = $${i++}`);
       vals.push(v);
+      // Mantém preco e preco_mensal sincronizados (admin edita um, syncamos o outro)
+      if (k === "preco" && body.preco_mensal === undefined) {
+        sets.push(`preco_mensal = $${i++}`);
+        vals.push(v);
+      } else if (k === "preco_mensal" && body.preco === undefined) {
+        sets.push(`preco = $${i++}`);
+        vals.push(v);
+      }
     }
   }
   vals.push(params.id);

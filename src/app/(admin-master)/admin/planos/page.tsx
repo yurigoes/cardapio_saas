@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Package, Plus, X, Users, ShoppingBag, Check, LayoutGrid, Calendar } from "lucide-react";
+import { Package, Plus, X, Users, ShoppingBag, Check, LayoutGrid, Calendar, Pencil, Trash2, Power } from "lucide-react";
 import { MODULOS_REGISTRY } from "@/lib/modules/registry";
 
 interface Plano {
@@ -74,6 +74,59 @@ export default function PlanosPage() {
 
   useEffect(() => { fetchPlanos(); }, []);
 
+  /** Edita: carrega plano no modal pra editar */
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  function abrirEdicao(p: Plano) {
+    setForm({
+      nome:      p.nome,
+      descricao: p.descricao ?? "",
+      preco:     Number(p.preco) || 0,
+      periodo:   (p.periodo as "mensal" | "anual" | "unico") ?? "mensal",
+      limites:   { ...DEFAULT_FORM.limites, ...(p.limites ?? {}) },
+      modulos:   p.modulos ?? [],
+      ativo:     p.ativo,
+      destaque:  p.destaque,
+    });
+    setEditandoId(p.id);
+    setShowModal(true);
+  }
+  function abrirNovo() {
+    setForm(DEFAULT_FORM);
+    setEditandoId(null);
+    setShowModal(true);
+  }
+
+  /** Toggle ativo/inativo (rápido, sem abrir modal) */
+  async function toggleAtivo(p: Plano) {
+    const r = await fetch(`/api/admin/planos/${p.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ ativo: !p.ativo }),
+    });
+    const d = await r.json();
+    if (d.success) fetchPlanos();
+    else alert(d.error ?? "Falha");
+  }
+
+  /** Excluir — backend protege (vira inativo se tem empresa) */
+  async function excluir(p: Plano) {
+    if (!confirm(`Excluir plano "${p.nome}"?\n\nSe houver empresas usando, ele será apenas DESATIVADO (não excluído).`)) return;
+    const r = await fetch(`/api/admin/planos/${p.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    const d = await r.json();
+    if (d.success) {
+      alert("Plano excluído");
+      fetchPlanos();
+    } else if (d.code === "CONFLICT") {
+      alert(d.error + (d.data?.empresas_vinculadas ? `\n\n${d.data.empresas_vinculadas} empresa(s) vinculadas.` : ""));
+      fetchPlanos();
+    } else {
+      alert(d.error ?? "Falha");
+    }
+  }
+
   function toggleModulo(id: string) {
     setForm(f => ({
       ...f,
@@ -93,8 +146,10 @@ export default function PlanosPage() {
     setError("");
 
     try {
-      const res  = await fetch("/api/admin/planos", {
-        method:  "POST",
+      const url    = editandoId ? `/api/admin/planos/${editandoId}` : "/api/admin/planos";
+      const method = editandoId ? "PATCH" : "POST";
+      const res  = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
         body:    JSON.stringify(form),
       });
@@ -102,10 +157,11 @@ export default function PlanosPage() {
 
       if (data.success) {
         setShowModal(false);
+        setEditandoId(null);
         setForm(DEFAULT_FORM);
         fetchPlanos();
       } else {
-        setError(data.error ?? "Erro ao criar plano");
+        setError(data.error ?? `Erro ao ${editandoId ? "editar" : "criar"} plano`);
       }
     } finally {
       setSaving(false);
@@ -122,7 +178,7 @@ export default function PlanosPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={abrirNovo}
           className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-400 transition"
         >
           <Plus className="h-4 w-4" />
@@ -217,6 +273,22 @@ export default function PlanosPage() {
 
                 <div className="border-t border-white/5 pt-3 text-xs text-slate-400">
                   {Number(plano.total_empresas)} empresa{Number(plano.total_empresas) !== 1 ? "s" : ""} usando
+                </div>
+
+                {/* Toolbar de ações */}
+                <div className="border-t border-white/5 pt-3 flex gap-2">
+                  <button onClick={() => abrirEdicao(plano)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5">
+                    <Pencil className="h-3.5 w-3.5" /> Editar
+                  </button>
+                  <button onClick={() => toggleAtivo(plano)} title={plano.ativo ? "Desativar" : "Ativar"}
+                    className="inline-flex items-center justify-center rounded-lg border border-white/10 p-1.5 text-slate-300 hover:bg-white/5">
+                    <Power className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => excluir(plano)} title="Excluir (vira inativo se tiver empresa)"
+                    className="inline-flex items-center justify-center rounded-lg border border-red-500/30 p-1.5 text-red-400 hover:bg-red-500/10">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </motion.div>
             );
