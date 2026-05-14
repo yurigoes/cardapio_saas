@@ -1,20 +1,16 @@
 /**
  * Cliente iFood — autenticação OAuth + chamadas básicas.
  *
- * Endpoints:
- *   /authentication/v1.0/oauth/token   → client_credentials
- *   /events/v1.0/events:polling         → long-poll 30s
- *   /events/v1.0/acknowledgment         → ack dos eventos lidos
- *   /order/v1.0/orders/{orderId}        → detalhes do pedido
- *
- * Token expira em 3h, mas cache no DB (ifood_config.access_token).
- * Reutiliza enquanto válido — só renova se faltar < 5min.
+ * Suporta os 2 tipos de app:
+ *   - CENTRALIZADO: 1 app por loja, fluxo client_credentials (cada empresa
+ *     cliente cria sua própria app no portal iFood)
+ *   - DISTRIBUÍDO: 1 app do master serve TODAS empresas, fluxo userCode +
+ *     authorization_code → refresh_token (escalável SaaS)
  */
 import { queryOne } from "@/lib/db/client";
-import { decrypt } from "@/lib/security/encrypt";
+import { encrypt, decrypt, decryptIfNeeded } from "@/lib/security/encrypt";
 
-const BASE_PROD    = "https://merchant-api.ifood.com.br";
-const BASE_SANDBOX = "https://merchant-api.ifood.com.br";   // iFood usa mesma URL pra sandbox; ambiente vem em scope
+const BASE = "https://merchant-api.ifood.com.br";
 
 export interface IfoodConfig {
   id:              string;
@@ -27,48 +23,100 @@ export interface IfoodConfig {
   polling_ativo:   boolean;
   access_token:    string | null;
   token_expira_em: string | null;
+  mode:            "centralizado" | "distribuido";
+  refresh_token:   string | null;
+  authorized_em:   string | null;
+  authorization_code_verifier: string | null;
+}
+
+export interface MasterIfoodConfig {
+  client_id:     string;
+  client_secret: string;
+  app_nome:      string | null;
+  ativo:         boolean;
 }
 
 interface TokenResponse {
-  accessToken: string;
-  type:        string;
-  expiresIn:   number;
+  accessToken:   string;
+  refreshToken?: string;
+  type:          string;
+  expiresIn:     number;
 }
 
-/** Lê config descriptografando secrets */
+// ─── Helpers de criptografia ─────────────────────────────────────────────────
+
+function decryptField(value: string | null): string | null {
+  if (!value) return null;
+  if (value.startsWith("encrypted:")) {
+    try { return decrypt(value.slice(10)); }
+    catch (err) {
+      console.error("[ifood] decrypt falhou:", err);
+      return null;
+    }
+  }
+  return decryptIfNeeded(value) ?? value;
+}
+
+export function encryptField(plain: string): string {
+  return `encrypted:${encrypt(plain)}`;
+}
+
+// ─── Master config (singleton) ───────────────────────────────────────────────
+
+export async function getMasterIfoodConfig(): Promise<MasterIfoodConfig | null> {
+  const row = await queryOne<{
+    client_id: string | null; client_secret: string | null;
+    app_nome: string | null; ativo: boolean;
+  }>(`SELECT client_id, client_secret, app_nome, ativo FROM saas_ifood_config WHERE id = 1`);
+
+  if (!row || !row.ativo || !row.client_id || !row.client_secret) return null;
+
+  const cid = decryptField(row.client_id);
+  const sec = decryptField(row.client_secret);
+  if (!cid || !sec) return null;
+
+  return { client_id: cid, client_secret: sec, app_nome: row.app_nome, ativo: row.ativo };
+}
+
+// ─── Empresa config ──────────────────────────────────────────────────────────
+
 export async function getIfoodConfig(empresaId: string): Promise<IfoodConfig | null> {
   const row = await queryOne<IfoodConfig>(
     `SELECT id, empresa_id, client_id, client_secret, merchant_id,
             ambiente, ativo, polling_ativo,
-            access_token, token_expira_em::text AS token_expira_em
+            access_token, token_expira_em::text AS token_expira_em,
+            mode, refresh_token, authorized_em::text AS authorized_em,
+            authorization_code_verifier
        FROM ifood_config
       WHERE empresa_id = $1`,
     [empresaId]
   );
   if (!row) return null;
-  // Descriptografa secret se encrypted (formato 'encrypted:...')
-  if (row.client_secret?.startsWith("encrypted:")) {
-    try {
-      row.client_secret = decrypt(row.client_secret.slice(10));
-    } catch (err) {
-      // Decrypt falhou — provavelmente ENCRYPTION_KEY mudou ou secret
-      // foi salvo com chave diferente. NÃO podemos usar o blob cifrado
-      // como secret (vai dar 401). Lança erro claro.
-      console.error("[ifood] decrypt client_secret falhou:", err);
+
+  // Descriptografa secret e refresh_token
+  if (row.client_secret) {
+    const dec = decryptField(row.client_secret);
+    if (!dec && row.mode === "centralizado") {
       throw new Error(
         "client_secret inválido (descriptografia falhou). " +
         "Re-salve as credenciais em /painel/ifood. " +
         "Causa provável: ENCRYPTION_KEY foi alterada após salvar o secret."
       );
     }
+    row.client_secret = dec ?? row.client_secret;
   }
+  if (row.refresh_token) {
+    const dec = decryptField(row.refresh_token);
+    if (dec) row.refresh_token = dec;
+  }
+
   return row;
 }
 
-/** Renova token se necessário e retorna o atual válido. */
+// ─── Token: renova ou retorna válido ─────────────────────────────────────────
+
 export async function getValidToken(cfg: IfoodConfig): Promise<string> {
   const expira = cfg.token_expira_em ? new Date(cfg.token_expira_em) : null;
-  // 5min de margem antes da expiração
   if (cfg.access_token && expira && expira.getTime() > Date.now() + 5 * 60_000) {
     return cfg.access_token;
   }
@@ -76,14 +124,28 @@ export async function getValidToken(cfg: IfoodConfig): Promise<string> {
 }
 
 async function renovarToken(cfg: IfoodConfig): Promise<string> {
-  const base = cfg.ambiente === "sandbox" ? BASE_SANDBOX : BASE_PROD;
+  if (cfg.mode === "distribuido") {
+    if (!cfg.refresh_token) {
+      throw new Error("Empresa não autorizou app distribuído ainda. Acesse /painel/ifood e clique em 'Conectar com iFood'.");
+    }
+    const master = await getMasterIfoodConfig();
+    if (!master) {
+      throw new Error("Master não configurou app iFood Distribuído. Avise o admin pra configurar em /admin/ifood.");
+    }
+    return await refreshAccessToken(master.client_id, master.client_secret, cfg.refresh_token, cfg.id);
+  }
+
+  return await clientCredentialsToken(cfg);
+}
+
+async function clientCredentialsToken(cfg: IfoodConfig): Promise<string> {
   const body = new URLSearchParams({
     grantType:    "client_credentials",
     clientId:     cfg.client_id,
     clientSecret: cfg.client_secret,
   });
 
-  const r = await fetch(`${base}/authentication/v1.0/oauth/token`, {
+  const r = await fetch(`${BASE}/authentication/v1.0/oauth/token`, {
     method:  "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -98,42 +160,144 @@ async function renovarToken(cfg: IfoodConfig): Promise<string> {
     throw new Error(`iFood auth ${r.status}: ${txt.slice(0, 200)}`);
   }
   const tok = await r.json() as TokenResponse;
-  const expira = new Date(Date.now() + (tok.expiresIn ?? 10800) * 1000);
+  await persistirToken(cfg.id, tok, null);
+  return tok.accessToken;
+}
 
+async function refreshAccessToken(
+  masterClientId: string,
+  masterClientSecret: string,
+  refreshToken: string,
+  cfgId: string,
+): Promise<string> {
+  const body = new URLSearchParams({
+    grantType:    "refresh_token",
+    clientId:     masterClientId,
+    clientSecret: masterClientSecret,
+    refreshToken: refreshToken,
+  });
+
+  const r = await fetch(`${BASE}/authentication/v1.0/oauth/token`, {
+    method:  "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "accept":       "application/json",
+    },
+    body:    body.toString(),
+    signal:  AbortSignal.timeout(15_000),
+  });
+
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`iFood refresh ${r.status}: ${txt.slice(0, 200)}`);
+  }
+  const tok = await r.json() as TokenResponse;
+  await persistirToken(cfgId, tok, tok.refreshToken ?? refreshToken);
+  return tok.accessToken;
+}
+
+async function persistirToken(
+  cfgId: string, tok: TokenResponse, novoRefreshToken: string | null
+): Promise<void> {
+  const expira = new Date(Date.now() + (tok.expiresIn ?? 10800) * 1000);
   await queryOne(
     `UPDATE ifood_config
         SET access_token    = $1,
             token_expira_em = $2,
+            refresh_token   = COALESCE($3, refresh_token),
             ultimo_erro     = NULL,
             ultimo_erro_em  = NULL,
             updated_at      = NOW()
-      WHERE id = $3`,
-    [tok.accessToken, expira.toISOString(), cfg.id]
+      WHERE id = $4`,
+    [
+      tok.accessToken,
+      expira.toISOString(),
+      novoRefreshToken ? encryptField(novoRefreshToken) : null,
+      cfgId,
+    ]
   );
-
-  return tok.accessToken;
 }
 
+// ─── Distribuído: userCode flow (helpers chamados pelos endpoints) ──────────
+
+export interface UserCodeResponse {
+  userCode:                  string;
+  authorizationCodeVerifier: string;
+  verificationUrl:           string;
+  verificationUrlComplete:   string;
+  expiresIn:                 number;
+}
+
+export async function requestUserCode(masterClientId: string): Promise<UserCodeResponse> {
+  const body = new URLSearchParams({ clientId: masterClientId });
+
+  const r = await fetch(`${BASE}/authentication/v1.0/oauth/userCode`, {
+    method:  "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "accept":       "application/json",
+    },
+    body:    body.toString(),
+    signal:  AbortSignal.timeout(15_000),
+  });
+
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`iFood userCode ${r.status}: ${txt.slice(0, 200)}`);
+  }
+  return await r.json() as UserCodeResponse;
+}
+
+export async function exchangeAuthorizationCode(
+  masterClientId: string,
+  masterClientSecret: string,
+  authorizationCode: string,
+  authorizationCodeVerifier: string,
+): Promise<TokenResponse> {
+  const body = new URLSearchParams({
+    grantType:                 "authorization_code",
+    clientId:                  masterClientId,
+    clientSecret:              masterClientSecret,
+    authorizationCode:         authorizationCode,
+    authorizationCodeVerifier: authorizationCodeVerifier,
+  });
+
+  const r = await fetch(`${BASE}/authentication/v1.0/oauth/token`, {
+    method:  "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "accept":       "application/json",
+    },
+    body:    body.toString(),
+    signal:  AbortSignal.timeout(15_000),
+  });
+
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`iFood exchange ${r.status}: ${txt.slice(0, 300)}`);
+  }
+  return await r.json() as TokenResponse;
+}
+
+// ─── Polling + ack + getOrderDetail ──────────────────────────────────────────
+
 export interface IfoodEvent {
-  id:               string;       // event ID
-  code:             string;       // PLACED, CONFIRMED, CANCELLED, ...
+  id:               string;
+  code:             string;
   fullCode?:        string;
-  orderId:          string;       // order ID do iFood
+  orderId:          string;
   createdAt:        string;
   merchantId?:      string;
   metadata?:        Record<string, unknown>;
 }
 
-/** Long-poll de eventos (timeout 30s no iFood). */
 export async function pollEvents(cfg: IfoodConfig): Promise<IfoodEvent[]> {
   const token = await getValidToken(cfg);
-  const base  = cfg.ambiente === "sandbox" ? BASE_SANDBOX : BASE_PROD;
-  const r = await fetch(`${base}/events/v1.0/events:polling`, {
+  const r = await fetch(`${BASE}/events/v1.0/events:polling`, {
     headers: { Authorization: `Bearer ${token}` },
     signal:  AbortSignal.timeout(35_000),
   });
 
-  // 204 = sem eventos (esperado em long-poll)
   if (r.status === 204) return [];
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
@@ -143,12 +307,10 @@ export async function pollEvents(cfg: IfoodConfig): Promise<IfoodEvent[]> {
   return Array.isArray(events) ? events : [];
 }
 
-/** Ack obrigatório — iFood reenvia eventos não confirmados em 1 min. */
 export async function ackEvents(cfg: IfoodConfig, eventIds: string[]): Promise<void> {
   if (eventIds.length === 0) return;
   const token = await getValidToken(cfg);
-  const base  = cfg.ambiente === "sandbox" ? BASE_SANDBOX : BASE_PROD;
-  await fetch(`${base}/events/v1.0/events/acknowledgment`, {
+  await fetch(`${BASE}/events/v1.0/events/acknowledgment`, {
     method:  "POST",
     headers: {
       Authorization:  `Bearer ${token}`,
@@ -159,7 +321,6 @@ export async function ackEvents(cfg: IfoodConfig, eventIds: string[]): Promise<v
   }).catch(() => {});
 }
 
-/** Detalhes do pedido (chamado no evento PLACED). */
 export interface IfoodOrderDetail {
   id:                string;
   displayId:         string;
@@ -168,14 +329,12 @@ export interface IfoodOrderDetail {
   total?:            { orderAmount?: { value: number } };
   delivery?:         { mode?: string; deliveredBy?: string };
   takeout?:          { mode?: string };
-  // ... muitos campos; capturamos os essenciais
   [key: string]:     unknown;
 }
 
 export async function getOrderDetail(cfg: IfoodConfig, orderId: string): Promise<IfoodOrderDetail | null> {
   const token = await getValidToken(cfg);
-  const base  = cfg.ambiente === "sandbox" ? BASE_SANDBOX : BASE_PROD;
-  const r = await fetch(`${base}/order/v1.0/orders/${orderId}`, {
+  const r = await fetch(`${BASE}/order/v1.0/orders/${orderId}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal:  AbortSignal.timeout(15_000),
   });
@@ -183,11 +342,9 @@ export async function getOrderDetail(cfg: IfoodConfig, orderId: string): Promise
   return await r.json() as IfoodOrderDetail;
 }
 
-/** Confirma pedido no iFood (ESTÁGIO obrigatório após PLACED). */
 export async function confirmOrder(cfg: IfoodConfig, orderId: string): Promise<boolean> {
   const token = await getValidToken(cfg);
-  const base  = cfg.ambiente === "sandbox" ? BASE_SANDBOX : BASE_PROD;
-  const r = await fetch(`${base}/order/v1.0/orders/${orderId}/confirm`, {
+  const r = await fetch(`${BASE}/order/v1.0/orders/${orderId}/confirm`, {
     method:  "POST",
     headers: { Authorization: `Bearer ${token}` },
     signal:  AbortSignal.timeout(15_000),

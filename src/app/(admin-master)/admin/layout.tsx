@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Building2, Users, Package, CreditCard,
   BarChart3, Settings, LogOut, ChefHat, Bell, Shield, FileText, Webhook,
   Image as ImageIcon, TrendingUp, Bug, Server, AlertTriangle, ScrollText,
-  Mail, ShieldCheck, Wrench, Receipt,
+  Mail, ShieldCheck, Wrench, Receipt, Zap,
 } from "lucide-react";
 import { VersaoFooter } from "@/components/VersaoFooter";
 import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
@@ -39,6 +39,9 @@ const NAV: NavGroup[] = [
   { titulo: "Conteúdo", items: [
     { href: "/admin/imagens",   label: "Imagens",     icon: ImageIcon },
     { href: "/admin/webhooks",  label: "Webhooks",    icon: Webhook },
+  ]},
+  { titulo: "Integrações", items: [
+    { href: "/admin/ifood",     label: "iFood (master)", icon: Zap },
   ]},
   { titulo: "Sistema", items: [
     { href: "/admin/email",      label: "E-mail (SMTP)", icon: Mail },

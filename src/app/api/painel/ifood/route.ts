@@ -23,11 +23,21 @@ export async function GET(req: NextRequest) {
     const cfg = await queryOne(
       `SELECT id, client_id, merchant_id, ambiente, ativo, polling_ativo,
               ultimo_polling_em, ultimo_evento_id, ultimo_erro, ultimo_erro_em,
-              token_expira_em
+              token_expira_em, mode, authorized_em
          FROM ifood_config WHERE empresa_id = $1`,
       [empresaId]
     );
-    return ok(cfg ?? null);
+
+    // Pega info se master configurou app distribuída (1 query simples)
+    const master = await queryOne<{ ativo: boolean; app_nome: string | null }>(
+      `SELECT ativo, app_nome FROM saas_ifood_config WHERE id = 1`
+    ).catch(() => null);
+
+    return ok({
+      cfg: cfg ?? null,
+      master_distribuido_disponivel: !!(master?.ativo),
+      master_app_nome:               master?.app_nome ?? null,
+    });
   } catch (err) {
     console.error("[Ifood/GET]", err);
     return serverError();
