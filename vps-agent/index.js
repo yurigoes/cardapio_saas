@@ -32,7 +32,7 @@ const { exec, spawn } = require("child_process");
 const os   = require("os");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.3.0";
+const VERSION     = "1.4.0";
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
@@ -359,6 +359,48 @@ const COMANDOS = {
       const stat = fs.statSync(file);
       return { ok: true, arquivo: file, tamanho_mb: (stat.size / 1024 / 1024).toFixed(1) };
     } catch (e) { return { ok: false, erro: e.message }; }
+  },
+
+  // Backup completo + upload pra Cloudflare R2 (ou outro S3 compat).
+  // Delega pro script bash scripts/backup-to-r2.sh que cuida de:
+  //   pg_dumpall → gzip → rclone copy → retenção
+  async backup_to_r2() {
+    const projetoDir = process.env.CARDAPIO_DIR || "/opt/cardapio_saas";
+    const script = path.join(projetoDir, "scripts", "backup-to-r2.sh");
+    if (!fs.existsSync(script)) {
+      return { ok: false, erro: `script não encontrado: ${script}` };
+    }
+    try {
+      const out = await execCmd(`bash ${script}`, { timeout: 600_000 });
+      // O script imprime JSON na última linha
+      const linhas = out.trim().split("\n").filter(Boolean);
+      const ultima = linhas[linhas.length - 1];
+      try { return JSON.parse(ultima); }
+      catch { return { ok: true, raw: out.slice(-2000) }; }
+    } catch (e) {
+      // Script imprime JSON em stderr também via fail()
+      const stderr = String(e.stderr || e.message || "").trim();
+      const linhas = stderr.split("\n").filter(Boolean);
+      const ultima = linhas[linhas.length - 1] || "";
+      try { return JSON.parse(ultima); }
+      catch { return { ok: false, erro: stderr.slice(-1000) || e.message }; }
+    }
+  },
+
+  async backup_to_r2_check() {
+    const projetoDir = process.env.CARDAPIO_DIR || "/opt/cardapio_saas";
+    const script = path.join(projetoDir, "scripts", "backup-to-r2.sh");
+    if (!fs.existsSync(script)) {
+      return { ok: false, erro: `script não encontrado: ${script}` };
+    }
+    try {
+      const out = await execCmd(`bash ${script} --check`, { timeout: 30_000 });
+      const linhas = out.trim().split("\n").filter(Boolean);
+      try { return JSON.parse(linhas[linhas.length - 1]); }
+      catch { return { ok: true, raw: out }; }
+    } catch (e) {
+      return { ok: false, erro: String(e.stderr || e.message).slice(-1000) };
+    }
   },
 
   async exec_migration(params) {

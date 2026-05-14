@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { TrialBanner } from "@/components/painel/TrialBanner";
 import { OnboardingBanner } from "@/components/painel/OnboardingBanner";
+import { WizardOnboardingModal } from "@/components/painel/WizardOnboardingModal";
 import { ImpersonateBanner } from "@/components/painel/ImpersonateBanner";
 import { LinksExternos } from "@/components/painel/LinksExternos";
 
@@ -152,6 +153,7 @@ function PainelDashboard() {
 
       {/* Onboarding */}
       <OnboardingBanner />
+      <WizardOnboardingModal />
 
       {/* Header */}
       <div>

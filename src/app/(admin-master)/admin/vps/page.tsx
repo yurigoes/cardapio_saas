@@ -20,6 +20,7 @@ import {
 import { VpsDashboard } from "@/components/admin/VpsDashboard";
 import { DiscosDetectados } from "@/components/admin/DiscosDetectados";
 import { DeployPanel } from "@/components/admin/DeployPanel";
+import { BackupR2Panel } from "@/components/admin/BackupR2Panel";
 import { LinksExternos } from "@/components/painel/LinksExternos";
 import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
@@ -335,6 +336,21 @@ sudo bash install-systemd.sh`}</pre>
 
       {/* Deploy + backups */}
       <DeployPanel
+        agentOnline={algumOnline}
+        exec={async (comando, params) => {
+          const r = await fetch("/api/admin/vps/exec", {
+            method: "POST", headers: auth(),
+            body: JSON.stringify({ comando, params, timeout_s: 600 }),
+          });
+          const d = await r.json();
+          if (d.success && d.data?.status === "sucesso") return d.data.resultado;
+          if (d.success && d.data?.status === "erro")    return { ok: false, erro: d.data.erro };
+          return null;
+        }}
+      />
+
+      {/* Backup pra R2 */}
+      <BackupR2Panel
         agentOnline={algumOnline}
         exec={async (comando, params) => {
           const r = await fetch("/api/admin/vps/exec", {

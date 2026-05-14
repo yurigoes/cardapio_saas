@@ -18,6 +18,7 @@ const COMANDOS_VALIDOS = [
   "error_log_tail", "speedtest", "exec_migration", "backup_db",
   "restart_container", "discos_resumo", "formatar_e_montar_disco",
   "deploy", "listar_backups",
+  "backup_to_r2", "backup_to_r2_check",
 ];
 
 const schema = z.object({
