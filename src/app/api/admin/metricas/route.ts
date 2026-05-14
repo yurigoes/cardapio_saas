@@ -146,9 +146,8 @@ export async function GET(req: NextRequest) {
       ),
     ]);
 
-    function pct(num: number, den: number): number {
-      return den > 0 ? Math.round((num / den) * 1000) / 10 : 0;
-    }
+    const pct = (num: number, den: number): number =>
+      den > 0 ? Math.round((num / den) * 1000) / 10 : 0;
 
     const c30T = Number(conversao?.c30_total ?? 0);
     const c60T = Number(conversao?.c60_total ?? 0);

@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
       [...params, limit]
     );
 
-    return paginatedOk(cupons, { total, page, limit });
+    return paginatedOk(cupons, total, page, limit);
   } catch (err) {
     console.error("[Cupons/GET]", err);
     return serverError();

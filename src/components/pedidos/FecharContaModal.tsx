@@ -22,6 +22,7 @@ interface PedidoMin {
   id:     string;
   numero: number | null;
   total:  number;
+  tipo?:  string | null;            // balcao | delivery | mesa | totem
   mesa_numero?: number | null;
   cliente_nome?: string | null;
 }

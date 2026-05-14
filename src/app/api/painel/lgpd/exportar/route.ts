@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     const json = JSON.stringify(dump, null, 2);
     const gz = gzipSync(json);
 
-    return new NextResponse(gz, {
+    return new NextResponse(new Uint8Array(gz), {
       status: 200,
       headers: {
         "Content-Type":        "application/gzip",

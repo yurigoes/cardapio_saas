@@ -185,7 +185,8 @@ export class MercadoPagoGateway implements IGateway {
       const ts     = parts.find(p => p.startsWith("ts="))?.slice(3) ?? "";
       const v1     = parts.find(p => p.startsWith("v1="))?.slice(3) ?? "";
       const body   = JSON.stringify(payload);
-      const toSign = `id:${(payload as Record<string, unknown>)?.data?.id ?? ""};request-id:;ts:${ts};`;
+      const dataObj = (payload as { data?: { id?: string | number } })?.data;
+      const toSign  = `id:${dataObj?.id ?? ""};request-id:;ts:${ts};`;
       const expected = createHmac("sha256", this.config.webhook_secret)
         .update(toSign)
         .digest("hex");

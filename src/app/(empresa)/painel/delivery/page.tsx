@@ -421,12 +421,12 @@ export default function DeliveryPage() {
                       <div className="min-w-0">
                         <p className="truncate font-medium text-white">{z.nome}</p>
                         <div className="mt-0.5 flex items-center gap-2 sm:hidden text-xs text-slate-400">
-                          <span>{formatBRL(z.taxa)}</span>
+                          <span>{formatBRL(z.taxa ?? 0)}</span>
                           {z.tempo_min && <span>{z.tempo_min} min</span>}
                         </div>
                       </div>
                       <p className="hidden sm:block text-sm text-slate-400 truncate">{z.descricao ?? "—"}</p>
-                      <p className="hidden sm:block text-right text-sm font-medium text-white">{formatBRL(z.taxa)}</p>
+                      <p className="hidden sm:block text-right text-sm font-medium text-white">{formatBRL(z.taxa ?? 0)}</p>
                       <p className="hidden sm:block text-right text-sm text-slate-400">
                         {z.tempo_min ? `${z.tempo_min} min` : "—"}
                       </p>

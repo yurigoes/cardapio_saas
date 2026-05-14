@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
       Readable.from(tar).pipe(z);
     });
 
-    return new NextResponse(gz, {
+    return new NextResponse(new Uint8Array(gz), {
       status: 200,
       headers: {
         "Content-Type":        "application/gzip",

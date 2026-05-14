@@ -2395,7 +2395,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     clienteNome: string,
     clienteTel: string,
     obs: string,
-    formaPagamento: "pix" | "dinheiro" = "dinheiro",
+    formaPagamento: FormaPagTotem = "dinheiro",
     cupom: { codigo: string; desconto: number } | null = null,
     gatewaySlug: string | null = null,
     cashbackUsar: number = 0,

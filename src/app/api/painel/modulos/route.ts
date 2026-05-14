@@ -12,21 +12,7 @@ import { NextRequest } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { query, queryOne } from "@/lib/db/client";
 import { ok, forbidden, serverError } from "@/lib/utils/response";
-
-// Lista canônica de módulos do sistema
-export const MODULOS = [
-  { key: "balcao",            nome: "PDV / Balcão",          preco: 49.90 },
-  { key: "mesa",              nome: "Gestão de Mesas",       preco: 39.90 },
-  { key: "delivery",          nome: "Delivery",              preco: 59.90 },
-  { key: "cozinha_kds",       nome: "Cozinha (KDS)",         preco: 29.90 },
-  { key: "totem",             nome: "Totem Autoatendimento", preco: 79.90 },
-  { key: "financeiro",        nome: "Financeiro / Caixa",    preco: 49.90 },
-  { key: "estoque",           nome: "Controle de Estoque",   preco: 39.90 },
-  { key: "cupom",             nome: "Cupons",                preco: 19.90 },
-  { key: "crm",               nome: "CRM / Clientes",        preco: 29.90 },
-  { key: "relatorios_basicos",nome: "Relatórios",            preco: 19.90 },
-  { key: "ifood",             nome: "Integração iFood",      preco: 99.90 },
-];
+import { MODULOS } from "@/lib/modules/catalog";
 
 interface EmpresaRow { modulos_ativos: string[] | null }
 interface TrialRow { modulo: string; expira_em: string }

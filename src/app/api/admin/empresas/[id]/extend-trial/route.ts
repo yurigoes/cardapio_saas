@@ -45,7 +45,7 @@ export async function POST(
       acao:       "empresa:extender-trial",
       recurso:    "empresas",
       recursoId:  params.id,
-      dadosAntes: { trial_fim: antes.trial_fim,  status: antes.status },
+      dadosAnteriores: { trial_fim: antes.trial_fim,  status: antes.status },
       dadosNovos: { trial_fim: depois?.trial_fim, status: depois?.status, dias: body.dias, motivo: body.motivo },
       usuario:    { sub: auth.payload.sub, empresaId: undefined },
     });

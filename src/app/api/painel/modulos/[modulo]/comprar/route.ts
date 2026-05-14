@@ -12,7 +12,7 @@ import { NextRequest } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { queryOne } from "@/lib/db/client";
 import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
-import { MODULOS } from "../../route";
+import { MODULOS } from "@/lib/modules/catalog";
 import { getSaasBranding } from "@/lib/branding/server";
 import { criarPreferencia, isSandbox } from "@/lib/billing/mercadopago";
 

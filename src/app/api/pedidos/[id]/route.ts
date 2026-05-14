@@ -140,7 +140,7 @@ export async function PATCH(
     }
 
     // Dispara cozinha quando pedido é CONFIRMADO (e ainda não foi)
-    if ((body.status === "confirmado" || body.status === "preparo" || body.status === "preparando")
+    if ((body.status === "confirmado" || body.status === "preparo" || body.status === "em_preparo")
         && pedido.status === "pendente") {
       dispatchCupomCozinha(empresaId, params.id)
         .catch(e => console.warn("[Pedidos/PATCH] cozinha:", e));

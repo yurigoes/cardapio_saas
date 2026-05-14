@@ -267,7 +267,7 @@ export default function MotoboyPage() {
                   <div className="text-right flex-shrink-0">
                     <p className="text-lg font-bold text-emerald-400">{fmtBRL(p.total)}</p>
                     {Number(p.valor_motoboy) > 0 && (
-                      <p className="text-[10px] text-amber-400">+{fmtBRL(p.valor_motoboy)} pra você</p>
+                      <p className="text-[10px] text-amber-400">+{fmtBRL(p.valor_motoboy ?? 0)} pra você</p>
                     )}
                   </div>
                 </div>

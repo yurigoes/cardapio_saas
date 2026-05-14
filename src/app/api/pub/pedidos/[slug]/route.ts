@@ -295,7 +295,8 @@ export async function POST(
       let taxaEntrega = 0;
       let zonaId: string | null = null;
       let valorMotoboy = 0;
-      let enderecoComCoords = body.cliente_endereco;
+      let enderecoComCoords: (typeof body.cliente_endereco & { lat?: number; lng?: number }) | undefined =
+        body.cliente_endereco;
       if (tipo === "delivery") {
         const zona = await lookupZonaParaEndereco(empresa.id, body.cliente_endereco ?? null);
         if (zona) {

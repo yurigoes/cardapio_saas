@@ -36,7 +36,8 @@ function row(left: string, right: string, n = W): string {
   const leftMax = n - right2.length;
   return pad(left.slice(0, leftMax), leftMax) + right2;
 }
-function brl(v: number | string): string {
+function brl(v: number | string | null | undefined): string {
+  if (v == null) return "0,00";
   return Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 

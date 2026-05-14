@@ -6,9 +6,13 @@
  */
 import { useEffect, useRef } from "react";
 
+// Leaflet é carregado via CDN — não temos types instalados pra evitar bloat npm.
+// Usamos `any` no namespace global pra não quebrar build.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare global {
   interface Window {
-    L?: typeof import("leaflet");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    L?: any;
   }
 }
 
@@ -30,8 +34,8 @@ interface Props {
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS  = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
 
-let leafletLoading: Promise<typeof import("leaflet")> | null = null;
-function loadLeaflet(): Promise<typeof import("leaflet")> {
+let leafletLoading: Promise<unknown> | null = null;
+function loadLeaflet(): Promise<unknown> {
   if (typeof window === "undefined") return Promise.reject(new Error("ssr"));
   if (window.L) return Promise.resolve(window.L);
   if (leafletLoading) return leafletLoading;
@@ -62,7 +66,8 @@ function loadLeaflet(): Promise<typeof import("leaflet")> {
 }
 
 // Ícone customizado por cor (usa SVG inline)
-function makeIcon(L: typeof import("leaflet"), color: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeIcon(L: any, color: string) {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="44" viewBox="0 0 32 44">
       <path d="M16 0C7.2 0 0 7.2 0 16c0 11 16 28 16 28s16-17 16-28C32 7.2 24.8 0 16 0z"
@@ -87,12 +92,15 @@ const COLORS = {
 
 export function MapaTracking({ origem, motoboy, destino, height = 300, className = "" }: Props) {
   const ref     = useRef<HTMLDivElement>(null);
-  const mapRef  = useRef<import("leaflet").Map | null>(null);
-  const layerRef = useRef<import("leaflet").LayerGroup | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapRef  = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const layerRef = useRef<any>(null);
 
   useEffect(() => {
     let cancelled = false;
-    loadLeaflet().then((L) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    loadLeaflet().then((L: any) => {
       if (cancelled || !ref.current) return;
       if (!mapRef.current) {
         const map = L.map(ref.current, { zoomControl: true, attributionControl: false });
