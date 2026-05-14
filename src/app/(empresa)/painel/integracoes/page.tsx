@@ -165,26 +165,76 @@ function EventosCheckboxes({
       selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]
     );
   }
+
+  const [testandoEvento, setTestandoEvento] = useState<string | null>(null);
+
+  async function testarEvento(evento: string) {
+    setTestandoEvento(evento);
+    try {
+      const r = await fetch("/api/painel/whatsapp/testar-evento", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body:    JSON.stringify({ evento }),
+      });
+      const d = await r.json();
+      const { alertar } = await import("@/components/ui/ConfirmModal");
+      if (d.success && d.data?.enviado) {
+        await alertar({
+          titulo:   "✓ Teste enviado",
+          mensagem: `Evento "${evento}" disparou normalmente. Confira o WhatsApp do destinatário.`,
+          tipo:     "sucesso",
+        });
+      } else {
+        const motivo = d.data?.motivo ?? d.error?.message ?? "desconhecido";
+        await alertar({
+          titulo:   `✗ Evento "${evento}" não enviou`,
+          mensagem: `Motivo: ${motivo}\n\n` +
+            (motivo.includes("não habilitado")
+              ? "→ Marque a checkbox e clique em Salvar antes de testar."
+              : motivo.includes("sem telefone")
+                ? "→ Configure o WhatsApp da empresa em /painel/config (eventos do dono) ou identifique cliente com telefone (eventos do cliente)."
+                : motivo.includes("evolution não configurado")
+                  ? "→ Conecte o WhatsApp acima antes de testar eventos."
+                  : motivo.includes("template desativado")
+                    ? "→ O template desse evento está desativado em mensagens_template."
+                    : "→ Verifique credenciais Evolution e logs do servidor."),
+          tipo: "alerta",
+        });
+      }
+    } finally { setTestandoEvento(null); }
+  }
+
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {WA_EVENTOS.map(ev => (
-        <label
+        <div
           key={ev.id}
-          className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition ${
+          className={`flex items-center gap-2 rounded-xl border px-4 py-3 transition ${
             selected.includes(ev.id)
               ? "border-brand/40 bg-brand/10"
               : "border-white/10 bg-white/5 hover:bg-white/10"
-          } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+          } ${disabled ? "opacity-50" : ""}`}
         >
-          <input
-            type="checkbox"
-            checked={selected.includes(ev.id)}
-            onChange={() => toggle(ev.id)}
-            disabled={disabled}
-            className="h-4 w-4 accent-brand"
-          />
-          <span className="text-sm text-slate-300">{ev.label}</span>
-        </label>
+          <label className={`flex flex-1 items-center gap-3 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+            <input
+              type="checkbox"
+              checked={selected.includes(ev.id)}
+              onChange={() => toggle(ev.id)}
+              disabled={disabled}
+              className="h-4 w-4 accent-brand"
+            />
+            <span className="text-sm text-slate-300">{ev.label}</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => testarEvento(ev.id)}
+            disabled={disabled || testandoEvento !== null}
+            title="Disparar este evento agora pra testar"
+            className="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-400 hover:bg-white/5 hover:text-white disabled:opacity-30"
+          >
+            {testandoEvento === ev.id ? "..." : "↗ Testar"}
+          </button>
+        </div>
       ))}
     </div>
   );

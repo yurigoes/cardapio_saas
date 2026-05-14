@@ -18,6 +18,7 @@ import { ok, badRequest, conflict, serverError } from "@/lib/utils/response";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
 import { criarSessao } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/auth/middleware";
+import { enfileirar as enfileirarEmail, smtpAtivo } from "@/lib/email/smtp";
 import type { PoolClient } from "pg";
 
 const schema = z.object({
@@ -125,6 +126,24 @@ export async function POST(req: NextRequest) {
       nome:      body.admin_nome,
       sessionId: sessao.id,
     });
+
+    // E-mail de boas-vindas (best-effort, não bloqueia resposta)
+    if (await smtpAtivo()) {
+      const planoNome = await queryOne<{ nome: string }>(
+        `SELECT nome FROM planos WHERE id = $1`,
+        [plano?.id ?? null]
+      ).catch(() => null);
+      enfileirarEmail({
+        para:     body.email,
+        evento:   "boas_vindas",
+        vars: {
+          empresa_nome: body.empresa_nome,
+          plano_nome:   planoNome?.nome ?? "Trial",
+          painel_url:   `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/painel`,
+        },
+        contexto: { empresa_id: result.empresa_id, usuario_id: result.usuario_id },
+      }).catch(e => console.warn("[Cadastro/Empresa] email boas-vindas:", e));
+    }
 
     return ok({
       empresa_id:    result.empresa_id,

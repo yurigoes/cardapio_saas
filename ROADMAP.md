@@ -7,7 +7,35 @@ já estão em produção.
 
 ## 🚧 Próximo ciclo (alta prioridade)
 
-### SMTP / E-mail transacional do master
+### ✅ SMTP / E-mail transacional (entregue v2.x)
+
+Implementado:
+- Tabela `smtp_config` (singleton) com host/port/auth/from + telemetria
+- Tabela `email_templates` com mustache simples ({{var}} + {{#var}}block{{/var}})
+- Tabela `email_jobs` (queue + retry exponencial 5/25/125min)
+- Tabela `password_resets` (multi-canal email/whatsapp)
+- Lib `@/lib/email/smtp.ts` com `enfileirar()`, `processarQueue()`, `enviarDireto()`
+- Templates default: `boas_vindas` + `reset_senha` (HTML responsivo)
+- Endpoints admin: `/api/admin/email/{config,templates,logs,testar}`
+- Página `/admin/email` (config + teste com botão dedicado)
+- Cron `/api/cron/enviar-emails` (processa até 20/chamada, rodar 1-2min)
+- Hook automático: `POST /api/auth/cadastro-empresa` enfileira boas-vindas
+- Recuperação senha multi-canal: `/api/auth/{recuperar,redefinir}` + UI
+  `/recuperar-senha` (escolhe email ou WhatsApp, código 6 dígitos, TTL 15min)
+
+Pendências futuras (não bloqueantes):
+- Templates pra: fatura, pagamento_falhou, manutencao, trial_expirando
+- Hooks automáticos pra esses eventos
+- Página `/admin/email/templates` (editor visual)
+- Página `/admin/email/logs` (consulta de jobs)
+- Criptografia da `smtp_config.password` (hoje plaintext)
+
+Como configurar:
+1. `/admin/email` → preencher SMTP (host/port/user/pwd/from) → ativar
+2. Botão "Enviar teste" → confirmar entrega
+3. VPS: instalar cron `*/2 * * * * curl -X POST -H "x-cron-secret: $CRON_SECRET" $URL/api/cron/enviar-emails`
+
+### SMTP / E-mail transacional do master (especificação original)
 **Por quê:** hoje notificações operacionais saem via WhatsApp (Evolution).
 Precisamos de e-mail pra: boas-vindas em cadastro, recuperação de senha,
 faturas/cobranças, comunicados gerais.
