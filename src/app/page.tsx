@@ -6,6 +6,7 @@ import {
   Check, ChefHat, ArrowRight, Star, Zap, Users, MessageSquare,
   ShoppingBag, Tv2, BarChart3, CreditCard, Sparkles,
 } from "lucide-react";
+import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 
 interface Plano {
   id: string;
@@ -36,6 +37,7 @@ const fmtBRL = (n: number | string) =>
 export default function LandingPage() {
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [loading, setLoading] = useState(true);
+  const branding = useSaasBranding();
 
   useEffect(() => {
     fetch("/api/pub/planos")
@@ -50,10 +52,16 @@ export default function LandingPage() {
       <header className="sticky top-0 z-30 backdrop-blur bg-slate-950/80 border-b border-white/5">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-emerald-500/15 p-2">
-              <ChefHat className="h-5 w-5 text-emerald-400" />
-            </div>
-            <span className="font-bold text-lg">Cardápio SaaS</span>
+            {branding.logo_url ? (
+              <img src={branding.logo_url} alt={branding.nome} className="max-h-10 max-w-[10rem] object-contain" />
+            ) : (
+              <>
+                <div className="rounded-lg bg-emerald-500/15 p-2">
+                  <ChefHat className="h-5 w-5 text-emerald-400" />
+                </div>
+                <span className="font-bold text-lg">{branding.nome}</span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -166,7 +174,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
           <div className="flex items-center gap-2">
             <ChefHat className="h-4 w-4 text-emerald-400" />
-            <span>Cardápio SaaS · {new Date().getFullYear()}</span>
+            <span>{branding.nome} · {new Date().getFullYear()}</span>
           </div>
           <div className="flex items-center gap-4">
             <Link href="/login" className="hover:text-white">Entrar</Link>

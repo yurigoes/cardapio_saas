@@ -164,7 +164,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         {/* Logo da empresa */}
         <div className="flex h-16 items-center gap-3 border-b border-white/5 px-4">
           {empresa?.logo_url ? (
-            <img src={empresa.logo_url} alt="" className="h-8 w-8 rounded-lg object-contain" />
+            <img src={empresa.logo_url} alt="" className="max-h-10 max-w-[7rem] object-contain" />
           ) : (
             <div
               className="flex h-8 w-8 items-center justify-center rounded-lg"

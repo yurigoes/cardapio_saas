@@ -434,6 +434,7 @@ function RegisterModal({ slug, idioma, tipo, valorInicial, onCreated, onSkip }: 
   const [email, setEmail] = useState("");
   const [tel,   setTel]   = useState(tipo === "telefone" ? valorInicial : "");
   const [cpf,   setCpf]   = useState(tipo === "cpf"      ? valorInicial : "");
+  const [dataNasc, setDataNasc] = useState("");
   const [loading, setLoading] = useState(false);
   const [erro,    setErro]   = useState("");
 
@@ -443,9 +444,10 @@ function RegisterModal({ slug, idioma, tipo, valorInicial, onCreated, onSkip }: 
     setLoading(true); setErro("");
     try {
       const body: Record<string, string> = { nome: nome.trim() };
-      if (tel)   body.telefone = tel.replace(/\D/g, "");
-      if (cpf)   body.cpf     = cpf.replace(/\D/g, "");
-      if (email) body.email   = email.trim();
+      if (tel)      body.telefone = tel.replace(/\D/g, "");
+      if (cpf)      body.cpf     = cpf.replace(/\D/g, "");
+      if (email)    body.email   = email.trim();
+      if (dataNasc) body.data_nascimento = dataNasc;
 
       const res  = await fetch(`/api/painel/clientes?slug=${slug}`, {
         method:  "POST",
@@ -523,6 +525,17 @@ function RegisterModal({ slug, idioma, tipo, valorInicial, onCreated, onSkip }: 
               onChange={e => setEmail(e.target.value)}
               placeholder="email@exemplo.com"
               type="email"
+              className="w-full rounded-xl bg-slate-800 border border-white/10 px-4 py-3 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">Data de nascimento (opcional — pra receber felicitações)</label>
+            <input
+              value={dataNasc}
+              onChange={e => setDataNasc(e.target.value)}
+              type="date"
+              max={new Date().toISOString().slice(0, 10)}
               className="w-full rounded-xl bg-slate-800 border border-white/10 px-4 py-3 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none"
             />
           </div>
@@ -1354,17 +1367,18 @@ interface CartDrawerProps {
   isOnline:    boolean;
   tipoConsumo: TipoConsumo;
   taxaInfo?:   { taxa: number; zona_nome: string | null; tempo_min: number | null; fallback: boolean } | null;
+  aceitaDinheiro?: boolean;
   onClose:     () => void;
   onUpdate:    (uid: string, delta: number) => void;
   onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: FormaPagTotem, cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null, cashbackUsar: number) => Promise<void>;
 }
 
-function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoConsumo, taxaInfo, onClose, onUpdate, onConfirm }: CartDrawerProps) {
+function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoConsumo, taxaInfo, aceitaDinheiro, onClose, onUpdate, onConfirm }: CartDrawerProps) {
   const [nome, setNome]           = useState(cliente?.nome ?? "");
   const [tel, setTel]             = useState(cliente?.telefone ?? "");
   const [obs, setObs]             = useState("");
   const [formaPag, setFormaPag]   = useState<FormaPagTotem>(
-    tipoConsumo === "delivery" ? "pagar_entrega" : "dinheiro"
+    tipoConsumo === "delivery" ? "pagar_entrega" : (aceitaDinheiro ? "dinheiro" : "pix")
   );
   const [sending, setSending]     = useState(false);
 
@@ -1687,7 +1701,7 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoCon
             {((tipoConsumo === "delivery"
               ? (["dinheiro", "pix", "pagar_entrega"] as const)
               : (["dinheiro", "pix"] as const)) as readonly FormaPagTotem[])
-              .filter(m => m !== "dinheiro" || (empresa as { totem_aceita_dinheiro?: boolean })?.totem_aceita_dinheiro === true)
+              .filter(m => m !== "dinheiro" || aceitaDinheiro === true)
               .map((metodo) => {
               const ativo      = formaPag === metodo;
               const desabilitado = metodo === "pix" && !isOnline;
@@ -2836,6 +2850,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           isOnline={isOnline}
           tipoConsumo={tipoConsumo}
           taxaInfo={tipoConsumo === "delivery" ? taxaEntrega : null}
+          aceitaDinheiro={(empresa as { totem_aceita_dinheiro?: boolean })?.totem_aceita_dinheiro === true}
           onClose={() => setCartOpen(false)}
           onUpdate={updateCart}
           onConfirm={handleConfirmarPedido}
