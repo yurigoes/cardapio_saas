@@ -15,7 +15,14 @@
       "Bash(New-Item -ItemType Directory -Force -Path \"A:\\\\Sistemas\\\\cardapio_saas\\\\src\\\\app\\\\api\\\\pub\\\\media\\\\[...path]\")",
       "Bash(Out-Null)",
       "Bash(Write-Output \"dir created\")",
-      "Bash(mkdir -p \"A:/Sistemas/cardapio_saas/src/app/api/pub/media/[...path]\" && echo \"dir created\")"
+      "Bash(mkdir -p \"A:/Sistemas/cardapio_saas/src/app/api/pub/media/[...path]\" && echo \"dir created\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(mkdir -p \"/a/Sistemas/cardapio_saas/src/app/api/pub/cliente/[id]\")",
+      "Bash(mkdir -p \"/a/Sistemas/cardapio_saas/src/app/cliente/[slug]\")",
+      "Bash(git commit *)",
+      "Bash(git push origin main)",
+      "Bash(git push origin main:*)"
     ]
   }
 }

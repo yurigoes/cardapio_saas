@@ -7,6 +7,7 @@ import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/re
 import { notificarEvolution, type EvolutionEvento } from "@/lib/notify/evolution";
 import { cancelarJobsPedido } from "@/lib/print/queue";
 import { invalidarRastreio } from "@/lib/delivery/rastreio";
+import { dispatchCupomCozinha } from "@/lib/print/dispatch";
 
 // Map de status do pedido → ID do evento Evolution (WA_EVENTOS no painel)
 const STATUS_TO_EVENTO: Partial<Record<PedidoStatus, EvolutionEvento>> = {
@@ -136,6 +137,13 @@ export async function PATCH(
     if (body.status === "cancelado" && pedido.status !== "cancelado") {
       cancelarJobsPedido(params.id)
         .catch(e => console.warn("[Pedidos/PATCH] cancel print:", e));
+    }
+
+    // Dispara cozinha quando pedido é CONFIRMADO (e ainda não foi)
+    if ((body.status === "confirmado" || body.status === "preparo" || body.status === "preparando")
+        && pedido.status === "pendente") {
+      dispatchCupomCozinha(empresaId, params.id)
+        .catch(e => console.warn("[Pedidos/PATCH] cozinha:", e));
     }
 
     // WhatsApp ao cliente em transições relevantes (best-effort)

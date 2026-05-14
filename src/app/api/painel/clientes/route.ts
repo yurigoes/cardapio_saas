@@ -124,12 +124,21 @@ export async function POST(req: NextRequest) {
     data_nascimento?: string;
   };
 
-  // Obrigatórios: nome + telefone (cpf/email são opcionais)
-  if (!nome || !nome.trim()) {
-    return badRequest("Nome é obrigatório");
-  }
-  if (!telefone || !telefone.trim()) {
-    return badRequest("Telefone é obrigatório");
+  // Obrigatórios para painel/admin: nome + telefone
+  // Pra totem público (sem auth), aceita só telefone (anônimo)
+  const ehPublico = !empresaId || isAuthError(auth);
+  if (!ehPublico) {
+    if (!nome || !nome.trim()) {
+      return badRequest("Nome é obrigatório");
+    }
+    if (!telefone || !telefone.trim()) {
+      return badRequest("Telefone é obrigatório");
+    }
+  } else {
+    // Totem: ao menos telefone OU cpf
+    if (!telefone && !cpf && !email) {
+      return badRequest("Informe ao menos telefone, CPF ou e-mail");
+    }
   }
 
   try {
@@ -159,14 +168,30 @@ export async function POST(req: NextRequest) {
       return ok({ ...existing, nome: nome || existing.nome, encontrado: true });
     }
 
-    // Cria novo cliente
-    const novo = await queryOne<{ id: string; pontos: number }>(
-      `INSERT INTO clientes (empresa_id, nome, telefone, cpf, email, data_nascimento)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, pontos`,
-      [empresaId, nome || null, telefone || null, cpf || null, email || null,
-       data_nascimento || null]
-    );
+    // Cria novo cliente — tenta com data_nascimento; se coluna não existir, faz fallback
+    let novo: { id: string; pontos: number } | null = null;
+    try {
+      novo = await queryOne<{ id: string; pontos: number }>(
+        `INSERT INTO clientes (empresa_id, nome, telefone, cpf, email, data_nascimento)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, pontos`,
+        [empresaId, nome || null, telefone || null, cpf || null, email || null,
+         data_nascimento || null]
+      );
+    } catch (e) {
+      // Coluna data_nascimento pode não existir — tenta sem
+      const msg = e instanceof Error ? e.message : "";
+      if (msg.includes("data_nascimento") || msg.includes("does not exist")) {
+        novo = await queryOne<{ id: string; pontos: number }>(
+          `INSERT INTO clientes (empresa_id, nome, telefone, cpf, email)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id, pontos`,
+          [empresaId, nome || null, telefone || null, cpf || null, email || null]
+        );
+      } else {
+        throw e;
+      }
+    }
 
     // WhatsApp ao dono (best-effort)
     notificarEvolution(empresaId, "novo_cliente", {

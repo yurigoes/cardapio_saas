@@ -17,6 +17,8 @@ export async function GET(
       totem_logo_url: string | null; totem_cor_destaque: string | null;
       totem_promo_texto: string | null; totem_pos_destaque: string | null;
       totem_atendimento: string | null;
+      totem_aceita_dinheiro: boolean | null;
+      totem_tema: string | null;
       horario_abertura: string | null; horario_fechamento: string | null;
       caixa_obrigatorio: boolean;
       taxa_entrega: string; pedido_minimo: string; tempo_entrega_min: number | null;
@@ -25,6 +27,8 @@ export async function GET(
               totem_bg_video_url, totem_bg_image_url, totem_cta_text, totem_slogan,
               totem_logo_url, totem_cor_destaque, totem_promo_texto,
               totem_pos_destaque, totem_atendimento,
+              COALESCE(totem_aceita_dinheiro, false) AS totem_aceita_dinheiro,
+              COALESCE(totem_tema, 'escuro')         AS totem_tema,
               horario_abertura::text, horario_fechamento::text,
               COALESCE(caixa_obrigatorio, false) AS caixa_obrigatorio,
               COALESCE(taxa_entrega, 0)          AS taxa_entrega,
@@ -83,6 +87,8 @@ export async function GET(
         totem_promo_texto:   empresa.totem_promo_texto,
         totem_pos_destaque:  empresa.totem_pos_destaque ?? "center",
         totem_atendimento:   empresa.totem_atendimento,
+        totem_aceita_dinheiro: empresa.totem_aceita_dinheiro ?? false,
+        totem_tema:          empresa.totem_tema ?? "escuro",
         horario_abertura:    empresa.horario_abertura,
         horario_fechamento:  empresa.horario_fechamento,
         caixa_obrigatorio:   empresa.caixa_obrigatorio,

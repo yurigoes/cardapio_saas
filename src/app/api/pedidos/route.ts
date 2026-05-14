@@ -311,10 +311,11 @@ export async function POST(req: NextRequest) {
       }).catch(e => console.warn("[Pedidos/POST] notify:", e));
     }
 
-    // Dispara impressão na cozinha (best-effort, jobs ficam pendentes
-    // até o agente local pegar; sem impressora cadastrada, vira no-op)
-    dispatchCupomCozinha(empresaId, result.id)
-      .catch(e => console.warn("[Pedidos/POST] print:", e));
+    // Cozinha NÃO dispatcha aqui — só quando o pedido for CONFIRMADO
+    // (PATCH /api/pedidos/[id] status=confirmado).
+    // Razão: PDV/balcão pode criar pedido temporário; só imprime quando
+    // operador confirma/finaliza. Pra totem/delivery (auto-confirmados),
+    // dispatch acontece no PATCH ou no /api/pub/pedidos diretamente.
 
     return created(result);
   } catch (err) {

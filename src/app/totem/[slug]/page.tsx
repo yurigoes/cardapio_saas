@@ -1684,9 +1684,11 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoCon
         <div>
           <p className="mb-2 text-xs font-medium text-slate-400">{t(idioma, "pagamento_titulo")}</p>
           <div className={`grid gap-2 ${tipoConsumo === "delivery" ? "grid-cols-3" : "grid-cols-2"}`}>
-            {(tipoConsumo === "delivery"
+            {((tipoConsumo === "delivery"
               ? (["dinheiro", "pix", "pagar_entrega"] as const)
-              : (["dinheiro", "pix"] as const)).map((metodo) => {
+              : (["dinheiro", "pix"] as const)) as readonly FormaPagTotem[])
+              .filter(m => m !== "dinheiro" || (empresa as { totem_aceita_dinheiro?: boolean })?.totem_aceita_dinheiro === true)
+              .map((metodo) => {
               const ativo      = formaPag === metodo;
               const desabilitado = metodo === "pix" && !isOnline;
               const labelEntrega = "Pagar na entrega";

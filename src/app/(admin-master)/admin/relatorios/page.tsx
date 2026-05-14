@@ -13,7 +13,10 @@ interface Stats {
   empresas_novas_30d: number;
 }
 
-const fmtBRL = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmtBRL = (n: number | null | undefined) => {
+  const v = typeof n === "number" && Number.isFinite(n) ? n : 0;
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+};
 
 export default function AdminRelatoriosPage() {
   const [stats, setStats]     = useState<Stats | null>(null);

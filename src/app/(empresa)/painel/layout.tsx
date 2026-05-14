@@ -35,6 +35,7 @@ const ALL_NAV = [
   { href: "/painel/delivery",    label: "Delivery",    icon: Bike,            modulo: "delivery"   },
   { href: "/painel/cozinha",     label: "Cozinha",     icon: ChefHat,         modulo: "cozinha_kds"},
   { href: "/painel/painel-tv",  label: "Painel TV",   icon: Tv2,             modulo: "cozinha_kds"},
+  { href: "/painel/kiosk",      label: "Painéis kiosk", icon: Tv2,           modulo: null         },
   { href: "/painel/caixa",       label: "Caixa",       icon: Wallet,          modulo: "financeiro" },
   { href: "/painel/financeiro",  label: "Financeiro",  icon: DollarSign,      modulo: "financeiro" },
   { href: "/painel/estoque",     label: "Estoque",     icon: Package,         modulo: "estoque"    },

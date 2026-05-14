@@ -14,6 +14,7 @@ import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 import { creditarCashbackPedido, debitarCashbackPedido } from "@/lib/cashback/movimento";
 import { notificarEvolution } from "@/lib/notify/evolution";
+import { dispatchCupomCozinha, dispatchCupomCliente } from "@/lib/print/dispatch";
 import { lookupZonaParaEndereco } from "@/lib/delivery/lookup-zona";
 import { geocodeEndereco } from "@/lib/delivery/geocode";
 import crypto from "crypto";
@@ -486,6 +487,13 @@ export async function POST(
         pedidoNumero: pedido.numero,
         total:        totalCalc,
       }).catch(e => console.warn("[Pub/Pedidos] notify novo_pedido:", e));
+
+      // Envia pra impressora de cozinha e cupom completo do cliente (no PDV)
+      // Best-effort — não bloqueia resposta
+      dispatchCupomCozinha(empresa.id, pedido.id)
+        .catch(e => console.warn("[Pub/Pedidos] print cozinha:", e));
+      dispatchCupomCliente(empresa.id, pedido.id)
+        .catch(e => console.warn("[Pub/Pedidos] print cliente:", e));
     }
 
     return ok({

@@ -13,7 +13,10 @@ interface Resumo {
   vencendo_7d: { id: string; nome_fantasia: string; assinatura_expira_em: string }[];
 }
 
-const fmtBRL = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmtBRL = (n: number | null | undefined) => {
+  const v = typeof n === "number" && Number.isFinite(n) ? n : 0;
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+};
 const fmtData = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
 
 export default function AdminFinanceiroPage() {
