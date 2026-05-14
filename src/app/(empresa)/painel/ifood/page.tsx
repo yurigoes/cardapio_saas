@@ -6,7 +6,10 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Zap, RefreshCw, AlertTriangle, CheckCircle2, Loader2, Eye, EyeOff,
+  Play, ScrollText,
 } from "lucide-react";
+import Link from "next/link";
+import { alertar } from "@/components/ui/ConfirmModal";
 
 interface IfoodConfig {
   id:              string;
@@ -90,7 +93,6 @@ export default function IfoodPage() {
   async function testarPoll() {
     setMsg("Disparando polling de teste...");
     try {
-      const t = localStorage.getItem("access_token") ?? "";
       // Usa CRON_SECRET via header (precisa adicionar no .env do servidor + admin saber)
       const cron = prompt("Cole o CRON_SECRET do servidor (ou cancele):");
       if (!cron) { setMsg(null); return; }
@@ -101,6 +103,31 @@ export default function IfoodPage() {
       });
       const d = await r.json();
       setMsg(d.ok ? `Resultado: ${JSON.stringify(d.empresas)}` : `Falha: ${d.error}`);
+    } catch (e) {
+      setMsg("Erro: " + (e as Error).message);
+    }
+  }
+
+  async function simularPedido() {
+    const t = localStorage.getItem("access_token") ?? "";
+    setMsg("Simulando pedido iFood (sem chamar API)...");
+    try {
+      const r = await fetch("/api/painel/ifood/simular", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+        body:    JSON.stringify({ mode: "delivery" }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        await alertar({
+          titulo:   "✓ Pedido simulado criado",
+          mensagem: `Pedido #${d.data.pedido_numero} criado.\n\nVá em /painel/pedidos pra ver — cozinha imprimiu automaticamente. Use /painel/ifood/eventos pra ver o log.`,
+          tipo:     "sucesso",
+        });
+        setMsg(`✓ Pedido #${d.data.pedido_numero} simulado (ifood: ${d.data.ifood_order_id})`);
+      } else {
+        setMsg(`Falha: ${d.error?.message ?? "?"}`);
+      }
     } catch (e) {
       setMsg("Erro: " + (e as Error).message);
     }
@@ -119,11 +146,17 @@ export default function IfoodPage() {
             <code className="text-emerald-400"> /api/ifood/poll</code> a cada 30s.
           </p>
         </div>
-        <button onClick={carregar} disabled={loading}
-          className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50">
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Atualizar
-        </button>
+        <div className="flex gap-2">
+          <Link href="/painel/ifood/eventos"
+            className="flex items-center gap-1 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/5">
+            <ScrollText className="h-3.5 w-3.5" /> Eventos
+          </Link>
+          <button onClick={carregar} disabled={loading}
+            className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/5 disabled:opacity-50">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Status */}
@@ -221,10 +254,17 @@ export default function IfoodPage() {
             Salvar
           </button>
           {cfg && (
-            <button onClick={testarPoll}
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/10">
-              Testar polling agora
-            </button>
+            <>
+              <button onClick={testarPoll}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/10">
+                Testar polling agora
+              </button>
+              <button onClick={simularPedido}
+                className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-300 hover:bg-amber-500/20"
+                title="Cria pedido fake (não chama API iFood) — testa fluxo completo: importer + cozinha + pedidos">
+                <Play className="h-4 w-4" /> Simular pedido
+              </button>
+            </>
           )}
         </div>
         {msg && (
