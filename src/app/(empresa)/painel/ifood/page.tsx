@@ -6,7 +6,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Zap, RefreshCw, AlertTriangle, CheckCircle2, Loader2, Eye, EyeOff,
-  Play, ScrollText,
+  Play, ScrollText, KeyRound,
 } from "lucide-react";
 import Link from "next/link";
 import { alertar } from "@/components/ui/ConfirmModal";
@@ -103,6 +103,39 @@ export default function IfoodPage() {
       });
       const d = await r.json();
       setMsg(d.ok ? `Resultado: ${JSON.stringify(d.empresas)}` : `Falha: ${d.error}`);
+    } catch (e) {
+      setMsg("Erro: " + (e as Error).message);
+    }
+  }
+
+  async function testarCredenciais() {
+    setMsg("Testando OAuth iFood (sem polling)...");
+    const t = localStorage.getItem("access_token") ?? "";
+    try {
+      const r = await fetch("/api/painel/ifood/testar-credenciais", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+      });
+      const d = await r.json();
+      const data = d.data ?? d;
+      if (data.ok) {
+        await alertar({
+          titulo:   "✓ Credenciais OK",
+          mensagem: data.mensagem,
+          tipo:     "sucesso",
+        });
+        setMsg("✓ " + data.mensagem);
+      } else {
+        const detalhes = data.ifood_response
+          ? `\n\nResposta iFood:\n${typeof data.ifood_response === "string" ? data.ifood_response : JSON.stringify(data.ifood_response, null, 2)}`
+          : "";
+        await alertar({
+          titulo:   `✗ Falha em "${data.etapa}"`,
+          mensagem: `${data.mensagem}\n\n${data.diagnostico ?? ""}${detalhes}`,
+          tipo:     "perigo",
+        });
+        setMsg(`✗ ${data.etapa}: ${data.mensagem}`);
+      }
     } catch (e) {
       setMsg("Erro: " + (e as Error).message);
     }
@@ -255,6 +288,11 @@ export default function IfoodPage() {
           </button>
           {cfg && (
             <>
+              <button onClick={testarCredenciais}
+                className="flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2.5 text-sm font-medium text-blue-300 hover:bg-blue-500/20"
+                title="Testa OAuth do iFood — sem polling, sem importação. Diagnostica 401 e dá erro real do iFood.">
+                <KeyRound className="h-4 w-4" /> Verificar credenciais
+              </button>
               <button onClick={testarPoll}
                 className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/10">
                 Testar polling agora

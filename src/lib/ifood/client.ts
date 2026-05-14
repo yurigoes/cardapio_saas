@@ -48,7 +48,19 @@ export async function getIfoodConfig(empresaId: string): Promise<IfoodConfig | n
   if (!row) return null;
   // Descriptografa secret se encrypted (formato 'encrypted:...')
   if (row.client_secret?.startsWith("encrypted:")) {
-    try { row.client_secret = decrypt(row.client_secret.slice(10)); } catch { /* fallback raw */ }
+    try {
+      row.client_secret = decrypt(row.client_secret.slice(10));
+    } catch (err) {
+      // Decrypt falhou — provavelmente ENCRYPTION_KEY mudou ou secret
+      // foi salvo com chave diferente. NÃO podemos usar o blob cifrado
+      // como secret (vai dar 401). Lança erro claro.
+      console.error("[ifood] decrypt client_secret falhou:", err);
+      throw new Error(
+        "client_secret inválido (descriptografia falhou). " +
+        "Re-salve as credenciais em /painel/ifood. " +
+        "Causa provável: ENCRYPTION_KEY foi alterada após salvar o secret."
+      );
+    }
   }
   return row;
 }
