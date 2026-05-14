@@ -424,16 +424,54 @@ function StartScreen({
 
 // ─── RegisterModal (when customer not found) ──────────────────────────────────
 
+// Cabeçalho compartilhado entre todas as fases — mostra logo absoluta da
+// empresa (ou ChefHat fallback) + título + botão voltar.
+function TotemBrandHeader({
+  empresa, titulo, onBack,
+}: {
+  empresa?: { logo_url: string | null; nome_fantasia: string } | null;
+  titulo:   string;
+  onBack?:  () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 border-b border-white/5 p-4">
+      {onBack && (
+        <button onClick={onBack}
+          aria-label="Voltar"
+          className="text-slate-400 hover:text-white transition flex-shrink-0">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+      )}
+      {empresa?.logo_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={empresa.logo_url}
+          alt={empresa.nome_fantasia ?? ""}
+          className="h-10 w-auto max-w-[140px] object-contain flex-shrink-0"
+        />
+      ) : empresa?.nome_fantasia ? (
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 flex-shrink-0">
+          <ChefHat className="h-4 w-4 text-emerald-400" />
+        </div>
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <h2 className="text-base font-bold text-white truncate">{titulo}</h2>
+      </div>
+    </div>
+  );
+}
+
 interface RegisterModalProps {
   slug:          string;
   idioma:        Idioma;
   tipo:          "telefone" | "cpf";
   valorInicial:  string; // digits only from search
+  empresa?:      { logo_url: string | null; nome_fantasia: string } | null;
   onCreated:     (cliente: ClienteIdentificado) => void;
   onSkip:        () => void;
 }
 
-function RegisterModal({ slug, idioma, tipo, valorInicial, onCreated, onSkip }: RegisterModalProps) {
+function RegisterModal({ slug, idioma, tipo, valorInicial, empresa, onCreated, onSkip }: RegisterModalProps) {
   const [nome,  setNome]  = useState("");
   const [email, setEmail] = useState("");
   const [tel,   setTel]   = useState(tipo === "telefone" ? valorInicial : "");
@@ -479,14 +517,7 @@ function RegisterModal({ slug, idioma, tipo, valorInicial, onCreated, onSkip }: 
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
-      <div className="flex items-center gap-3 border-b border-white/5 p-4">
-        <button onClick={onSkip} className="text-slate-400 hover:text-white transition">
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div>
-          <h2 className="text-lg font-bold text-white">{t(idioma, "cadastro_titulo")}</h2>
-        </div>
-      </div>
+      <TotemBrandHeader empresa={empresa} titulo={t(idioma, "cadastro_titulo")} onBack={onSkip} />
 
       <div className="flex flex-1 flex-col justify-center px-6 pb-8">
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -571,11 +602,12 @@ function RegisterModal({ slug, idioma, tipo, valorInicial, onCreated, onSkip }: 
 interface CustomerModalProps {
   slug:          string;
   idioma:        Idioma;
+  empresa?:      { logo_url: string | null; nome_fantasia: string } | null;
   onIdentified:  (cliente: ClienteIdentificado, ultimoPedido: UltimoPedido | null) => void;
   onSkip:        () => void;
 }
 
-function CustomerModal({ slug, idioma, onIdentified, onSkip }: CustomerModalProps) {
+function CustomerModal({ slug, idioma, empresa, onIdentified, onSkip }: CustomerModalProps) {
   const [tipo, setTipo]   = useState<"telefone" | "cpf">("telefone");
   const [valor, setValor] = useState("");
   const [loading, setLoading] = useState(false);
@@ -635,6 +667,7 @@ function CustomerModal({ slug, idioma, onIdentified, onSkip }: CustomerModalProp
         idioma={idioma}
         tipo={tipo}
         valorInicial={digitsParaReg}
+        empresa={empresa}
         onCreated={(c) => onIdentified(c, null)}
         onSkip={onSkip}
       />
@@ -643,15 +676,8 @@ function CustomerModal({ slug, idioma, onIdentified, onSkip }: CustomerModalProp
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
-      <div className="flex items-center gap-3 border-b border-white/5 p-4">
-        <button onClick={onSkip} className="text-slate-400 hover:text-white transition">
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div>
-          <h2 className="text-lg font-bold text-white">{t(idioma, "identificacao_titulo")}</h2>
-          <p className="text-xs text-slate-500">{t(idioma, "identificacao_sub")}</p>
-        </div>
-      </div>
+      <TotemBrandHeader empresa={empresa} titulo={t(idioma, "identificacao_titulo")} onBack={onSkip} />
+      <p className="px-4 -mt-2 mb-1 text-xs text-slate-500">{t(idioma, "identificacao_sub")}</p>
 
       <div className="flex flex-1 flex-col justify-center px-6 pb-8 space-y-6">
         <div className="flex items-center justify-center">
@@ -716,11 +742,12 @@ interface RepeatOrderModalProps {
   ultimoPedido: UltimoPedido;
   idioma:       Idioma;
   produtos:     Produto[];
+  empresa?:     { logo_url: string | null; nome_fantasia: string } | null;
   onRepeat:     (items: CartItem[]) => void;
   onSkip:       () => void;
 }
 
-function RepeatOrderModal({ cliente, ultimoPedido, idioma, produtos, onRepeat, onSkip }: RepeatOrderModalProps) {
+function RepeatOrderModal({ cliente, ultimoPedido, idioma, produtos, empresa, onRepeat, onSkip }: RepeatOrderModalProps) {
   const itens = ultimoPedido.itens ?? [];
 
   function handleRepeat() {
@@ -735,18 +762,15 @@ function RepeatOrderModal({ cliente, ultimoPedido, idioma, produtos, onRepeat, o
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
-      <div className="flex items-center gap-3 border-b border-white/5 p-4">
-        <div>
-          <h2 className="text-lg font-bold text-white">
-            {t(idioma, "cliente_identificado")}: {cliente.nome || ""}
-          </h2>
-          {cliente.pontos > 0 && (
-            <p className="flex items-center gap-1 text-xs text-emerald-400">
-              <Gift className="h-3 w-3" /> {cliente.pontos} {t(idioma, "pontos_acumulados")}
-            </p>
-          )}
-        </div>
-      </div>
+      <TotemBrandHeader
+        empresa={empresa}
+        titulo={`${t(idioma, "cliente_identificado")}: ${cliente.nome || ""}`}
+      />
+      {cliente.pontos > 0 && (
+        <p className="px-4 -mt-2 mb-1 flex items-center gap-1 text-xs text-emerald-400">
+          <Gift className="h-3 w-3" /> {cliente.pontos} {t(idioma, "pontos_acumulados")}
+        </p>
+      )}
 
       <div className="flex flex-1 flex-col justify-center px-6 pb-8 space-y-5">
         <div className="flex items-center justify-center">
@@ -805,10 +829,11 @@ type TipoConsumo = "local" | "retirada" | "delivery";
 interface TipoConsumoModalProps {
   idioma:    Idioma;
   temMesa:   boolean;
+  empresa?:  { logo_url: string | null; nome_fantasia: string } | null;
   onSelect:  (tipo: TipoConsumo) => void;
 }
 
-function TipoConsumoModal({ idioma, temMesa, onSelect }: TipoConsumoModalProps) {
+function TipoConsumoModal({ idioma, temMesa, empresa, onSelect }: TipoConsumoModalProps) {
   const opcoes: { tipo: TipoConsumo; label: string; icon: React.ReactNode; desc: string }[] = [
     {
       tipo:  "local",
@@ -831,12 +856,10 @@ function TipoConsumoModal({ idioma, temMesa, onSelect }: TipoConsumoModalProps) 
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-slate-950 p-8">
-      <div className="text-center">
-        <h2 className="text-2xl font-black text-white">{t(idioma, "consumo_titulo")}</h2>
-      </div>
-
-      <div className="grid w-full max-w-sm grid-cols-1 gap-4">
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
+      <TotemBrandHeader empresa={empresa} titulo={t(idioma, "consumo_titulo")} />
+      <div className="flex flex-1 flex-col items-center justify-center gap-8 p-8">
+        <div className="grid w-full max-w-sm grid-cols-1 gap-4">
         {opcoes.map((o) => (
           <button
             key={o.tipo}
@@ -852,6 +875,7 @@ function TipoConsumoModal({ idioma, temMesa, onSelect }: TipoConsumoModalProps) 
             </div>
           </button>
         ))}
+        </div>
       </div>
     </div>
   );
@@ -862,11 +886,12 @@ function TipoConsumoModal({ idioma, temMesa, onSelect }: TipoConsumoModalProps) 
 interface EnderecoModalProps {
   enderecoSalvo: EnderecoCliente | null;
   valorAtual:    EnderecoCliente | null;
+  empresa?:      { logo_url: string | null; nome_fantasia: string } | null;
   onConfirm:     (e: EnderecoCliente) => void;
   onBack:        () => void;
 }
 
-function EnderecoModal({ enderecoSalvo, valorAtual, onConfirm, onBack }: EnderecoModalProps) {
+function EnderecoModal({ enderecoSalvo, valorAtual, empresa, onConfirm, onBack }: EnderecoModalProps) {
   // Se cliente tem endereço salvo e ainda não escolheu, mostra escolha
   const [modo, setModo] = useState<"escolha" | "form">(
     enderecoSalvo && !valorAtual ? "escolha" : "form"
@@ -914,16 +939,15 @@ function EnderecoModal({ enderecoSalvo, valorAtual, onConfirm, onBack }: Enderec
     const linha2 = [enderecoSalvo.bairro, enderecoSalvo.cidade, enderecoSalvo.uf]
       .filter(Boolean).join(" · ");
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-slate-950 p-8">
-        <div className="text-center">
-          <h2 className="text-2xl font-black text-white">Para qual endereço?</h2>
-          <p className="mt-1 text-sm text-slate-400">Você tem um endereço salvo</p>
-        </div>
+      <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
+        <TotemBrandHeader empresa={empresa} titulo="Para qual endereço?" onBack={onBack} />
+        <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
+          <p className="text-center text-sm text-slate-400">Você tem um endereço salvo</p>
 
-        <button
-          onClick={() => onConfirm(enderecoSalvo)}
-          className="group flex w-full max-w-sm items-start gap-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-left transition hover:bg-emerald-500/15"
-        >
+          <button
+            onClick={() => onConfirm(enderecoSalvo)}
+            className="group flex w-full max-w-sm items-start gap-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-left transition hover:bg-emerald-500/15"
+          >
           <div className="mt-1 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
             ✓
           </div>
@@ -944,9 +968,10 @@ function EnderecoModal({ enderecoSalvo, valorAtual, onConfirm, onBack }: Enderec
           + Endereço diferente
         </button>
 
-        <button onClick={onBack} className="mt-2 text-sm text-slate-500 hover:text-white">
-          ← Voltar
-        </button>
+          <button onClick={onBack} className="mt-2 text-sm text-slate-500 hover:text-white">
+            ← Voltar
+          </button>
+        </div>
       </div>
     );
   }
@@ -954,15 +979,8 @@ function EnderecoModal({ enderecoSalvo, valorAtual, onConfirm, onBack }: Enderec
   // ── Formulário de endereço ───────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
-      <div className="flex items-center gap-3 border-b border-white/10 p-4">
-        <button onClick={onBack} className="text-slate-400 hover:text-white p-2">
-          ←
-        </button>
-        <div>
-          <h2 className="text-xl font-black text-white">Endereço de entrega</h2>
-          <p className="text-xs text-slate-500">Para onde devemos entregar?</p>
-        </div>
-      </div>
+      <TotemBrandHeader empresa={empresa} titulo="Endereço de entrega" onBack={onBack} />
+      <p className="px-4 -mt-2 mb-1 text-xs text-slate-500">Para onde devemos entregar?</p>
 
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-md space-y-3">
@@ -2620,6 +2638,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
             <CustomerModal
               slug={params.slug}
               idioma={idioma}
+              empresa={empresa}
               onIdentified={handleIdentified}
               onSkip={handleSkipIdentificacao}
             />
@@ -2639,6 +2658,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
             <TipoConsumoModal
               idioma={idioma}
               temMesa={!!mesaId}
+              empresa={empresa}
               onSelect={handleTipoConsumoSelected}
             />
           </motion.div>
@@ -2657,6 +2677,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
             <EnderecoModal
               enderecoSalvo={cliente?.endereco ?? null}
               valorAtual={endereco}
+              empresa={empresa}
               onConfirm={handleEnderecoConfirmado}
               onBack={() => setFase("tipoConsumo")}
             />
@@ -2678,6 +2699,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
               ultimoPedido={ultimoPedido}
               idioma={idioma}
               produtos={produtos}
+              empresa={empresa}
               onRepeat={handleRepeatOrder}
               onSkip={() => setFase("cardapio")}
             />

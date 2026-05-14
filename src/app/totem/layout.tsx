@@ -1,22 +1,26 @@
 import type { Metadata } from "next";
+import { getSaasBranding } from "@/lib/branding/server";
 
-export const metadata: Metadata = {
-  title: "Cardápio",
-  description: "Autoatendimento",
-  manifest: "/manifest.json",
-  themeColor: "#10b981",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Cardápio",
-  },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const b = await getSaasBranding();
+  return {
+    title: `${b.nome} · Autoatendimento`,
+    description: `Autoatendimento ${b.nome}`,
+    manifest: "/manifest.json",
+    themeColor: "#10b981",
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      title: b.nome,
+    },
+    viewport: {
+      width: "device-width",
+      initialScale: 1,
+      maximumScale: 1,
+      userScalable: false,
+    },
+  };
+}
 
 export default function TotemLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -177,8 +177,9 @@ self.addEventListener("message", (event) => {
 // ── Web Push ────────────────────────────────────────────────────────────────
 
 self.addEventListener("push", (event) => {
+  // Fallback genérico — push event quase sempre traz title no payload.
   let payload = {
-    title: "Cardápio SaaS",
+    title: "Notificação",
     body:  "Você tem uma nova notificação",
   };
   try {

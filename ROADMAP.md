@@ -83,13 +83,15 @@ Usuário escolhe no formulário "esqueci senha" se quer receber código por:
 
 ## 📋 Backlog (média prioridade)
 
-### Static files dinâmicos (white-label completo)
-- `public/sw.js` — push notification fallback title hardcoded
-- `public/manifest-admin.json` — nome do PWA admin
-- `public/openapi.json` — title da spec OpenAPI
-- Solução: converter os 3 em route handlers (`/sw.js/route.ts`,
-  `/manifest-admin.json/route.ts`, `/openapi.json/route.ts`) que leem
-  branding e devolvem com `Cache-Control` apropriado
+### ✅ Static files dinâmicos (white-label completo) — entregue v2.x
+- `manifest-admin.json` → route handler `/manifest-admin.json/route.ts`
+  com nome+ícone do branding
+- `openapi.json` → route handler que lê `public/openapi-base.json` e
+  injeta título/descrição/contact dinâmicos
+- `sw.js` push fallback title trocado por "Notificação" genérica (push
+  events com título customizado já enviam corretamente — fallback só
+  dispara se payload omitir title)
+- `totem/layout.tsx` generateMetadata dinâmica (title/description/PWA)
 
 ### Wizard onboarding mais completo
 - Já existe versão básica (modal multi-step)
