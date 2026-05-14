@@ -93,19 +93,27 @@ Usuário escolhe no formulário "esqueci senha" se quer receber código por:
   dispara se payload omitir title)
 - `totem/layout.tsx` generateMetadata dinâmica (title/description/PWA)
 
-### Wizard onboarding mais completo
-- Já existe versão básica (modal multi-step)
-- Adicionar: step de configurar PIX direto, step de horário de
-  funcionamento, step de cadastro de mesa+QR
+### ✅ Wizard onboarding completo — entregue v2.x
+- 8 steps: welcome → dados → **horário** → categoria → produto → **PIX** →
+  **mesa+QR** → conclusão
+- Steps opcionais (PIX, mesa) têm botão "Pular" — wizard avança sem dados
+- Horário de abertura/fechamento (PATCH config)
+- Chave PIX direta (PATCH config: pix_chave + pix_tipo)
+- Primeira mesa com capacidade (POST mesas — QR gerado automaticamente)
 
 ### Caixa compartilhado: feedback fechamento
 - Quando 2 operadores compartilham caixa e um fecha, avisar o outro
   via SSE/polling pra UI dele atualizar
 
-### Métricas Prometheus + Grafana
-- `/api/metrics` exposing Prometheus format
-- Dashboards pra: pedidos/min, latência endpoints, error rate,
-  caixa aberto/fechado por dia
+### ✅ Métricas Prometheus + Grafana — entregue v2.x
+- Lib `@/lib/observability/metrics` com `prom-client` + collectors
+- Endpoint `GET /api/metrics` protegido por `METRICS_TOKEN` (env var)
+- Coletas: HTTP requests/latência, pedidos criados (tipo+origem),
+  pagamentos (forma+status), caixas abertos, email queue, print queue,
+  erros por origem+code, default Node metrics (CPU/mem/GC)
+- Instrumentado: POST /api/pedidos com recordPedido()
+- Pendência: instrumentar /api/pub/pedidos + webhooks de pagamento +
+  Grafana dashboards (deferido — endpoint pronto pra scrape)
 
 ### ✅ 2FA TOTP — entregue v2.x
 - Migration 051 (totp_secret cifrado AES-256-GCM, totp_enabled, recovery codes)
@@ -125,11 +133,16 @@ Usuário escolhe no formulário "esqueci senha" se quer receber código por:
 - Anti-duplicação 6h por empresa
 - Reusa template `manutencao_aviso` (editável em /admin/email/templates)
 
-### Rate limit avançado
-- Hoje tem básico (login). Estender pra:
-  - POST pedido público (anti-DoS no cardápio)
-  - Webhooks de gateway (anti-replay)
-  - Endpoints sensíveis (impersonate, exclusão)
+### ✅ Rate limit avançado — entregue v2.x
+- Novos configs em `@/lib/security/rate-limit`:
+  - `PUB_PEDIDO_RATE_LIMIT` (20 req/min/IP) — anti-DoS cardápio público
+  - `RECUPERAR_RATE_LIMIT` (5 req/5min/IP) — anti-spam reset senha
+  - `SENSIBLE_RATE_LIMIT` (10 req/min/IP) — anti-bruteforce 2FA
+- Aplicado: POST /api/pub/pedidos/[slug], POST /api/auth/recuperar,
+  POST /api/auth/2fa/verify
+- Configurável via env: RATE_LIMIT_PUB_PEDIDO, RATE_LIMIT_RECUPERAR,
+  RATE_LIMIT_SENSIBLE
+- Pendência futura: impersonate, exclusão de empresa
 
 ### App mobile nativo (PWA já existe)
 - React Native ou Capacitor

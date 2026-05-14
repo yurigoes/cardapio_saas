@@ -13,6 +13,7 @@ import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import { notificarEvolution } from "@/lib/notify/evolution";
 import { dispatchCupomCozinha } from "@/lib/print/dispatch";
 import { emManutencao } from "@/lib/security/manutencao";
+import { recordPedido } from "@/lib/observability/metrics";
 import type { PoolClient } from "pg";
 
 // ─────────────────────────────────────────────
@@ -333,6 +334,10 @@ export async function POST(req: NextRequest) {
     // Razão: PDV/balcão pode criar pedido temporário; só imprime quando
     // operador confirma/finaliza. Pra totem/delivery (auto-confirmados),
     // dispatch acontece no PATCH ou no /api/pub/pedidos diretamente.
+
+    if (!result.acumulado) {
+      recordPedido(body.tipo ?? "balcao", "api");
+    }
 
     return created(result);
   } catch (err) {

@@ -15,6 +15,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Sparkles, X, ChevronRight, Check, ArrowLeft,
   Building2, FolderOpen, Package, PartyPopper, Loader2,
+  Clock, QrCode, MapPin, SkipForward,
 } from "lucide-react";
 import { alertar } from "@/components/ui/ConfirmModal";
 
@@ -43,9 +44,26 @@ interface FormProduto {
   categoria_id: string;
 }
 
-type Step = "welcome" | "dados" | "categoria" | "produto" | "conclusao";
+interface FormHorario {
+  abertura:  string;     // HH:MM
+  fechamento: string;
+}
 
-const STEPS_ORDER: Step[] = ["welcome", "dados", "categoria", "produto", "conclusao"];
+interface FormPix {
+  pix_chave:  string;
+  pix_tipo:   "cpf" | "cnpj" | "email" | "telefone" | "aleatoria" | "";
+}
+
+interface FormMesa {
+  numero:     string;
+  capacidade: string;
+}
+
+type Step = "welcome" | "dados" | "horario" | "categoria" | "produto" | "pix" | "mesa" | "conclusao";
+
+const STEPS_ORDER: Step[] = [
+  "welcome", "dados", "horario", "categoria", "produto", "pix", "mesa", "conclusao",
+];
 
 function getToken() { return localStorage.getItem("access_token") ?? ""; }
 function authHeader(): HeadersInit {
@@ -69,6 +87,9 @@ export function WizardOnboardingModal({ openOverride, onClose }: {
   const [produto, setProduto]     = useState<FormProduto>({
     nome: "", preco: "", categoria_id: "",
   });
+  const [horario, setHorario] = useState<FormHorario>({ abertura: "11:00", fechamento: "23:00" });
+  const [pix, setPix]         = useState<FormPix>({ pix_chave: "", pix_tipo: "" });
+  const [mesa, setMesa]       = useState<FormMesa>({ numero: "1", capacidade: "4" });
 
   // ── Auto-trigger: empresa sem produtos + não dismissed ─────────────────────
   useEffect(() => {
@@ -204,6 +225,70 @@ export function WizardOnboardingModal({ openOverride, onClose }: {
     } finally { setBusy(false); }
   }, [produto]);
 
+  // Horário (PATCH config)
+  const salvarHorario = useCallback(async () => {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/painel/config", {
+        method: "PATCH", headers: authHeader(),
+        body: JSON.stringify({
+          horario_abertura:   horario.abertura || null,
+          horario_fechamento: horario.fechamento || null,
+        }),
+      });
+      const d = await r.json();
+      if (d.success) next();
+      else await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "", tipo: "perigo" });
+    } finally { setBusy(false); }
+  }, [horario]);
+
+  // PIX (PATCH config — pix_chave + pix_tipo são campos diretos da empresa)
+  const salvarPix = useCallback(async () => {
+    if (!pix.pix_chave.trim()) { next(); return; } // opcional
+    if (!pix.pix_tipo) {
+      await alertar({ titulo: "Tipo PIX obrigatório", mensagem: "Escolha CPF/CNPJ/email/telefone/aleatória", tipo: "alerta" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/painel/config", {
+        method: "PATCH", headers: authHeader(),
+        body: JSON.stringify({
+          pix_chave: pix.pix_chave.trim(),
+          pix_tipo:  pix.pix_tipo,
+        }),
+      });
+      const d = await r.json();
+      if (d.success) next();
+      else await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "", tipo: "perigo" });
+    } finally { setBusy(false); }
+  }, [pix]);
+
+  // Mesa (POST mesas)
+  const salvarMesa = useCallback(async () => {
+    if (!mesa.numero.trim()) { next(); return; } // opcional
+    const numeroNum = parseInt(mesa.numero, 10);
+    const capNum    = parseInt(mesa.capacidade, 10);
+    if (!Number.isFinite(numeroNum) || numeroNum < 1) {
+      await alertar({ titulo: "Número inválido", mensagem: "Use um número inteiro >= 1", tipo: "alerta" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/painel/mesas", {
+        method: "POST", headers: authHeader(),
+        body: JSON.stringify({
+          numero:     numeroNum,
+          capacidade: Number.isFinite(capNum) ? capNum : 4,
+          ativa:      true,
+        }),
+      });
+      const d = await r.json();
+      if (d.success) next();
+      else await alertar({ titulo: "Falha ao criar mesa", mensagem: d.error?.message ?? "", tipo: "perigo" });
+    } finally { setBusy(false); }
+  }, [mesa]);
+
   if (!open) return null;
 
   return (
@@ -250,14 +335,112 @@ export function WizardOnboardingModal({ openOverride, onClose }: {
               </div>
               <h3 className="text-lg font-bold text-white">Bem-vindo!</h3>
               <p className="text-sm text-slate-400 leading-relaxed">
-                Vamos configurar sua empresa em <strong className="text-white">menos de 2 minutos</strong>:
-                dados básicos, primeira categoria e primeiro produto. Você pode editar tudo depois.
+                Vamos configurar sua empresa em <strong className="text-white">menos de 5 minutos</strong>.
+                Pode pular qualquer passo e voltar depois.
               </p>
               <ul className="text-left text-xs text-slate-400 space-y-1 max-w-xs mx-auto pt-2">
                 <li className="flex items-center gap-2"><Building2 className="h-3.5 w-3.5 text-emerald-400" /> Dados da empresa</li>
+                <li className="flex items-center gap-2"><Clock className="h-3.5 w-3.5 text-emerald-400" /> Horário de funcionamento</li>
                 <li className="flex items-center gap-2"><FolderOpen className="h-3.5 w-3.5 text-emerald-400" /> Primeira categoria</li>
                 <li className="flex items-center gap-2"><Package className="h-3.5 w-3.5 text-emerald-400" /> Primeiro produto</li>
+                <li className="flex items-center gap-2"><QrCode className="h-3.5 w-3.5 text-emerald-400" /> Chave PIX (opcional)</li>
+                <li className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-emerald-400" /> Primeira mesa (opcional)</li>
               </ul>
+            </div>
+          )}
+
+          {step === "horario" && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <Clock className="h-5 w-5" />
+                <h3 className="font-bold text-white">Horário de funcionamento</h3>
+              </div>
+              <p className="text-xs text-slate-400">
+                Quando o restaurante atende. Cardápio público mostra &quot;fechado&quot; fora desse horário.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-400 mb-1 block">Abertura *</span>
+                  <input type="time" value={horario.abertura}
+                    onChange={e => setHorario({ ...horario, abertura: e.target.value })}
+                    className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white" />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-400 mb-1 block">Fechamento *</span>
+                  <input type="time" value={horario.fechamento}
+                    onChange={e => setHorario({ ...horario, fechamento: e.target.value })}
+                    className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white" />
+                </label>
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Ajuste dias e múltiplos turnos depois em <strong>Configurações</strong>.
+              </p>
+            </div>
+          )}
+
+          {step === "pix" && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <QrCode className="h-5 w-5" />
+                <h3 className="font-bold text-white">Chave PIX (opcional)</h3>
+              </div>
+              <p className="text-xs text-slate-400">
+                PIX direto pra cliente pagar. Você também pode configurar
+                gateways completos (Mercado Pago, etc) depois em <strong>Gateways</strong>.
+              </p>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-400 mb-1 block">Tipo da chave</span>
+                <select value={pix.pix_tipo}
+                  onChange={e => setPix({ ...pix, pix_tipo: e.target.value as FormPix["pix_tipo"] })}
+                  className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white">
+                  <option value="">— escolha —</option>
+                  <option value="cpf">CPF</option>
+                  <option value="cnpj">CNPJ</option>
+                  <option value="email">E-mail</option>
+                  <option value="telefone">Telefone</option>
+                  <option value="aleatoria">Aleatória</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-400 mb-1 block">Chave PIX</span>
+                <input type="text" value={pix.pix_chave}
+                  onChange={e => setPix({ ...pix, pix_chave: e.target.value })}
+                  placeholder="Ex: 11999999999, contato@empresa.com, CNPJ..."
+                  className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white" />
+              </label>
+              <p className="text-[10px] text-slate-500">
+                Vazio = pular este passo. Cliente verá só os outros métodos disponíveis.
+              </p>
+            </div>
+          )}
+
+          {step === "mesa" && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <MapPin className="h-5 w-5" />
+                <h3 className="font-bold text-white">Primeira mesa (opcional)</h3>
+              </div>
+              <p className="text-xs text-slate-400">
+                Cadastra mesa #1 já com QR code pronto pra colar.
+                Adicione mais em <strong>Mesas</strong>.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-400 mb-1 block">Número da mesa</span>
+                  <input type="number" min="1" value={mesa.numero}
+                    onChange={e => setMesa({ ...mesa, numero: e.target.value })}
+                    className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white" />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-400 mb-1 block">Capacidade</span>
+                  <input type="number" min="1" value={mesa.capacidade}
+                    onChange={e => setMesa({ ...mesa, capacidade: e.target.value })}
+                    className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white" />
+                </label>
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Pra delivery only ou totem, deixe número vazio (pula).
+              </p>
             </div>
           )}
 
@@ -416,6 +599,19 @@ export function WizardOnboardingModal({ openOverride, onClose }: {
               Continuar
             </button>
           )}
+          {step === "horario" && (
+            <>
+              <button onClick={next}
+                className="flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400 hover:bg-white/5">
+                <SkipForward className="h-3.5 w-3.5" /> Pular
+              </button>
+              <button onClick={salvarHorario} disabled={busy}
+                className="flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-2 text-sm font-bold text-white disabled:opacity-50">
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
+                Salvar
+              </button>
+            </>
+          )}
           {step === "categoria" && (
             <button onClick={salvarCategoria} disabled={busy}
               className="flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-2 text-sm font-bold text-white disabled:opacity-50">
@@ -429,6 +625,32 @@ export function WizardOnboardingModal({ openOverride, onClose }: {
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
               Criar produto
             </button>
+          )}
+          {step === "pix" && (
+            <>
+              <button onClick={next}
+                className="flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400 hover:bg-white/5">
+                <SkipForward className="h-3.5 w-3.5" /> Pular
+              </button>
+              <button onClick={salvarPix} disabled={busy}
+                className="flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-2 text-sm font-bold text-white disabled:opacity-50">
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
+                Salvar PIX
+              </button>
+            </>
+          )}
+          {step === "mesa" && (
+            <>
+              <button onClick={next}
+                className="flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400 hover:bg-white/5">
+                <SkipForward className="h-3.5 w-3.5" /> Pular
+              </button>
+              <button onClick={salvarMesa} disabled={busy}
+                className="flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-2 text-sm font-bold text-white disabled:opacity-50">
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
+                Criar mesa
+              </button>
+            </>
           )}
           {step === "conclusao" && (
             <button onClick={() => fechar(true)}

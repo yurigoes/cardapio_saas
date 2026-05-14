@@ -38,6 +38,27 @@ export const WEBHOOK_RATE_LIMIT: RateLimitConfig = {
   keyPrefix: "rl:webhook",
 };
 
+// Pedidos públicos (cardápio): anti-DoS — alguém spammando POST
+export const PUB_PEDIDO_RATE_LIMIT: RateLimitConfig = {
+  windowMs:  60_000,
+  max:       parseInt(process.env.RATE_LIMIT_PUB_PEDIDO || "20"),
+  keyPrefix: "rl:pub-pedido",
+};
+
+// Recuperação de senha: anti-spam de envio de SMS/email
+export const RECUPERAR_RATE_LIMIT: RateLimitConfig = {
+  windowMs:  300_000,    // 5 min
+  max:       parseInt(process.env.RATE_LIMIT_RECUPERAR || "5"),
+  keyPrefix: "rl:recuperar",
+};
+
+// 2FA setup: tentativa de força bruta no código
+export const SENSIBLE_RATE_LIMIT: RateLimitConfig = {
+  windowMs:  60_000,
+  max:       parseInt(process.env.RATE_LIMIT_SENSIBLE || "10"),
+  keyPrefix: "rl:sensible",
+};
+
 function getClientIp(req: NextRequest): string {
   return (
     req.headers.get("x-real-ip") ||

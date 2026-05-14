@@ -12,7 +12,8 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { query } from "@/lib/db/client";
-import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
+import { ok, forbidden, badRequest, serverError, tooManyRequests } from "@/lib/utils/response";
+import { checkRateLimitByRequest, SENSIBLE_RATE_LIMIT } from "@/lib/security/rate-limit";
 import {
   verificarCodigo, cifrarSecret,
   gerarRecoveryCodes, salvarRecoveryCodes,
@@ -26,6 +27,10 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
+
+  // Anti-bruteforce no código TOTP
+  const rl = await checkRateLimitByRequest(req, SENSIBLE_RATE_LIMIT);
+  if (!rl.success) return tooManyRequests(rl);
 
   let body: z.infer<typeof schema>;
   try { body = schema.parse(await req.json()); }

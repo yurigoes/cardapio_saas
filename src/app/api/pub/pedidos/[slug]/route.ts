@@ -8,7 +8,9 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { queryOne, transaction } from "@/lib/db/client";
-import { ok, notFound, badRequest, serverError } from "@/lib/utils/response";
+import { ok, notFound, badRequest, serverError, tooManyRequests } from "@/lib/utils/response";
+import { checkRateLimitByRequest, PUB_PEDIDO_RATE_LIMIT } from "@/lib/security/rate-limit";
+import { recordPedido } from "@/lib/observability/metrics";
 import { EMPRESA_OPERACIONAL_SQL } from "@/lib/billing/empresa-acesso";
 import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
@@ -103,6 +105,10 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { slug: string } }
 ) {
+  // Rate limit por IP — anti-DoS no cardápio público
+  const rl = await checkRateLimitByRequest(req, PUB_PEDIDO_RATE_LIMIT);
+  if (!rl.success) return tooManyRequests(rl);
+
   // Parse body
   let body: z.output<typeof pedidoPublicoSchema>;
   try {

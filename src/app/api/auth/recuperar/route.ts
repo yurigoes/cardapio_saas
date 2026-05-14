@@ -13,8 +13,9 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { query, queryOne } from "@/lib/db/client";
-import { ok, badRequest, serverError } from "@/lib/utils/response";
+import { ok, badRequest, serverError, tooManyRequests } from "@/lib/utils/response";
 import { getClientIp } from "@/lib/auth/middleware";
+import { checkRateLimitByRequest, RECUPERAR_RATE_LIMIT } from "@/lib/security/rate-limit";
 import bcrypt from "bcryptjs";
 import { enfileirar as enfileirarEmail, smtpAtivo } from "@/lib/email/smtp";
 import { notificarEvolution } from "@/lib/notify/evolution";
@@ -33,6 +34,10 @@ function ehEmail(s: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit por IP — anti-spam de envio (5 por 5min default)
+  const rl = await checkRateLimitByRequest(req, RECUPERAR_RATE_LIMIT);
+  if (!rl.success) return tooManyRequests(rl);
+
   let body: z.infer<typeof schema>;
   try { body = schema.parse(await req.json()); }
   catch (err) { return badRequest(err instanceof Error ? err.message : "Body inválido"); }
