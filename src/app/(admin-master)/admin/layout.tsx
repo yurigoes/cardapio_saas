@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Building2, Users, Package, CreditCard,
   BarChart3, Settings, LogOut, ChefHat, Bell, Shield, FileText, Webhook,
   Image as ImageIcon, TrendingUp, Bug, Server, AlertTriangle, ScrollText,
-  Mail, ShieldCheck, Wrench,
+  Mail, ShieldCheck, Wrench, Receipt,
 } from "lucide-react";
 import { VersaoFooter } from "@/components/VersaoFooter";
 import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
@@ -24,6 +24,8 @@ const NAV: NavGroup[] = [
     { href: "/admin/usuarios",  label: "Usuários",   icon: Users },
     { href: "/admin/planos",    label: "Planos",     icon: Package },
     { href: "/admin/financeiro",label: "Financeiro", icon: CreditCard },
+    { href: "/admin/financeiro/mensalidades", label: "Mensalidades", icon: Receipt },
+    { href: "/admin/billing",   label: "Mercado Pago", icon: CreditCard },
     { href: "/admin/relatorios",label: "Relatórios", icon: BarChart3 },
     { href: "/admin/metricas",  label: "Métricas",   icon: TrendingUp },
   ]},

@@ -40,6 +40,7 @@ const ALL_NAV = [
   { href: "/painel/kiosk",      label: "Painéis kiosk", icon: Tv2,           modulo: null         },
   { href: "/painel/caixa",       label: "Caixa",       icon: Wallet,          modulo: "financeiro" },
   { href: "/painel/financeiro",  label: "Financeiro",  icon: DollarSign,      modulo: "financeiro" },
+  { href: "/painel/financeiro/mensalidades", label: "Mensalidades", icon: DollarSign, modulo: null },
   { href: "/painel/estoque",     label: "Estoque",     icon: Package,         modulo: "estoque"    },
   { href: "/painel/cupons",      label: "Cupons",      icon: Tag,             modulo: "cupom"      },
   { href: "/painel/clientes",    label: "Clientes",    icon: Users,           modulo: "crm"        },

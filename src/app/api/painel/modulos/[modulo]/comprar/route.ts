@@ -46,7 +46,8 @@ export async function POST(
     let checkoutUrl: string | null = null;
     let avisoMP: string | null = null;
 
-    if (process.env.MERCADOPAGO_ACCESS_TOKEN) {
+    // Tenta MP — se DB tem token (saas_billing_config) OU env, vai funcionar
+    {
       const branding = await getSaasBranding();
       try {
         const pref = await criarPreferencia({
@@ -75,13 +76,11 @@ export async function POST(
           [`mp:pref:${pref.id}`, compra.id]
         );
 
-        checkoutUrl = isSandbox() ? pref.sandbox_init_point : pref.init_point;
+        checkoutUrl = (await isSandbox()) ? pref.sandbox_init_point : pref.init_point;
       } catch (e) {
         console.error("[modulos/comprar] MP falhou:", e);
-        avisoMP = "Mercado Pago indisponível no momento — pagamento pendente. Tente novamente em alguns minutos.";
+        avisoMP = "Gateway de pagamento indisponível — verifique config em /admin/billing ou tente em alguns minutos.";
       }
-    } else {
-      avisoMP = "Gateway de pagamento não configurado. Entraremos em contato pra processar.";
     }
 
     return ok({
