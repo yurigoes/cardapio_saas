@@ -49,6 +49,8 @@ const PUBLIC_ROUTES = [
   "/cadastro",
   "/termos",
   "/privacidade",
+  "/k/",
+  "/api/k/",
 ];
 
 // Rotas por role

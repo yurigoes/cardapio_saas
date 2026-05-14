@@ -160,7 +160,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         {/* Logo da empresa */}
         <div className="flex h-16 items-center gap-3 border-b border-white/5 px-4">
           {empresa?.logo_url ? (
-            <img src={empresa.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover" />
+            <img src={empresa.logo_url} alt="" className="h-8 w-8 rounded-lg object-contain" />
           ) : (
             <div
               className="flex h-8 w-8 items-center justify-center rounded-lg"
@@ -241,7 +241,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/5 bg-slate-950/80 px-6 backdrop-blur">
           <div className="flex items-center gap-2">
             {empresa?.logo_url ? (
-              <img src={empresa.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover" />
+              <img src={empresa.logo_url} alt="" className="h-8 w-8 rounded-lg object-contain" />
             ) : null}
             <span className="text-sm font-semibold text-white hidden sm:block">
               {empresa?.nome_fantasia}

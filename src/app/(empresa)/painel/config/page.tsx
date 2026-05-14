@@ -189,11 +189,12 @@ function ImageField({
     <div className="space-y-2">
       <Label>{label}</Label>
       {value && (
-        <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/10 bg-white/5">
+        <div className="relative w-full min-h-[8rem] max-h-48 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center p-3">
+          {/* object-contain preserva aspect ratio — sem cortar a logo */}
           <img
             src={value}
             alt={label}
-            className="h-full w-full object-cover"
+            className="max-h-40 max-w-full object-contain"
             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
           />
         </div>
