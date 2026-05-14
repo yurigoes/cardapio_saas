@@ -367,7 +367,6 @@ sudo bash install-systemd.sh`}</pre>
           <Btn icon={Cpu}   label="Status" onClick={() => exec("status",     {}, "Status do servidor")} busy={busy === "status"} />
           <Btn icon={HardDrive} label="Disco" onClick={() => exec("disk",     {}, "Espaço em disco")} busy={busy === "disk"} />
           <Btn icon={Server} label="Docker ps" onClick={() => exec("docker_ps",{}, "Containers")} busy={busy === "docker_ps"} />
-          <Btn icon={HardDrive} label="Discos detectados" onClick={() => exec("lista_discos",{}, "Discos físicos")} busy={busy === "lista_discos"} />
           <Btn icon={Activity} label="Speed test" onClick={() => exec("speedtest", {}, "Teste de internet")} busy={busy === "speedtest"} />
           <Btn icon={Database} label="Backup banco" onClick={() => exec("backup_db", {}, "Backup Postgres")} busy={busy === "backup_db"} />
           <Btn icon={Power} label="Restart app" variant="warning"

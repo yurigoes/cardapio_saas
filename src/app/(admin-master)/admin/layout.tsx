@@ -8,6 +8,7 @@ import {
   BarChart3, Settings, LogOut, ChefHat, Bell, Shield, FileText, Webhook,
   Image as ImageIcon, TrendingUp, Bug, Server, AlertTriangle, ScrollText,
 } from "lucide-react";
+import { VersaoFooter } from "@/components/VersaoFooter";
 
 type NavItem  = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
 type NavGroup = { titulo?: string; items: NavItem[] };
@@ -142,6 +143,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             Sair
           </button>
         </div>
+        <VersaoFooter mostrarVps />
       </aside>
 
       {/* Main */}

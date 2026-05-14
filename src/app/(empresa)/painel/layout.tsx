@@ -17,6 +17,7 @@ import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 import { ModuloLockedModal } from "@/components/painel/ModuloLockedModal";
 import { useModulos, type ModuloStatus } from "@/lib/hooks/useModulos";
 import { Lock } from "lucide-react";
+import { VersaoFooter } from "@/components/VersaoFooter";
 
 interface Empresa {
   nome_fantasia:  string;
@@ -244,6 +245,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
             Sair
           </button>
         </div>
+        <VersaoFooter />
       </aside>
 
       {/* Main */}
