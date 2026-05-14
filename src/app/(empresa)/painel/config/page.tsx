@@ -50,6 +50,8 @@ interface EmpresaConfig {
   totem_promo_texto:  string;
   totem_pos_destaque: "top" | "center" | "bottom";
   totem_atendimento:  string;
+  totem_tema:         "claro" | "escuro" | "auto";
+  totem_aceita_dinheiro: boolean;
 }
 
 type Tab = "identidade" | "contato" | "pagamentos" | "fidelidade" | "totem";
@@ -97,6 +99,8 @@ const DEFAULT_CONFIG: EmpresaConfig = {
   totem_promo_texto:  "",
   totem_pos_destaque: "center" as const,
   totem_atendimento:  "",
+  totem_tema:         "escuro" as const,
+  totem_aceita_dinheiro: false,
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -1138,6 +1142,32 @@ export default function ConfigPage() {
                     <option value="center">Centro</option>
                     <option value="bottom">Rodapé</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Tema visual do totem</label>
+                  <select
+                    value={form.totem_tema}
+                    onChange={e => setForm(f => ({ ...f, totem_tema: e.target.value as "claro" | "escuro" | "auto" }))}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:border-amber-500/50 focus:outline-none"
+                  >
+                    <option value="escuro">Escuro (default)</option>
+                    <option value="claro">Claro</option>
+                    <option value="auto">Auto (segue sistema)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pt-6">
+                    <input
+                      type="checkbox"
+                      checked={form.totem_aceita_dinheiro}
+                      onChange={e => setForm(f => ({ ...f, totem_aceita_dinheiro: e.target.checked }))}
+                      className="accent-emerald-500"
+                    />
+                    Totem aceita pagamento em dinheiro
+                  </label>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Desligado = totem só aceita PIX/cartão (recomendado pra evitar troco no totem).
+                  </p>
                 </div>
               </div>
 

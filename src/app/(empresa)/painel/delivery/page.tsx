@@ -6,6 +6,7 @@ import {
   Bike, MapPin, Plus, Trash2, Edit2, X,
   Phone, Car, ToggleLeft, ToggleRight, AlertCircle,
 } from "lucide-react";
+import { PedidosAndamento } from "@/components/delivery/PedidosAndamento";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -270,6 +271,9 @@ export default function DeliveryPage() {
           Configuração em breve — os endpoints de delivery ainda não estão disponíveis.
         </div>
       )}
+
+      {/* Pedidos em andamento (auto-refresh 15s) */}
+      <PedidosAndamento />
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1 w-fit">

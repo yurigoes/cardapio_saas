@@ -2512,7 +2512,14 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
+    <div
+      data-totem-tema={(empresa as { totem_tema?: string })?.totem_tema ?? "escuro"}
+      className={`relative min-h-screen overflow-hidden ${
+        (empresa as { totem_tema?: string })?.totem_tema === "claro"
+          ? "bg-slate-50 text-slate-900"
+          : "bg-slate-950 text-white"
+      }`}
+    >
 
       {/* ── Caixa fechado (só se exigido e for tipo presencial) ─────────── */}
       {empresa?.caixa_obrigatorio && empresa?.caixa_aberto === false && fase !== "start" && (

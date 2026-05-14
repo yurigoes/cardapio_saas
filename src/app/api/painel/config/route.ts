@@ -32,6 +32,9 @@ export async function GET(req: NextRequest) {
          totem_bg_video_url, totem_bg_image_url, totem_cta_text, totem_slogan,
          totem_logo_url, totem_cor_destaque, totem_promo_texto,
          totem_pos_destaque, totem_atendimento,
+         COALESCE(totem_tema, 'escuro') AS totem_tema,
+         COALESCE(totem_aceita_dinheiro, false) AS totem_aceita_dinheiro,
+         COALESCE(delivery_aceita_fora_zona, false) AS delivery_aceita_fora_zona,
          evolution_url, evolution_key, evolution_eventos,
          n8n_url, n8n_token, n8n_eventos,
          modulos_ativos, status
@@ -72,6 +75,7 @@ export async function PATCH(req: NextRequest) {
     "totem_bg_video_url", "totem_bg_image_url", "totem_cta_text", "totem_slogan",
     "totem_logo_url", "totem_cor_destaque", "totem_promo_texto",
     "totem_pos_destaque", "totem_atendimento",
+    "totem_tema", "totem_aceita_dinheiro", "delivery_aceita_fora_zona",
     "evolution_url", "evolution_key", "evolution_eventos",
     "n8n_url", "n8n_token", "n8n_eventos",
   ];

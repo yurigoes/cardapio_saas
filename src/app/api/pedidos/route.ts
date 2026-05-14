@@ -123,6 +123,23 @@ export async function POST(req: NextRequest) {
     return badRequest(err instanceof Error ? err.message : "Dados inválidos");
   }
 
+  // Caixa obrigatório? Bloqueia balcão/mesa se não tiver caixa aberto
+  if (body.tipo === "balcao" || body.tipo === "mesa") {
+    const empresaCfg = await queryOne<{ caixa_obrigatorio: boolean }>(
+      `SELECT COALESCE(caixa_obrigatorio, false) AS caixa_obrigatorio FROM empresas WHERE id = $1`,
+      [empresaId]
+    );
+    if (empresaCfg?.caixa_obrigatorio) {
+      const caixa = await queryOne<{ id: string }>(
+        `SELECT id FROM caixas WHERE empresa_id = $1 AND status = 'aberto' LIMIT 1`,
+        [empresaId]
+      );
+      if (!caixa) {
+        return badRequest("Caixa fechado. Abra o caixa antes de registrar vendas.");
+      }
+    }
+  }
+
   // Verifica módulo necessário
   try {
     const moduloMap: Record<string, string> = {
