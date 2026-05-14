@@ -4,7 +4,6 @@
  * Devolve só dados não-sensíveis (logo + nome + canais públicos).
  */
 import { queryOne } from "@/lib/db/client";
-import { ok } from "@/lib/utils/response";
 import { NextResponse } from "next/server";
 
 const DEFAULT = {
@@ -14,18 +13,24 @@ const DEFAULT = {
   site:     null as string | null,
 };
 
+const HEADERS = {
+  "Cache-Control": "no-store, max-age=0, must-revalidate",
+  "Pragma":        "no-cache",
+};
+
 export async function GET() {
   try {
     const r = await queryOne<{ valor: { nome?: string; logo_url?: string | null; whatsapp?: string | null; site?: string | null } }>(
       `SELECT valor FROM settings WHERE chave = 'saas_branding'`
     );
-    return ok({
+    const data = {
       nome:     r?.valor?.nome     ?? DEFAULT.nome,
       logo_url: r?.valor?.logo_url ?? null,
       whatsapp: r?.valor?.whatsapp ?? null,
       site:     r?.valor?.site     ?? null,
-    });
+    };
+    return NextResponse.json({ success: true, data }, { headers: HEADERS });
   } catch {
-    return NextResponse.json({ success: true, data: DEFAULT });
+    return NextResponse.json({ success: true, data: DEFAULT }, { headers: HEADERS });
   }
 }

@@ -164,21 +164,27 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         {/* Logo da empresa */}
         <div className="flex h-16 items-center gap-3 border-b border-white/5 px-4">
           {empresa?.logo_url ? (
-            <img src={empresa.logo_url} alt="" className="max-h-10 max-w-[7rem] object-contain" />
+            // Tem logo: mostra só ela (sem nome ao lado, logo já identifica)
+            <img src={empresa.logo_url} alt={empresa.nome_fantasia}
+              title={empresa.nome_fantasia}
+              className="max-h-12 max-w-full object-contain" />
           ) : (
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ background: "var(--color-primary-15, rgba(16,185,129,0.12))" }}
-            >
-              <ChefHat
-                className="h-4 w-4"
-                style={{ color: "var(--color-primary, #10b981)" }}
-              />
-            </div>
+            // Sem logo: ícone genérico + nome
+            <>
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
+                style={{ background: "var(--color-primary-15, rgba(16,185,129,0.12))" }}
+              >
+                <ChefHat
+                  className="h-4 w-4"
+                  style={{ color: "var(--color-primary, #10b981)" }}
+                />
+              </div>
+              <p className="truncate text-sm font-semibold">
+                {empresa?.nome_fantasia || "Empresa"}
+              </p>
+            </>
           )}
-          <p className="truncate text-sm font-semibold">
-            {empresa?.nome_fantasia || "Empresa"}
-          </p>
         </div>
 
         {/* Nav */}
@@ -248,19 +254,22 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
             {saasBranding.logo_url ? (
               <img src={saasBranding.logo_url} alt={saasBranding.nome}
                 title={saasBranding.nome}
-                className="max-h-8 object-contain" />
+                className="max-h-10 max-w-[8rem] object-contain" />
             ) : (
               <span className="text-xs font-semibold text-emerald-400">{saasBranding.nome}</span>
             )}
             {/* Linha vertical separadora */}
-            <span className="h-8 w-px bg-white/10" />
-            {/* Logo da empresa */}
+            <span className="h-10 w-px bg-white/10" />
+            {/* Logo da empresa (sem nome ao lado — a logo já identifica) */}
             {empresa?.logo_url ? (
-              <img src={empresa.logo_url} alt="" className="max-h-8 object-contain" />
-            ) : null}
-            <span className="text-sm font-semibold text-white hidden sm:block">
-              {empresa?.nome_fantasia}
-            </span>
+              <img src={empresa.logo_url} alt={empresa.nome_fantasia}
+                title={empresa.nome_fantasia}
+                className="max-h-10 max-w-[8rem] object-contain" />
+            ) : (
+              <span className="text-sm font-semibold text-white">
+                {empresa?.nome_fantasia}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <PrintAgentStatus />

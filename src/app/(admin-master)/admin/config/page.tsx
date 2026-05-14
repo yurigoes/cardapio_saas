@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Settings, Server, MessageCircle, Database, GitBranch, Shield, ExternalLink, Zap, Save, Loader2, ImageIcon } from "lucide-react";
+import { invalidarSaasBrandingCache } from "@/lib/hooks/useSaasBranding";
 
 interface SaasBranding {
   nome: string; logo_url: string | null;
@@ -80,11 +81,15 @@ export default function AdminConfigPage() {
         body: JSON.stringify(branding),
       });
       const d = await r.json();
-      if (d.success) { setBranding(d.data); setMsg("✓ Salvo"); }
+      if (d.success) {
+        setBranding(d.data);
+        invalidarSaasBrandingCache(); // força refetch nas próximas páginas
+        setMsg("✓ Salvo. Recarregue (F5) outras abas pra ver a nova logo.");
+      }
       else setMsg(d.error?.message ?? "Falha");
     } finally {
       setSalvando(false);
-      setTimeout(() => setMsg(null), 3000);
+      setTimeout(() => setMsg(null), 5000);
     }
   }
 
