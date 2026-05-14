@@ -78,18 +78,26 @@ export function FecharContaModal({ pedido, open, onClose, onClosed, authToken }:
   }
 
   async function imprimir() {
+    // Pra delivery: envia conta via WhatsApp (não imprime)
+    // Pra mesa/balcão: imprime no caixa via agente local
+    const ehDelivery = pedido.tipo === "delivery";
+    const url = ehDelivery
+      ? `/api/painel/pedidos/${pedido.id}/enviar-conta`
+      : `/api/painel/pedidos/${pedido.id}/imprimir`;
     try {
-      const r = await fetch(`/api/painel/pedidos/${pedido.id}/imprimir`, {
+      const r = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ tipo: "cliente" }),
+        body: JSON.stringify(ehDelivery ? {} : { tipo: "cliente" }),
       });
       const d = await r.json();
       if (!d.success) {
-        alert(d.error?.message ?? "Falha ao enviar pra impressora");
+        alert(d.error?.message ?? (ehDelivery ? "Falha ao enviar WhatsApp" : "Falha ao enviar pra impressora"));
+      } else if (ehDelivery) {
+        alert(d.data.mensagem ?? "Conta enviada pelo WhatsApp do cliente");
       }
     } catch (e) {
-      alert("Falha de rede ao imprimir");
+      alert("Falha de rede");
     }
   }
 
@@ -249,7 +257,7 @@ export function FecharContaModal({ pedido, open, onClose, onClosed, authToken }:
             className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/10 transition"
           >
             <Printer className="h-4 w-4" />
-            Imprimir conta
+            {pedido.tipo === "delivery" ? "Enviar conta WhatsApp" : "Imprimir conta"}
           </button>
           <button
             onClick={onClose}
