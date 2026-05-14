@@ -100,3 +100,127 @@ export function formatarCupomCliente(empresa: string, p: PedidoCupom): string {
   out.push("");
   return out.join("\n");
 }
+
+// ─── Cupom de fechamento de caixa ──────────────────────────────
+interface FechamentoCaixa {
+  empresa:           string;
+  operador_abertura: string | null;
+  operador_fechamento: string | null;
+  aberto_em:         string;
+  fechado_em:        string;
+  valor_abertura:    number | string;
+  valor_esperado:    number | string;
+  valor_fechamento:  number | string;
+  diferenca:         number | string;
+  reforcos:          number | string;
+  sangrias:          number | string;
+  esperados_por_forma:  Record<string, number>;
+  informados_por_forma: Record<string, number> | null;
+  diferencas_por_forma: Record<string, number> | null;
+}
+
+const FORMA_LABEL: Record<string, string> = {
+  pix: "PIX", dinheiro: "Dinheiro", credito: "Crédito",
+  debito: "Débito", vale: "Vale", outro: "Outro",
+};
+
+export function formatarFechamentoCaixa(c: FechamentoCaixa): string {
+  const out: string[] = [];
+  out.push(center(c.empresa.toUpperCase()));
+  out.push(line("="));
+  out.push(center("FECHAMENTO DE CAIXA"));
+  out.push("");
+  out.push(`Aberto em:    ${new Date(c.aberto_em).toLocaleString("pt-BR")}`);
+  out.push(`Operador:     ${c.operador_abertura ?? "—"}`);
+  out.push(`Fechado em:   ${new Date(c.fechado_em).toLocaleString("pt-BR")}`);
+  out.push(`Operador:     ${c.operador_fechamento ?? "—"}`);
+  out.push(line());
+
+  out.push(row("Abertura",    brl(c.valor_abertura)));
+  if (Number(c.reforcos) > 0) out.push(row("Reforços (+)", brl(c.reforcos)));
+  if (Number(c.sangrias) > 0) out.push(row("Sangrias (-)", brl(c.sangrias)));
+  out.push(line());
+  out.push(center("VENDAS POR FORMA"));
+  for (const [k, v] of Object.entries(c.esperados_por_forma)) {
+    if (v > 0) out.push(row(FORMA_LABEL[k] ?? k, brl(v)));
+  }
+  out.push(line("="));
+  out.push(row("ESPERADO",    brl(c.valor_esperado)));
+  out.push(row("CONFERIDO",   brl(c.valor_fechamento)));
+  const dif = Number(c.diferenca);
+  if (dif !== 0) {
+    out.push(row(dif > 0 ? "SOBRA" : "FALTA", brl(Math.abs(dif))));
+  }
+
+  if (c.diferencas_por_forma) {
+    out.push("");
+    out.push(center("DIFERENÇAS"));
+    for (const [k, v] of Object.entries(c.diferencas_por_forma)) {
+      if (v !== 0) out.push(row(FORMA_LABEL[k] ?? k, brl(v)));
+    }
+  }
+
+  out.push("");
+  out.push("");
+  out.push("");
+  return out.join("\n");
+}
+
+// ─── Cupom de motoboy ──────────────────────────────────────────
+interface MotoboyCorrida {
+  pedido_numero: number | null;
+  cliente_nome:  string | null;
+  endereco:      string | null;
+  taxa_entrega:  number | string;
+  total_pedido:  number | string;
+  status:        string;
+  hora:          string;
+}
+interface MotoboyResumo {
+  empresa:        string;
+  motoboy_nome:   string;
+  data:           string;
+  total_corridas: number;
+  total_taxas:    number | string;
+  corridas:       MotoboyCorrida[];
+}
+
+export function formatarCupomMotoboySintetico(r: MotoboyResumo): string {
+  const out: string[] = [];
+  out.push(center(r.empresa.toUpperCase()));
+  out.push(line("="));
+  out.push(center("RESUMO MOTOBOY"));
+  out.push(`Motoboy: ${r.motoboy_nome}`);
+  out.push(`Data:    ${r.data}`);
+  out.push(line());
+  out.push(row("Total corridas",  String(r.total_corridas)));
+  out.push(row("Total taxas",     brl(r.total_taxas)));
+  out.push("");
+  out.push("");
+  return out.join("\n");
+}
+
+export function formatarCupomMotoboyAnalitico(r: MotoboyResumo): string {
+  const out: string[] = [];
+  out.push(center(r.empresa.toUpperCase()));
+  out.push(line("="));
+  out.push(center("DETALHE DE CORRIDAS"));
+  out.push(`Motoboy: ${r.motoboy_nome}`);
+  out.push(`Data:    ${r.data}`);
+  out.push(line());
+  for (const c of r.corridas) {
+    out.push(`#${c.pedido_numero ?? "?"} ${c.hora}`);
+    if (c.cliente_nome) out.push(`  ${c.cliente_nome}`);
+    if (c.endereco)     out.push(`  ${c.endereco}`.slice(0, W));
+    out.push(row(`  Taxa`, brl(c.taxa_entrega)));
+    out.push(row(`  Total`, brl(c.total_pedido)));
+    out.push("");
+  }
+  out.push(line("="));
+  out.push(row("TOTAL TAXAS", brl(r.total_taxas)));
+  out.push(row("CORRIDAS",    String(r.total_corridas)));
+  out.push("");
+  out.push("");
+  return out.join("\n");
+}
+

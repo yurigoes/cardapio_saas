@@ -11,9 +11,10 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
-import { transaction } from "@/lib/db/client";
+import { transaction, query } from "@/lib/db/client";
 import { temPermissao } from "@/lib/auth/rbac";
 import { ok, badRequest, notFound, forbidden, serverError } from "@/lib/utils/response";
+import { dispatchFechamentoCaixa, dispatchRelatorioMotoboy } from "@/lib/print/dispatch";
 
 // Compat: aceita o body antigo (apenas valor_fechamento total) E o novo
 // (valores_informados por forma de pagamento — fechamento detalhado).
@@ -170,6 +171,24 @@ export async function POST(
         default:               return serverError(result.message);
       }
     }
+
+    // Dispara cupom de fechamento (best-effort, não bloqueia)
+    dispatchFechamentoCaixa(empresaId, params.id)
+      .catch(e => console.warn("[Caixa/Fechar] cupom:", e));
+
+    // Pra cada motoboy que entregou hoje, gera cupom sintético
+    const dataLocal = new Date().toISOString().slice(0, 10);
+    query<{ motoboy_id: string }>(
+      `SELECT DISTINCT motoboy_id FROM pedidos
+        WHERE empresa_id = $1 AND motoboy_id IS NOT NULL
+          AND DATE(created_at AT TIME ZONE 'America/Bahia') = $2::date`,
+      [empresaId, dataLocal]
+    ).then(motoboys => {
+      for (const m of motoboys) {
+        dispatchRelatorioMotoboy(empresaId, m.motoboy_id, dataLocal, "sintetico")
+          .catch(e => console.warn("[Caixa/Fechar] motoboy", m.motoboy_id, e));
+      }
+    }).catch(() => {});
 
     return ok(result);
   } catch (err) {

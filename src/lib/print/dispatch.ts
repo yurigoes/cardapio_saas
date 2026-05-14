@@ -5,7 +5,10 @@
  */
 import { query, queryOne } from "@/lib/db/client";
 import { enqueuePrint } from "@/lib/print/queue";
-import { formatarCozinha, formatarCupomCliente } from "@/lib/print/formatadores";
+import {
+  formatarCozinha, formatarCupomCliente,
+  formatarFechamentoCaixa, formatarCupomMotoboySintetico, formatarCupomMotoboyAnalitico,
+} from "@/lib/print/formatadores";
 
 interface PedidoRow {
   id: string;
@@ -125,3 +128,144 @@ export async function dispatchCupomCliente(
     console.warn("[print/dispatch/cliente]", (err as Error).message);
   }
 }
+
+/**
+ * Cupom de fechamento de caixa — imprime no setor 'caixa'.
+ */
+export async function dispatchFechamentoCaixa(empresaId: string, caixaId: string): Promise<void> {
+  try {
+    const c = await queryOne<{
+      empresa_nome: string;
+      operador_abertura: string | null;
+      operador_fechamento: string | null;
+      aberto_em: string;
+      fechado_em: string;
+      valor_abertura: string;
+      valor_esperado: string;
+      valor_fechamento: string;
+      diferenca: string;
+      valores_esperados: Record<string, number> | null;
+      valores_informados: Record<string, number> | null;
+      diferencas_por_forma: Record<string, number> | null;
+    }>(
+      `SELECT e.nome_fantasia AS empresa_nome,
+              ua.nome AS operador_abertura,
+              uf.nome AS operador_fechamento,
+              c.aberto_em, c.fechado_em,
+              c.valor_abertura, c.valor_esperado, c.valor_fechamento, c.diferenca,
+              c.valores_esperados, c.valores_informados, c.diferencas_por_forma
+         FROM caixas c
+         JOIN empresas e   ON e.id = c.empresa_id
+    LEFT JOIN usuarios ua  ON ua.id = c.usuario_abertura_id
+    LEFT JOIN usuarios uf  ON uf.id = c.usuario_fechamento_id
+        WHERE c.id = $1 AND c.empresa_id = $2`,
+      [caixaId, empresaId]
+    );
+    if (!c) return;
+
+    // Reforços/sangrias
+    const totals = await query<{ tipo: string; total: string }>(
+      `SELECT tipo, COALESCE(SUM(valor), 0) AS total
+         FROM caixa_movimentos WHERE caixa_id = $1 GROUP BY tipo`,
+      [caixaId]
+    );
+    const sumByTipo = (t: string) => Number(totals.find(r => r.tipo === t)?.total ?? 0);
+
+    const conteudo = formatarFechamentoCaixa({
+      empresa:             c.empresa_nome,
+      operador_abertura:   c.operador_abertura,
+      operador_fechamento: c.operador_fechamento,
+      aberto_em:           c.aberto_em,
+      fechado_em:          c.fechado_em,
+      valor_abertura:      c.valor_abertura,
+      valor_esperado:      c.valor_esperado,
+      valor_fechamento:    c.valor_fechamento,
+      diferenca:           c.diferenca,
+      reforcos:            sumByTipo("reforco"),
+      sangrias:            sumByTipo("sangria"),
+      esperados_por_forma:  c.valores_esperados ?? {},
+      informados_por_forma: c.valores_informados,
+      diferencas_por_forma: c.diferencas_por_forma,
+    });
+
+    const ids = await enqueuePrint({
+      empresaId, setor: "caixa", tipo: "cupom", conteudo,
+    });
+    if (ids.length === 0) {
+      await enqueuePrint({ empresaId, setor: "balcao", tipo: "cupom", conteudo });
+    }
+  } catch (err) {
+    console.warn("[print/dispatch/fechamento]", (err as Error).message);
+  }
+}
+
+/**
+ * Cupom de relatório de motoboy (sintético ou analítico).
+ */
+export async function dispatchRelatorioMotoboy(
+  empresaId: string,
+  motoboyId: string,
+  data: string,                    // YYYY-MM-DD
+  formato: "sintetico" | "analitico",
+): Promise<void> {
+  try {
+    const empresa = await queryOne<{ nome_fantasia: string }>(
+      `SELECT nome_fantasia FROM empresas WHERE id = $1`, [empresaId]
+    );
+    const motoboy = await queryOne<{ nome: string }>(
+      `SELECT nome FROM motoboys WHERE id = $1 AND empresa_id = $2`,
+      [motoboyId, empresaId]
+    );
+    if (!empresa || !motoboy) return;
+
+    const corridas = await query<{
+      pedido_numero: number | null;
+      cliente_nome:  string | null;
+      cliente_endereco: { rua?: string; numero?: string; bairro?: string } | null;
+      taxa_entrega:  string;
+      total:         string;
+      status:        string;
+      created_at:    string;
+    }>(
+      `SELECT numero AS pedido_numero, cliente_nome, cliente_endereco,
+              COALESCE(taxa_entrega, 0) AS taxa_entrega,
+              total, status, created_at
+         FROM pedidos
+        WHERE empresa_id = $1 AND motoboy_id = $2
+          AND DATE(created_at AT TIME ZONE 'America/Bahia') = $3::date
+          AND deleted_at IS NULL
+        ORDER BY created_at`,
+      [empresaId, motoboyId, data]
+    );
+
+    const totalTaxas = corridas.reduce((acc, c) => acc + Number(c.taxa_entrega), 0);
+
+    const resumo = {
+      empresa:        empresa.nome_fantasia,
+      motoboy_nome:   motoboy.nome,
+      data,
+      total_corridas: corridas.length,
+      total_taxas:    totalTaxas,
+      corridas: corridas.map(c => ({
+        pedido_numero: c.pedido_numero,
+        cliente_nome:  c.cliente_nome,
+        endereco:      c.cliente_endereco
+          ? [c.cliente_endereco.rua, c.cliente_endereco.numero, c.cliente_endereco.bairro].filter(Boolean).join(", ")
+          : null,
+        taxa_entrega:  c.taxa_entrega,
+        total_pedido:  c.total,
+        status:        c.status,
+        hora:          new Date(c.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      })),
+    };
+
+    const conteudo = formato === "analitico"
+      ? formatarCupomMotoboyAnalitico(resumo)
+      : formatarCupomMotoboySintetico(resumo);
+
+    await enqueuePrint({ empresaId, setor: "caixa", tipo: "cupom", conteudo });
+  } catch (err) {
+    console.warn("[print/dispatch/motoboy]", (err as Error).message);
+  }
+}
+
