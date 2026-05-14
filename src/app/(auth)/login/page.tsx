@@ -7,11 +7,13 @@ import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 
 export default function LoginPage() {
   const branding = useSaasBranding();
-  const [email,    setEmail]    = useState("");
-  const [senha,    setSenha]    = useState("");
-  const [mostrar,  setMostrar]  = useState(false);
-  const [loading,  setLoading]  = useState(false);
-  const [erro,     setErro]     = useState<string | null>(null);
+  const [email,     setEmail]     = useState("");
+  const [senha,     setSenha]     = useState("");
+  const [mostrar,   setMostrar]   = useState(false);
+  const [loading,   setLoading]   = useState(false);
+  const [erro,      setErro]      = useState<string | null>(null);
+  const [precisa2fa, setPrecisa2fa] = useState(false);
+  const [codigo2fa, setCodigo2fa] = useState("");
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
@@ -22,7 +24,10 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ email, senha }),
+        body:    JSON.stringify({
+          email, senha,
+          ...(precisa2fa && codigo2fa.trim() && { codigo_2fa: codigo2fa.trim() }),
+        }),
       });
 
       const data = await res.json();
@@ -37,6 +42,14 @@ export default function LoginPage() {
             tipo:     "alerta",
           });
           setErro("Sistema em manutenção — acesso bloqueado");
+          return;
+        }
+        // 2FA necessário: troca pra step do código
+        if (data.code === "2FA_REQUIRED" || data.code === "2FA_INVALID") {
+          setPrecisa2fa(true);
+          setErro(data.code === "2FA_INVALID"
+            ? "Código 2FA inválido — tente o código atual do app"
+            : null);
           return;
         }
         setErro(data.error || "Erro ao fazer login");
@@ -162,13 +175,35 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Campo 2FA — aparece só se backend pedir */}
+            {precisa2fa && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-300">
+                  Código 2FA
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={20}
+                  value={codigo2fa}
+                  onChange={(e) => setCodigo2fa(e.target.value)}
+                  placeholder="000000 ou XXXX-XXXX"
+                  autoFocus
+                  className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-center text-lg font-mono tracking-wider text-white outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20"
+                />
+                <p className="mt-1 text-[10px] text-slate-500">
+                  6 dígitos do app authenticator OU recovery code (XXXX-XXXX)
+                </p>
+              </div>
+            )}
+
             {/* Submit */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (precisa2fa && codigo2fa.trim().length < 6)}
               className="mt-2 w-full rounded-xl bg-emerald-500 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loading ? "Entrando..." : "Entrar"}
+              {loading ? "Entrando..." : (precisa2fa ? "Confirmar código" : "Entrar")}
             </button>
 
             <div className="text-center">

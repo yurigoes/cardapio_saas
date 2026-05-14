@@ -107,10 +107,23 @@ Usuário escolhe no formulário "esqueci senha" se quer receber código por:
 - Dashboards pra: pedidos/min, latência endpoints, error rate,
   caixa aberto/fechado por dia
 
-### 2FA pro master
-- TOTP (Google Authenticator) opcional pro role=master
-- Recovery codes
-- Lock por IP
+### ✅ 2FA TOTP — entregue v2.x
+- Migration 051 (totp_secret cifrado AES-256-GCM, totp_enabled, recovery codes)
+- Lib `@/lib/auth/totp` com otplib + qrcode (8 recovery codes one-shot)
+- Endpoints `/api/auth/2fa/{setup,verify,disable,status}`
+- Login `/api/auth/login` aceita `codigo_2fa` (TOTP 6 dígitos OU recovery)
+- Page `/admin/seguranca` com fluxo wizard (QR, código, download recovery)
+- UI `/login` mostra campo 2FA quando backend retorna `2FA_REQUIRED`
+- Recovery codes consumíveis (one-shot) com fallback se perder app
+- Lock por IP segue rate-limit base do login
+
+### ✅ Manutenção broadcast — entregue v2.x
+- API `/api/admin/manutencao/avisar` enfileira email pra todas empresas
+  ativas/teste com email cadastrado
+- Page `/admin/manutencao` com form (início/duração/impacto/detalhes) +
+  preview mode + dispara broadcast
+- Anti-duplicação 6h por empresa
+- Reusa template `manutencao_aviso` (editável em /admin/email/templates)
 
 ### Rate limit avançado
 - Hoje tem básico (login). Estender pra:

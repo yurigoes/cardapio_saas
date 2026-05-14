@@ -9,11 +9,13 @@ import { logSecurityEvent, incrementLoginFailures, resetLoginFailures } from "@/
 import { ok, unauthorized, tooManyRequests, badRequest, serverError } from "@/lib/utils/response";
 import { getClientIp } from "@/lib/auth/middleware";
 import { emManutencao } from "@/lib/security/manutencao";
+import { verificarOuConsumir } from "@/lib/auth/totp";
 import { NextResponse } from "next/server";
 
 const loginSchema = z.object({
-  email: z.string().email().toLowerCase().max(255),
-  senha: z.string().min(1).max(128),
+  email:    z.string().email().toLowerCase().max(255),
+  senha:    z.string().min(1).max(128),
+  codigo_2fa: z.string().min(6).max(20).optional(),  // TOTP 6 dígitos OU recovery XXXX-XXXX
 });
 
 interface UsuarioDb {
@@ -26,6 +28,8 @@ interface UsuarioDb {
   ativo:           boolean;
   bloqueado_ate:   Date | null;
   tentativas_login: number;
+  totp_enabled:    boolean;
+  totp_secret:     string | null;
 }
 
 export async function POST(req: NextRequest) {
@@ -90,6 +94,39 @@ export async function POST(req: NextRequest) {
         detalhes:  { tentativas },
       });
       return unauthorized("E-mail ou senha incorretos");
+    }
+
+    // ── 2FA TOTP — se ativo, exige código antes de logar ──────────────────
+    if (usuario.totp_enabled) {
+      if (!body.codigo_2fa) {
+        return NextResponse.json({
+          success: false,
+          code:    "2FA_REQUIRED",
+          error:   "Esta conta tem 2FA ativo. Informe o código do app authenticator.",
+          data:    { requer_2fa: true },
+        }, { status: 401 });
+      }
+      const r = await verificarOuConsumir(
+        usuario.id, usuario.totp_secret, body.codigo_2fa.trim(), ip
+      );
+      if (!r.ok) {
+        await logSecurityEvent({
+          tipo:      "login_falha",
+          ipAddress: ip, usuarioId: usuario.id,
+          detalhes:  { motivo: "2fa_invalido" },
+        });
+        return NextResponse.json({
+          success: false,
+          code:    "2FA_INVALID",
+          error:   "Código 2FA inválido ou expirado",
+          data:    { requer_2fa: true },
+        }, { status: 401 });
+      }
+      // Avisa quando recovery code foi usado (UI pode alertar)
+      if (r.via === "recovery") {
+        // Apenas log; UI vê via /api/auth/2fa/status que codes_restantes diminui
+        console.info(`[Auth] usuario=${usuario.id} usou recovery code`);
+      }
     }
 
     // Modo manutenção: só master pode logar
