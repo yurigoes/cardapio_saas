@@ -706,7 +706,12 @@ function MensagensTemplatesSection({ toast }: { toast: ReturnType<typeof useToas
                 <input
                   type="checkbox"
                   checked={t.ativo}
-                  onChange={e => setLocal(t.evento, { ativo: e.target.checked })}
+                  onChange={async e => {
+                    const novoAtivo = e.target.checked;
+                    setLocal(t.evento, { ativo: novoAtivo });
+                    // Persiste imediatamente (sem precisar do botão Salvar)
+                    await salvar({ ...t, ativo: novoAtivo });
+                  }}
                   className="h-3.5 w-3.5 accent-emerald-500"
                 />
                 Ativo
