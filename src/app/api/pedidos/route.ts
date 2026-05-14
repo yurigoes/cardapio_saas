@@ -321,9 +321,14 @@ export async function POST(req: NextRequest) {
       usuario:   { sub: auth.payload.sub, empresaId },
     });
 
-    // WhatsApp para o dono (best-effort, não bloqueia resposta)
-    if (!result.acumulado) {
+    // WhatsApp para o dono (best-effort, não bloqueia resposta).
+    // SÓ dispara se o pedido tem cliente identificado — venda de balcão
+    // anônima não notifica (spam pro dono). Dono identifica cliente apenas
+    // em delivery/totem/whatsapp; PDV puro normalmente não.
+    const temCliente = !!(body.cliente_id || body.cliente_nome || body.cliente_telefone);
+    if (!result.acumulado && temCliente) {
       notificarEvolution(empresaId, "novo_pedido", {
+        clienteNome:  body.cliente_nome ?? null,
         pedidoNumero: result.numero,
         total:        body.itens.reduce((a, i) => a + i.preco_unitario * i.quantidade, 0),
       }).catch(e => console.warn("[Pedidos/POST] notify:", e));

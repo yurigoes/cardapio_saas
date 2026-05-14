@@ -12,6 +12,7 @@ import { queryOne } from "@/lib/db/client";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { auditLog } from "@/lib/security/audit";
 import { notificarConfirmacaoCliente } from "@/lib/notify/evolution";
+import { enviarLinkRastreio } from "@/lib/delivery/rastreio";
 
 const STATUS = ["aguardando", "atribuido", "coletado", "em_rota", "entregue", "cancelado"] as const;
 
@@ -87,9 +88,15 @@ export async function POST(
       usuario:    { sub, empresaId },
     });
 
-    // Notifica cliente em transições importantes (best-effort)
-    if (body.status === "em_rota" || body.status === "entregue") {
-      // Reaproveita 'pronto' ou 'confirmado' template; aqui simples 'pronto'
+    // Notifica cliente em transições importantes (best-effort).
+    // - "atribuido" / "coletado" / "em_rota": envia link de rastreio com
+    //   nome do motoboy (cliente acompanha em tempo real)
+    // - "entregue": confirma entrega via template 'pronto'
+    if (body.status === "atribuido" || body.status === "coletado" || body.status === "em_rota") {
+      enviarLinkRastreio(empresaId, params.id)
+        .catch(e => console.warn("[StatusEntrega] rastreio:", e));
+    }
+    if (body.status === "entregue") {
       notificarConfirmacaoCliente(empresaId, params.id)
         .catch(e => console.warn("[StatusEntrega] notify:", e));
     }

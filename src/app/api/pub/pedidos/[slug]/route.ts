@@ -490,17 +490,35 @@ export async function POST(
       const totalCalc = body.itens.reduce(
         (a, i) => a + i.preco_unitario * i.quantidade, 0
       ) - (body.desconto ?? 0) - (body.cashback_usar ?? 0);
-      notificarEvolution(empresa.id, "novo_pedido", {
-        pedidoNumero: pedido.numero,
-        total:        totalCalc,
-      }).catch(e => console.warn("[Pub/Pedidos] notify novo_pedido:", e));
 
-      // Envia pra impressora de cozinha e cupom completo do cliente (no PDV)
-      // Best-effort — não bloqueia resposta
-      dispatchCupomCozinha(empresa.id, pedido.id)
-        .catch(e => console.warn("[Pub/Pedidos] print cozinha:", e));
-      dispatchCupomCliente(empresa.id, pedido.id)
-        .catch(e => console.warn("[Pub/Pedidos] print cliente:", e));
+      // novo_pedido só dispara se houver cliente identificado (anti-spam dono)
+      const temCliente = !!(body.cliente_id || body.cliente_nome || body.cliente_telefone);
+      if (temCliente) {
+        notificarEvolution(empresa.id, "novo_pedido", {
+          clienteNome:  body.cliente_nome ?? null,
+          pedidoNumero: pedido.numero,
+          total:        totalCalc,
+        }).catch(e => console.warn("[Pub/Pedidos] notify novo_pedido:", e));
+      }
+
+      // PRINT: só dispara imediatamente pra formas síncronas (dinheiro,
+      // pagar_entrega, cartão pinpad). PIX/cartão online aguardam o
+      // webhook do gateway aprovar — senão a cozinha imprime pedido que
+      // o cliente nunca pagou.
+      const formaSincrona = !body.forma_pagamento ||
+        ["dinheiro", "pagar_entrega", "pinpad", "cartao_maquina"].includes(body.forma_pagamento);
+
+      if (formaSincrona) {
+        dispatchCupomCozinha(empresa.id, pedido.id)
+          .catch(e => console.warn("[Pub/Pedidos] print cozinha:", e));
+        dispatchCupomCliente(empresa.id, pedido.id)
+          .catch(e => console.warn("[Pub/Pedidos] print cliente:", e));
+      } else {
+        console.info(
+          `[Pub/Pedidos] pedido=${pedido.id} forma=${body.forma_pagamento} ` +
+          `aguarda webhook pra imprimir`
+        );
+      }
     }
 
     return ok({

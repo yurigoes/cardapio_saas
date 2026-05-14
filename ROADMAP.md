@@ -7,6 +7,38 @@ já estão em produção.
 
 ## 🚧 Próximo ciclo (alta prioridade)
 
+### Mensalidades + cobrança recorrente (Mercado Pago Checkout Pro)
+
+**Por quê:** master precisa visibilidade + cobrança automática das
+mensalidades das empresas SaaS. Hoje não há gestão financeira recorrente.
+
+**Decisão técnica: Checkout Pro vs Transparente** → **Checkout Pro**
+recomendado:
+- Suporta `PreApproval` (assinatura mensal recorrente)
+- MP cobra automaticamente (cartão tokenizado) ou gera boleto/PIX manual
+- Cobertura completa de métodos
+- Sem PCI compliance pra nós (MP hospeda)
+- Lib base já configurada (`MERCADOPAGO_ACCESS_TOKEN` em uso pra módulos)
+
+**Escopo:**
+1. Schema `mensalidades` (empresa_id, mes_ref, valor, vencimento, status,
+   mp_preference_id, mp_payment_id, pago_em)
+2. Cron mensal dia 1: gera mensalidade pra cada empresa ativa, cria
+   preferência MP, salva URL pagamento
+3. Email automático `fatura_mensal` (template novo) com link MP + dados
+   do dono SaaS + valor + vencimento. Reenvio D-3, D-1, D+1
+4. Webhook MP estendido pra processar mensalidades (split por
+   external_reference prefix MENS- vs MOD-)
+5. Page `/admin/financeiro/mensalidades`: lista por empresa, filtros
+   (status, mês), cards (total/aberto/atrasado), ações manuais
+6. Page `/painel/financeiro/mensalidades`: empresa vê próprias faturas
+   + botão "Pagar agora" → redirect Checkout Pro
+7. Cron suspensão D+15 (suspensa) e D+30 (inadimplente)
+
+**Pendência decisão:** assinatura recorrente automática (PreApproval)
+vs cobrança manual mensal. Recorrente é melhor UX mas exige cartão
+tokenizado no MP. Pode fazer híbrido (oferece os 2).
+
 ### ✅ SMTP / E-mail transacional (entregue v2.x)
 
 Implementado:

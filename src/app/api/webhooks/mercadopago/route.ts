@@ -16,6 +16,7 @@ import { decrypt } from "@/lib/security/encrypt";
 import { registrarVendaPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 import { notificarConfirmacaoCliente } from "@/lib/notify/evolution";
+import { dispatchCupomCozinha, dispatchCupomCliente } from "@/lib/print/dispatch";
 import { withWebhookLog } from "@/lib/webhook/wrapper";
 
 const MP_API = "https://api.mercadopago.com";
@@ -162,6 +163,14 @@ export async function POST(req: NextRequest) {
       }).catch(e => console.warn("[MP/webhook] Push:", e));
       notificarConfirmacaoCliente(gateways.empresa_id, pedidoId)
         .catch(e => console.warn("[MP/webhook] Evolution:", e));
+
+      // ⚡ AGORA imprime cozinha + cupom cliente — pedido com PIX/cartão
+      // online só dispara impressão após o gateway aprovar o pagamento
+      // (best-effort: dispatch já tem fallback cascata pra qualquer printer)
+      dispatchCupomCozinha(gateways.empresa_id, pedidoId)
+        .catch(e => console.warn("[MP/webhook] print cozinha:", e));
+      dispatchCupomCliente(gateways.empresa_id, pedidoId, "pix")
+        .catch(e => console.warn("[MP/webhook] print cliente:", e));
     }
 
     console.info(`[MP/webhook] Pedido ${pedidoId} → ${novoStatus} (MP status: ${payment.status})`);

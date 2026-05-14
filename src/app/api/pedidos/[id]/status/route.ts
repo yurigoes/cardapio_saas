@@ -137,13 +137,19 @@ export async function PATCH(
 
     // ── Web Push em transições relevantes ────────────────────────────────
     // Notifica os admins/operadores em estados acionáveis:
-    //   pronto    → pedido pode ser entregue/chamado
-    //   cancelado → atenção, pode ser estorno necessário
-    // (confirmado e preparando não notificam para evitar spam — KDS já vê)
-    type StatusKey = "pronto" | "cancelado";
+    //   confirmado → pedido aprovado, cozinha pode preparar
+    //   preparo / em_preparo → atualização visual no KDS
+    //   pronto     → pedido pode ser entregue/chamado
+    //   entregue   → pedido finalizado
+    //   cancelado  → atenção, pode ser estorno necessário
+    type StatusKey = "confirmado" | "preparo" | "em_preparo" | "pronto" | "entregue" | "cancelado";
     const PUSH_CONFIGS: Record<StatusKey, { title: string; emoji: string }> = {
-      pronto:    { title: "Pedido pronto",    emoji: "✅" },
-      cancelado: { title: "Pedido cancelado", emoji: "⚠️" },
+      confirmado: { title: "Pedido confirmado", emoji: "✓" },
+      preparo:    { title: "Pedido em preparo", emoji: "👨‍🍳" },
+      em_preparo: { title: "Pedido em preparo", emoji: "👨‍🍳" },
+      pronto:     { title: "Pedido pronto",     emoji: "✅" },
+      entregue:   { title: "Pedido entregue",   emoji: "🛵" },
+      cancelado:  { title: "Pedido cancelado",  emoji: "⚠️" },
     };
     const cfg = PUSH_CONFIGS[body.status as StatusKey];
     if (cfg) {
