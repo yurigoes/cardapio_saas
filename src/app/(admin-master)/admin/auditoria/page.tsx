@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import MasterShell from "@/components/admin/MasterShell";
 import { ScrollText, RefreshCw, Filter, ChevronDown, ChevronUp } from "lucide-react";
 
 interface AuditRow {
@@ -40,8 +39,7 @@ export default function AdminAuditoriaPage() {
   }
 
   return (
-    <MasterShell>
-      <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-5xl">
         <div className="flex items-start justify-between">
           <div>
             <h1 className="flex items-center gap-2 text-xl font-bold text-white">
@@ -104,7 +102,5 @@ export default function AdminAuditoriaPage() {
             </div>
           )}
         </div>
-      </div>
-    </MasterShell>
-  );
+      </div>);
 }

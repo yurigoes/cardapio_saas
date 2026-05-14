@@ -4,7 +4,6 @@
  * /admin/usuarios — lista todos usuários do sistema (todas empresas).
  */
 import { useEffect, useState, useCallback } from "react";
-import MasterShell from "@/components/admin/MasterShell";
 import {
   Users, Search, RefreshCw, Filter, Building2, Shield, KeyRound,
 } from "lucide-react";
@@ -50,8 +49,7 @@ export default function AdminUsuariosPage() {
   useEffect(() => { carregar(); }, [carregar]);
 
   return (
-    <MasterShell>
-      <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 max-w-6xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="flex items-center gap-2 text-xl font-bold text-white">
@@ -145,7 +143,5 @@ export default function AdminUsuariosPage() {
               className="rounded-lg border border-white/10 px-3 py-1.5 disabled:opacity-30 hover:bg-white/5">Próxima</button>
           </div>
         )}
-      </div>
-    </MasterShell>
-  );
+      </div>);
 }

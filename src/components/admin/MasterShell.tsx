@@ -1,22 +1,52 @@
 "use client";
 
 /**
- * Shell pras páginas do MASTER (/admin/vps, /admin/erros, /admin/empresas).
- * Sidebar com navegação rápida, header com info do master, logout.
+ * Shell pras páginas do MASTER (/admin/vps, /admin/erros, etc).
+ * Sidebar com navegação agrupada por categoria.
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Server, AlertTriangle, Building2, LayoutDashboard,
-  LogOut, Sun, Moon, Settings, Shield,
+  LogOut, Shield, GitBranch, Users, DollarSign, BarChart3,
+  ScrollText, Settings, Activity,
 } from "lucide-react";
 
-const NAV = [
-  { href: "/admin",          label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/empresas", label: "Empresas",  icon: Building2 },
-  { href: "/admin/vps",      label: "VPS",       icon: Server },
-  { href: "/admin/erros",    label: "Erros",     icon: AlertTriangle },
+type NavItem  = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
+type NavGroup = { titulo?: string; items: NavItem[] };
+
+const NAV: NavGroup[] = [
+  {
+    items: [
+      { href: "/admin",          label: "Dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    titulo: "Negócio",
+    items: [
+      { href: "/admin/empresas", label: "Empresas",  icon: Building2 },
+      { href: "/admin/usuarios", label: "Usuários",  icon: Users },
+      { href: "/admin/planos",   label: "Planos",    icon: GitBranch },
+      { href: "/admin/financeiro", label: "Financeiro", icon: DollarSign },
+      { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3 },
+    ],
+  },
+  {
+    titulo: "Servidor",
+    items: [
+      { href: "/admin/vps",      label: "VPS",       icon: Server },
+      { href: "/admin/erros",    label: "Erros",     icon: AlertTriangle },
+      { href: "/admin/auditoria", label: "Auditoria", icon: ScrollText },
+      { href: "/admin/observability", label: "Observability", icon: Activity },
+    ],
+  },
+  {
+    titulo: "Sistema",
+    items: [
+      { href: "/admin/config",   label: "Configurações", icon: Settings },
+    ],
+  },
 ];
 
 export default function MasterShell({ children }: { children: React.ReactNode }) {
@@ -34,7 +64,6 @@ export default function MasterShell({ children }: { children: React.ReactNode })
         if (!d.success) { router.push("/login"); return; }
         const u = d.data?.usuario;
         if (u?.role !== "master") {
-          // não é master: manda pro painel da empresa dele
           router.push("/painel");
           return;
         }
@@ -73,25 +102,34 @@ export default function MasterShell({ children }: { children: React.ReactNode })
         </div>
 
         <nav className="flex-1 overflow-auto py-3">
-          {NAV.map(item => {
-            const Icon = item.icon;
-            const active = pathname === item.href ||
-              (item.href !== "/admin" && pathname.startsWith(item.href));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-2.5 mx-2 mb-0.5 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
-                  active
-                    ? "bg-emerald-500/15 text-emerald-400"
-                    : "text-slate-400 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
+          {NAV.map((grupo, gi) => (
+            <div key={gi} className="mb-3">
+              {grupo.titulo && (
+                <p className="px-4 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  {grupo.titulo}
+                </p>
+              )}
+              {grupo.items.map(item => {
+                const Icon = item.icon;
+                const active = pathname === item.href ||
+                  (item.href !== "/admin" && pathname.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-2.5 mx-2 mb-0.5 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+                      active
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "text-slate-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="border-t border-white/5 p-3">
@@ -105,7 +143,6 @@ export default function MasterShell({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      {/* Main */}
       <div className="flex-1 pl-60">
         <main className="p-6">{children}</main>
       </div>

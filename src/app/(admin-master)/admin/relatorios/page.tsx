@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import MasterShell from "@/components/admin/MasterShell";
 import { BarChart3, TrendingUp, RefreshCw } from "lucide-react";
 
 interface Stats {
@@ -35,8 +34,7 @@ export default function AdminRelatoriosPage() {
   useEffect(() => { carregar(); }, []);
 
   return (
-    <MasterShell>
-      <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-5xl">
         <div className="flex items-start justify-between">
           <div>
             <h1 className="flex items-center gap-2 text-xl font-bold text-white">
@@ -62,9 +60,7 @@ export default function AdminRelatoriosPage() {
         <p className="text-xs text-slate-500 italic">
           Para relatórios detalhados por empresa, acesse <a href="/admin/empresas" className="text-emerald-400 underline">/admin/empresas</a> → Gerenciar → Diagnóstico.
         </p>
-      </div>
-    </MasterShell>
-  );
+      </div>);
 }
 
 function Card({ titulo, valor, cor }: { titulo: string; valor: number | string | null | undefined; cor: string }) {

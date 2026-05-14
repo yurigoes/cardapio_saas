@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import MasterShell from "@/components/admin/MasterShell";
 import { DollarSign, TrendingUp, AlertTriangle, Building2, Calendar, RefreshCw } from "lucide-react";
 
 interface Resumo {
@@ -36,8 +35,7 @@ export default function AdminFinanceiroPage() {
   useEffect(() => { carregar(); }, []);
 
   return (
-    <MasterShell>
-      <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-5xl">
         <div className="flex items-start justify-between">
           <div>
             <h1 className="flex items-center gap-2 text-xl font-bold text-white">
@@ -99,9 +97,7 @@ export default function AdminFinanceiroPage() {
             </div>
           ) : <p className="text-sm text-slate-500">Nenhuma empresa vencendo no período 🎉</p>}
         </section>
-      </div>
-    </MasterShell>
-  );
+      </div>);
 }
 
 function Card({ titulo, valor, sub, cor, icon: Icon }: { titulo: string; valor: string; sub: string; cor: string; icon: React.ComponentType<{ className?: string }> }) {

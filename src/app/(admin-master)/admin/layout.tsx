@@ -6,23 +6,38 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, Users, Package, CreditCard,
   BarChart3, Settings, LogOut, ChefHat, Bell, Shield, FileText, Webhook,
-  Image as ImageIcon, TrendingUp, Bug,
+  Image as ImageIcon, TrendingUp, Bug, Server, AlertTriangle, ScrollText,
 } from "lucide-react";
 
-const NAV_ITEMS = [
-  { href: "/admin",           label: "Dashboard",  icon: LayoutDashboard },
-  { href: "/admin/empresas",  label: "Empresas",   icon: Building2 },
-  { href: "/admin/planos",    label: "Planos",     icon: Package },
-  { href: "/admin/usuarios",  label: "Usuários",   icon: Users },
-  { href: "/admin/financeiro",label: "Financeiro", icon: CreditCard },
-  { href: "/admin/relatorios",label: "Relatórios", icon: BarChart3 },
-  { href: "/admin/metricas",  label: "Métricas",   icon: TrendingUp },
-  { href: "/admin/webhooks",  label: "Webhooks",   icon: Webhook },
-  { href: "/admin/imagens",   label: "Imagens",    icon: ImageIcon },
-  { href: "/admin/auditoria", label: "Auditoria",  icon: Shield },
-  { href: "/admin/observability", label: "Observability", icon: Bug },
-  { href: "/admin/logs",      label: "Logs",       icon: FileText },
-  { href: "/admin/config",    label: "Config",     icon: Settings },
+type NavItem  = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
+type NavGroup = { titulo?: string; items: NavItem[] };
+
+const NAV: NavGroup[] = [
+  { items: [
+    { href: "/admin",           label: "Dashboard",  icon: LayoutDashboard },
+  ]},
+  { titulo: "Negócio", items: [
+    { href: "/admin/empresas",  label: "Empresas",   icon: Building2 },
+    { href: "/admin/usuarios",  label: "Usuários",   icon: Users },
+    { href: "/admin/planos",    label: "Planos",     icon: Package },
+    { href: "/admin/financeiro",label: "Financeiro", icon: CreditCard },
+    { href: "/admin/relatorios",label: "Relatórios", icon: BarChart3 },
+    { href: "/admin/metricas",  label: "Métricas",   icon: TrendingUp },
+  ]},
+  { titulo: "Servidor", items: [
+    { href: "/admin/vps",      label: "VPS",          icon: Server },
+    { href: "/admin/erros",    label: "Erros",        icon: AlertTriangle },
+    { href: "/admin/auditoria", label: "Auditoria",   icon: ScrollText },
+    { href: "/admin/observability", label: "Observability", icon: Bug },
+    { href: "/admin/logs",     label: "Logs",         icon: FileText },
+  ]},
+  { titulo: "Conteúdo", items: [
+    { href: "/admin/imagens",   label: "Imagens",     icon: ImageIcon },
+    { href: "/admin/webhooks",  label: "Webhooks",    icon: Webhook },
+  ]},
+  { titulo: "Sistema", items: [
+    { href: "/admin/config",    label: "Configurações", icon: Settings },
+  ]},
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -86,26 +101,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-auto py-4">
-          {NAV_ITEMS.map((item) => {
-            const Icon    = item.icon;
-            const active  = pathname === item.href || pathname.startsWith(item.href + "/");
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 mx-3 mb-0.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                  active
-                    ? "bg-emerald-500/15 text-emerald-400"
-                    : "text-slate-400 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                <Icon className="h-4 w-4 flex-shrink-0" />
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-auto py-3">
+          {NAV.map((grupo, gi) => (
+            <div key={gi} className="mb-3">
+              {grupo.titulo && (
+                <p className="px-5 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  {grupo.titulo}
+                </p>
+              )}
+              {grupo.items.map((item) => {
+                const Icon    = item.icon;
+                const active  = pathname === item.href ||
+                  (item.href !== "/admin" && pathname.startsWith(item.href + "/"));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-3 mx-3 mb-0.5 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+                      active
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "text-slate-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* Footer */}

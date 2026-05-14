@@ -13,6 +13,7 @@ import { applyBrandColors } from "@/lib/theme";
 import { useTheme } from "@/lib/hooks/useTheme";
 import { PwaInstallPrompt } from "@/components/painel/PwaInstallPrompt";
 import { PrintAgentStatus } from "@/components/painel/PrintAgentStatus";
+import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 import { ModuloLockedModal } from "@/components/painel/ModuloLockedModal";
 import { useModulos, type ModuloStatus } from "@/lib/hooks/useModulos";
 import { Lock } from "lucide-react";
@@ -96,6 +97,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
   }
 
   const modulosEmpresa = empresa?.modulos_ativos ?? [];
+  const saasBranding = useSaasBranding();
   const { get: getModulo, recarregar: recarregarModulos } = useModulos();
   const [moduloBloqueado, setModuloBloqueado] = useState<ModuloStatus | null>(null);
 
@@ -241,9 +243,20 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
       {/* Main */}
       <div className="flex flex-1 flex-col pl-60">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/5 bg-slate-950/80 px-6 backdrop-blur">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* Logo do SaaS (dono) */}
+            {saasBranding.logo_url ? (
+              <img src={saasBranding.logo_url} alt={saasBranding.nome}
+                title={saasBranding.nome}
+                className="max-h-8 object-contain" />
+            ) : (
+              <span className="text-xs font-semibold text-emerald-400">{saasBranding.nome}</span>
+            )}
+            {/* Linha vertical separadora */}
+            <span className="h-8 w-px bg-white/10" />
+            {/* Logo da empresa */}
             {empresa?.logo_url ? (
-              <img src={empresa.logo_url} alt="" className="h-8 w-8 rounded-lg object-contain" />
+              <img src={empresa.logo_url} alt="" className="max-h-8 object-contain" />
             ) : null}
             <span className="text-sm font-semibold text-white hidden sm:block">
               {empresa?.nome_fantasia}

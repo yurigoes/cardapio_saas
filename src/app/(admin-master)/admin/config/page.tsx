@@ -1,7 +1,13 @@
 "use client";
 
-import MasterShell from "@/components/admin/MasterShell";
-import { Settings, Server, MessageCircle, Database, GitBranch, Shield, ExternalLink, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Settings, Server, MessageCircle, Database, GitBranch, Shield, ExternalLink, Zap, Save, Loader2, ImageIcon } from "lucide-react";
+
+interface SaasBranding {
+  nome: string; logo_url: string | null;
+  email: string | null; telefone: string | null;
+  whatsapp: string | null; site: string | null;
+}
 
 const ATALHOS = [
   {
@@ -50,15 +56,101 @@ const ENVS_CRITICAS = [
 ];
 
 export default function AdminConfigPage() {
+  const [branding, setBranding] = useState<SaasBranding | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = localStorage.getItem("access_token") ?? "";
+    fetch("/api/admin/saas-branding", { headers: { Authorization: `Bearer ${t}` } })
+      .then(r => r.json())
+      .then(d => { if (d.success) setBranding(d.data); })
+      .catch(() => {});
+  }, []);
+
+  async function salvarBranding(e: React.FormEvent) {
+    e.preventDefault();
+    if (!branding) return;
+    setSalvando(true); setMsg(null);
+    try {
+      const t = localStorage.getItem("access_token") ?? "";
+      const r = await fetch("/api/admin/saas-branding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+        body: JSON.stringify(branding),
+      });
+      const d = await r.json();
+      if (d.success) { setBranding(d.data); setMsg("✓ Salvo"); }
+      else setMsg(d.error?.message ?? "Falha");
+    } finally {
+      setSalvando(false);
+      setTimeout(() => setMsg(null), 3000);
+    }
+  }
+
   return (
-    <MasterShell>
-      <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-white">
             <Settings className="h-5 w-5 text-emerald-400" /> Configurações master
           </h1>
-          <p className="text-sm text-slate-400">Atalhos pras áreas administrativas + estado das envs</p>
+          <p className="text-sm text-slate-400">Branding do SaaS, atalhos pras áreas administrativas + estado das envs</p>
         </div>
+
+        {/* Branding do SaaS */}
+        <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+            <ImageIcon className="h-4 w-4" /> Identidade do SaaS (dono)
+          </h2>
+          <p className="text-xs text-slate-500 mb-4">
+            Esses dados aparecem no header dos painéis das empresas (no formato Logo SaaS | Logo Empresa).
+            Páginas públicas (cardápio, totem) mostram só a logo da empresa.
+          </p>
+          {!branding ? (
+            <p className="text-sm text-slate-500">Carregando...</p>
+          ) : (
+            <form onSubmit={salvarBranding} className="space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Nome da plataforma">
+                  <input value={branding.nome ?? ""} onChange={e => setBranding({ ...branding, nome: e.target.value })}
+                    required className="input" />
+                </Field>
+                <Field label="Logo URL (use /api/upload pra subir)">
+                  <input value={branding.logo_url ?? ""} onChange={e => setBranding({ ...branding, logo_url: e.target.value || null })}
+                    placeholder="https://..." className="input" />
+                </Field>
+                <Field label="E-mail comercial">
+                  <input type="email" value={branding.email ?? ""} onChange={e => setBranding({ ...branding, email: e.target.value || null })}
+                    placeholder="contato@..." className="input" />
+                </Field>
+                <Field label="Telefone">
+                  <input value={branding.telefone ?? ""} onChange={e => setBranding({ ...branding, telefone: e.target.value || null })}
+                    placeholder="(71) 99999-9999" className="input" />
+                </Field>
+                <Field label="WhatsApp (público)">
+                  <input value={branding.whatsapp ?? ""} onChange={e => setBranding({ ...branding, whatsapp: e.target.value || null })}
+                    placeholder="71999999999" className="input" />
+                </Field>
+                <Field label="Site">
+                  <input value={branding.site ?? ""} onChange={e => setBranding({ ...branding, site: e.target.value || null })}
+                    placeholder="https://..." className="input" />
+                </Field>
+              </div>
+              {branding.logo_url && (
+                <div className="rounded-lg bg-slate-900/50 p-3 flex items-center gap-3">
+                  <span className="text-xs text-slate-500">Preview:</span>
+                  <img src={branding.logo_url} alt="" className="max-h-12 object-contain" />
+                </div>
+              )}
+              {msg && <p className={`text-sm ${msg.startsWith("✓") ? "text-emerald-400" : "text-red-400"}`}>{msg}</p>}
+              <button type="submit" disabled={salvando}
+                className="rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 px-5 py-2 text-sm font-bold text-white inline-flex items-center gap-2">
+                {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Salvar identidade
+              </button>
+            </form>
+          )}
+        </section>
 
         {/* Atalhos */}
         <section>
@@ -113,8 +205,30 @@ export default function AdminConfigPage() {
           <Item icon={Zap}            cor="text-pink-400"  titulo="n8n Automações"      url="https://n8n.tthreedigital.com.br" />
           <Item icon={Database}       cor="text-amber-400" titulo="MinIO Storage"        url="https://minio-console.tthreedigital.com.br" />
         </section>
-      </div>
-    </MasterShell>
+      </div>);
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-slate-400 mb-1 block">{label}</span>
+      {children}
+      <style jsx>{`
+        :global(.input) {
+          width: 100%;
+          background: rgb(30 41 59);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 0.5rem;
+          padding: 0.5rem 0.75rem;
+          color: white;
+          font-size: 0.875rem;
+        }
+        :global(.input:focus) {
+          outline: none;
+          border-color: rgba(16,185,129,0.5);
+        }
+      `}</style>
+    </label>
   );
 }
 
