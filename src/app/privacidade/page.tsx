@@ -1,18 +1,34 @@
 import Link from "next/link";
 import { ChefHat, ArrowLeft, Shield, Download, Trash2 } from "lucide-react";
+import { getSaasBranding } from "@/lib/branding/server";
 
-export const metadata = {
-  title: "Política de Privacidade · Cardápio SaaS",
-};
+export const dynamic = "force-dynamic";
 
-export default function PrivacidadePage() {
+export async function generateMetadata() {
+  const b = await getSaasBranding();
+  return { title: `Política de Privacidade · ${b.nome}` };
+}
+
+export default async function PrivacidadePage() {
+  const b = await getSaasBranding();
+  const razao = b.razao_social ?? b.nome;
+  const dpoEmail = b.dpo_email ?? b.email;
+  const dpoNome  = b.dpo_nome ?? "Encarregado de Proteção de Dados";
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/5">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <ChefHat className="h-5 w-5 text-emerald-400" />
-            <span className="font-bold">Cardápio SaaS</span>
+            {b.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={b.logo_url} alt={b.nome} className="h-8 w-auto max-w-[140px] object-contain" />
+            ) : (
+              <>
+                <ChefHat className="h-5 w-5 text-emerald-400" />
+                <span className="font-bold">{b.nome}</span>
+              </>
+            )}
           </Link>
           <Link href="/" className="flex items-center gap-1 text-sm text-slate-400 hover:text-white">
             <ArrowLeft className="h-4 w-4" /> Voltar
@@ -30,10 +46,14 @@ export default function PrivacidadePage() {
         </p>
 
         <Section titulo="1. Quem somos">
-          <p>Cardápio SaaS é uma plataforma de gestão para restaurantes operada
-          por <strong>Three Digital</strong>, CNPJ a definir, sediada em Salvador/BA.</p>
-          <p>Nosso encarregado de proteção de dados (DPO) pode ser contactado em:
-          {" "}<a href="mailto:dpo@tthreedigital.com.br" className="text-emerald-400">dpo@tthreedigital.com.br</a></p>
+          <p>{b.nome} é uma plataforma de gestão para restaurantes operada
+          por <strong>{razao}</strong>{b.cnpj ? `, CNPJ ${b.cnpj}` : ""}{b.endereco ? `, sediada em ${b.endereco}` : ""}.</p>
+          {dpoEmail && (
+            <p>Nosso encarregado de proteção de dados ({dpoNome}) pode ser contactado em:{" "}
+              <a href={`mailto:${dpoEmail}`} className="text-emerald-400">{dpoEmail}</a>
+              {b.dpo_telefone && <span> · Tel: {b.dpo_telefone}</span>}
+            </p>
+          )}
         </Section>
 
         <Section titulo="2. Quais dados coletamos">
@@ -127,8 +147,14 @@ export default function PrivacidadePage() {
         <Section titulo="11. Contato">
           <p>Pra exercer seus direitos ou tirar dúvidas:</p>
           <ul className="list-disc pl-5">
-            <li>E-mail: <a href="mailto:dpo@tthreedigital.com.br" className="text-emerald-400">dpo@tthreedigital.com.br</a></li>
-            <li>WhatsApp: a definir</li>
+            {dpoEmail && (
+              <li>E-mail (DPO): <a href={`mailto:${dpoEmail}`} className="text-emerald-400">{dpoEmail}</a></li>
+            )}
+            {b.email && b.email !== dpoEmail && (
+              <li>E-mail geral: <a href={`mailto:${b.email}`} className="text-emerald-400">{b.email}</a></li>
+            )}
+            {b.dpo_telefone && <li>Telefone: {b.dpo_telefone}</li>}
+            {b.whatsapp && <li>WhatsApp: {b.whatsapp}</li>}
             <li>Painel: <Link href="/painel/lgpd" className="text-emerald-400">/painel/lgpd</Link></li>
           </ul>
           <p className="mt-3">Resposta em até 15 dias úteis.</p>

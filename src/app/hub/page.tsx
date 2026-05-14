@@ -9,6 +9,7 @@ import {
   Eye, EyeOff, Tag, Monitor,
 } from "lucide-react";
 import { confirmar } from "@/components/ui/ConfirmModal";
+import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 
 /* ─── módulos por role ───────────────────────── */
 interface ModuloCard {
@@ -64,7 +65,14 @@ const MODULOS: ModuloCard[] = [
     descricao: "Gestão de entregas e motoboys",
     icon: Bike,
     cor: "from-yellow-500/20 to-yellow-600/10 border-yellow-500/30 hover:border-yellow-500/60",
-    roles: ["admin", "gerente", "delivery", "motoboy"],
+    roles: ["admin", "gerente", "delivery"],
+  },
+  {
+    href: "/motoboy", label: "Minhas entregas",
+    descricao: "PWA do motoboy: rota, status, fechamento de pedido",
+    icon: Bike,
+    cor: "from-amber-500/20 to-amber-600/10 border-amber-500/30 hover:border-amber-500/60",
+    roles: ["motoboy"],
   },
   {
     href: "/painel/mesas", label: "Mesas",
@@ -293,9 +301,18 @@ function MasterView({ usuario }: { usuario: Usuario }) {
       <header className="border-b border-white/5 bg-slate-900/50 backdrop-blur sticky top-0 z-20">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/20">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" />
-            </div>
+            {branding.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={branding.logo_url}
+                alt={branding.nome}
+                className="h-10 w-auto max-w-[160px] object-contain"
+              />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/20">
+                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+              </div>
+            )}
             <div>
               <p className="text-sm font-semibold">{usuario.nome}</p>
               <p className="text-xs text-slate-500">Master Admin</p>
@@ -469,7 +486,12 @@ function OperadorView({ usuario, empresa }: { usuario: Usuario; empresa: Empresa
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             {empresa?.logo_url ? (
-              <img src={empresa.logo_url} alt="" className="h-8 w-8 rounded-xl object-cover" />
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={empresa.logo_url}
+                alt={empresa.nome_fantasia ?? ""}
+                className="h-10 w-auto max-w-[160px] object-contain"
+              />
             ) : (
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/20">
                 <ChefHat className="h-4 w-4 text-emerald-400" />
@@ -538,6 +560,7 @@ function OperadorView({ usuario, empresa }: { usuario: Usuario; empresa: Empresa
 
 /* ─── página principal ───────────────────────── */
 export default function HubPage() {
+  const branding = useSaasBranding();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [loading, setLoading] = useState(true);

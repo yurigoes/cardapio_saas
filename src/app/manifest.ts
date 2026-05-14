@@ -1,9 +1,11 @@
 import { MetadataRoute } from "next";
+import { getSaasBranding } from "@/lib/branding/server";
 
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const b = await getSaasBranding();
   return {
-    name:             "Cardápio SaaS",
-    short_name:       "Cardápio",
+    name:             b.nome,
+    short_name:       b.nome.length > 12 ? b.nome.slice(0, 12) : b.nome,
     description:      "Sistema de gestão para restaurantes",
     start_url:        "/",
     display:          "standalone",

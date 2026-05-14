@@ -1,18 +1,33 @@
 import Link from "next/link";
 import { ChefHat, ArrowLeft } from "lucide-react";
+import { getSaasBranding } from "@/lib/branding/server";
 
-export const metadata = {
-  title: "Termos de Uso · Cardápio SaaS",
-};
+export const dynamic = "force-dynamic";
 
-export default function TermosPage() {
+export async function generateMetadata() {
+  const b = await getSaasBranding();
+  return { title: `Termos de Uso · ${b.nome}` };
+}
+
+export default async function TermosPage() {
+  const b = await getSaasBranding();
+  const contatoEmail = b.email ?? "contato";
+  const razao = b.razao_social ?? b.nome;
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/5">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <ChefHat className="h-5 w-5 text-emerald-400" />
-            <span className="font-bold">Cardápio SaaS</span>
+            {b.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={b.logo_url} alt={b.nome} className="h-8 w-auto max-w-[140px] object-contain" />
+            ) : (
+              <>
+                <ChefHat className="h-5 w-5 text-emerald-400" />
+                <span className="font-bold">{b.nome}</span>
+              </>
+            )}
           </Link>
           <Link href="/" className="flex items-center gap-1 text-sm text-slate-400 hover:text-white">
             <ArrowLeft className="h-4 w-4" /> Voltar
@@ -25,14 +40,14 @@ export default function TermosPage() {
         <p className="text-sm text-slate-400 mb-8">Última atualização: maio de 2026</p>
 
         <Section titulo="1. Aceitação dos Termos">
-          Ao se cadastrar e utilizar o sistema Cardápio SaaS (&ldquo;Serviço&rdquo;),
+          Ao se cadastrar e utilizar o sistema {b.nome} (&ldquo;Serviço&rdquo;),
           você (&ldquo;Cliente&rdquo;) concorda integralmente com estes Termos de Uso
           e com a <Link href="/privacidade" className="text-emerald-400 underline">Política de Privacidade</Link>.
           Se não concordar, não utilize o Serviço.
         </Section>
 
         <Section titulo="2. Descrição do Serviço">
-          <p>O Cardápio SaaS é uma plataforma SaaS (Software as a Service) para gestão
+          <p>O {b.nome} é uma plataforma SaaS (Software as a Service) para gestão
           de restaurantes que oferece, entre outros:</p>
           <ul>
             <li>Cardápio digital online e impressão de pedidos</li>
@@ -83,7 +98,7 @@ export default function TermosPage() {
         </Section>
 
         <Section titulo="7. Propriedade Intelectual">
-          <p>O código, design e marca do Cardápio SaaS pertencem a seus criadores.
+          <p>O código, design e marca do {b.nome} pertencem a {razao}.
           O Cliente recebe apenas uma <strong>licença de uso</strong> não exclusiva,
           intransferível e revogável durante o período da assinatura.</p>
           <p>Os dados do Cliente (cardápio, clientes, pedidos, etc) são de propriedade
@@ -91,7 +106,7 @@ export default function TermosPage() {
         </Section>
 
         <Section titulo="8. Limitação de Responsabilidade">
-          <p>Em nenhuma hipótese o Cardápio SaaS será responsável por:</p>
+          <p>Em nenhuma hipótese o {b.nome} será responsável por:</p>
           <ul>
             <li>Lucros cessantes, danos indiretos ou consequenciais</li>
             <li>Perda de dados não decorrente de falha exclusiva da plataforma</li>
@@ -118,14 +133,21 @@ export default function TermosPage() {
         </Section>
 
         <Section titulo="11. Foro">
-          <p>Fica eleito o foro da comarca de Salvador/BA para dirimir quaisquer
-          questões decorrentes destes Termos, com renúncia de qualquer outro,
-          por mais privilegiado que seja.</p>
+          <p>Fica eleito o foro da comarca onde está sediada a empresa controladora
+          ({razao}{b.cnpj ? `, CNPJ ${b.cnpj}` : ""}{b.endereco ? `, ${b.endereco}` : ""})
+          para dirimir quaisquer questões decorrentes destes Termos, com renúncia
+          de qualquer outro, por mais privilegiado que seja.</p>
         </Section>
 
         <p className="mt-12 text-xs text-slate-500">
-          Em caso de dúvidas, entre em contato:
-          {" "}<a href="mailto:contato@tthreedigital.com.br" className="text-emerald-400">contato@tthreedigital.com.br</a>
+          Em caso de dúvidas, entre em contato:{" "}
+          {b.email ? (
+            <a href={`mailto:${b.email}`} className="text-emerald-400">{b.email}</a>
+          ) : (
+            <span>{contatoEmail}</span>
+          )}
+          {b.telefone && <span> · Tel: {b.telefone}</span>}
+          {b.whatsapp && <span> · WhatsApp: {b.whatsapp}</span>}
         </p>
       </main>
     </div>

@@ -27,8 +27,10 @@ async function abrirImpressao(pedidoId: string, tipo: "cliente" | "cozinha" | "c
       body: JSON.stringify({ tipo: tipoApi }),
     });
     const d = await r.json();
-    if (!d.success) {
-      console.warn("[imprimir]", d.error);
+    if (!d.success || !d.data?.enfileirado) {
+      const msg = d.data?.mensagem ?? d.error?.message ?? "Falha ao imprimir";
+      const { alertar } = await import("@/components/ui/ConfirmModal");
+      await alertar({ titulo: "Impressão não enviada", mensagem: msg, tipo: "alerta" });
     }
   } catch (e) {
     console.warn("[imprimir]", e);

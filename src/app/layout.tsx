@@ -4,16 +4,20 @@ import { ErrorReporter } from "@/components/ErrorReporter";
 import { SessionExpiredModal } from "@/components/SessionExpiredModal";
 import { ManutencaoBanner } from "@/components/ManutencaoBanner";
 import { ConfirmModalRoot } from "@/components/ui/ConfirmModal";
+import { getSaasBranding } from "@/lib/branding/server";
 
-export const metadata: Metadata = {
-  title: {
-    default:  "Cardápio SaaS",
-    template: "%s | Cardápio SaaS",
-  },
-  description: "Sistema de gestão para restaurantes — cardápio digital, pedidos e muito mais",
-  robots:   { index: false, follow: false },
-  manifest: "/manifest.webmanifest",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const b = await getSaasBranding();
+  return {
+    title: {
+      default:  b.nome,
+      template: `%s | ${b.nome}`,
+    },
+    description: "Sistema de gestão para restaurantes — cardápio digital, pedidos e muito mais",
+    robots:   { index: false, follow: false },
+    manifest: "/manifest.webmanifest",
+  };
+}
 
 export const viewport: Viewport = {
   width:        "device-width",

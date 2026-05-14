@@ -13,13 +13,18 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { transaction, queryOne } from "@/lib/db/client";
 import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
 
+// Coerções tolerantes — PWA pode mandar string em vez de number,
+// e pedido_id como "" (string vazia) em vez de undefined.
 const bodySchema = z.object({
-  lat:        z.number().min(-90).max(90),
-  lng:        z.number().min(-180).max(180),
-  precisao_m: z.number().min(0).max(10000).optional(),
-  velocidade: z.number().min(0).max(300).optional(),
-  bateria:    z.number().min(0).max(100).optional(),
-  pedido_id:  z.string().uuid().optional(),
+  lat:        z.coerce.number().min(-90).max(90),
+  lng:        z.coerce.number().min(-180).max(180),
+  precisao_m: z.coerce.number().min(0).max(10000).optional().nullable(),
+  velocidade: z.coerce.number().min(0).max(300).optional().nullable(),
+  bateria:    z.coerce.number().min(0).max(100).optional().nullable(),
+  pedido_id:  z.preprocess(
+    v => (v === "" || v == null ? undefined : v),
+    z.string().uuid().optional()
+  ),
 });
 
 export async function POST(req: NextRequest) {

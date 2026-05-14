@@ -9,6 +9,7 @@ import {
   Image as ImageIcon, TrendingUp, Bug, Server, AlertTriangle, ScrollText,
 } from "lucide-react";
 import { VersaoFooter } from "@/components/VersaoFooter";
+import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 
 type NavItem  = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
 type NavGroup = { titulo?: string; items: NavItem[] };
@@ -43,6 +44,7 @@ const NAV: NavGroup[] = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname     = usePathname();
+  const branding     = useSaasBranding();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -90,13 +92,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex min-h-screen bg-slate-950 text-white">
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 flex w-64 flex-col border-r border-white/5 bg-slate-900">
-        {/* Logo */}
+        {/* Logo — absoluta quando há logo_url */}
         <div className="flex h-16 items-center gap-3 border-b border-white/5 px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20">
-            <ChefHat className="h-4 w-4 text-emerald-400" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold">Cardápio SaaS</p>
+          {branding.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={branding.logo_url}
+              alt={branding.nome}
+              className="h-9 w-auto max-w-[140px] object-contain"
+            />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20">
+              <ChefHat className="h-4 w-4 text-emerald-400" />
+            </div>
+          )}
+          <div className="min-w-0">
+            {!branding.logo_url && (
+              <p className="text-sm font-semibold truncate">{branding.nome}</p>
+            )}
             <p className="text-[10px] text-emerald-400 uppercase tracking-wider">Master Admin</p>
           </div>
         </div>

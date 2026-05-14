@@ -1,12 +1,14 @@
 /**
  * GET /api/painel/caixa/atual
  *
- * Retorna o caixa aberto da empresa (se houver) com totais agregados:
- *   - movimentos por tipo (sangria, reforco, venda, estorno)
- *   - vendas por forma de pagamento (dinheiro, pix, etc.)
- *   - saldo esperado (abertura + reforços + vendas em dinheiro - sangrias - estornos)
+ * Retorna o caixa aberto do usuário (preferência) ou outro caixa aberto da
+ * empresa caso o usuário queira "compartilhar" via ?compartilhar=true.
  *
- * Retorna { caixa: null } se não houver caixa aberto.
+ * Comportamento:
+ *   - Padrão: busca caixa aberto do próprio usuário
+ *   - Sem caixa próprio: retorna lista de caixas abertos de OUTROS usuários
+ *     em campo `outros_abertos` (PDV pode oferecer escolha)
+ *   - ?compartilhar=true&id=<uuid>: retorna o caixa específico (se aberto)
  */
 import { NextRequest } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
@@ -30,21 +32,53 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
 
-  const { empresaId } = auth.payload;
+  const { empresaId, sub: usuarioId } = auth.payload;
   if (!empresaId) return forbidden();
 
-  try {
-    const caixa = await queryOne<CaixaRow>(
-      `SELECT c.id, c.usuario_abertura_id, u.nome AS usuario_abertura_nome,
-              c.valor_abertura, c.observacoes, c.aberto_em, c.status
-       FROM caixas c
-       LEFT JOIN usuarios u ON u.id = c.usuario_abertura_id
-       WHERE c.empresa_id = $1 AND c.status = 'aberto'
-       ORDER BY c.aberto_em DESC LIMIT 1`,
-      [empresaId]
-    );
+  const url = new URL(req.url);
+  const caixaIdEspecifico = url.searchParams.get("id");
 
-    if (!caixa) return ok({ caixa: null });
+  try {
+    let caixa: CaixaRow | null = null;
+
+    if (caixaIdEspecifico) {
+      // Modo compartilhado: usuário escolheu usar caixa de outro
+      caixa = await queryOne<CaixaRow>(
+        `SELECT c.id, c.usuario_abertura_id, u.nome AS usuario_abertura_nome,
+                c.valor_abertura, c.observacoes, c.aberto_em, c.status
+         FROM caixas c
+         LEFT JOIN usuarios u ON u.id = c.usuario_abertura_id
+         WHERE c.id = $1 AND c.empresa_id = $2 AND c.status = 'aberto'`,
+        [caixaIdEspecifico, empresaId]
+      );
+    } else {
+      // Modo padrão: busca o caixa do próprio usuário
+      caixa = await queryOne<CaixaRow>(
+        `SELECT c.id, c.usuario_abertura_id, u.nome AS usuario_abertura_nome,
+                c.valor_abertura, c.observacoes, c.aberto_em, c.status
+         FROM caixas c
+         LEFT JOIN usuarios u ON u.id = c.usuario_abertura_id
+         WHERE c.empresa_id = $1 AND c.usuario_abertura_id = $2 AND c.status = 'aberto'
+         ORDER BY c.aberto_em DESC LIMIT 1`,
+        [empresaId, usuarioId]
+      );
+    }
+
+    if (!caixa) {
+      // Sem caixa próprio: lista outros caixas abertos pra escolha
+      const outrosAbertos = await query<{
+        id: string; usuario_abertura_nome: string | null; aberto_em: string;
+      }>(
+        `SELECT c.id, u.nome AS usuario_abertura_nome, c.aberto_em
+         FROM caixas c
+         LEFT JOIN usuarios u ON u.id = c.usuario_abertura_id
+         WHERE c.empresa_id = $1 AND c.status = 'aberto'
+           AND c.usuario_abertura_id != $2
+         ORDER BY c.aberto_em DESC`,
+        [empresaId, usuarioId]
+      );
+      return ok({ caixa: null, outros_abertos: outrosAbertos });
+    }
 
     // Totais por tipo de movimento
     const totaisTipo = await query<MovTipoRow>(

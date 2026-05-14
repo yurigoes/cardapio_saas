@@ -83,10 +83,18 @@ export async function POST(
       }
 
       // Motoboy só pode fechar pedidos atribuídos a ele
-      if (role === "motoboy" && pedido.motoboy_id !== sub) {
-        const e: Error & { code?: string } = new Error("Você só pode fechar pedidos atribuídos a você");
-        e.code = "FORBIDDEN";
-        throw e;
+      // pedido.motoboy_id é FK pra motoboys.id, mas sub é usuarios.id —
+      // precisamos resolver: motoboy_id IS NULL OK, ou achar motoboy do user
+      if (role === "motoboy") {
+        const motoboy = await client.query<{ id: string }>(
+          `SELECT id FROM motoboys WHERE usuario_id = $1 AND empresa_id = $2 AND deleted_at IS NULL LIMIT 1`,
+          [sub, empresaId]
+        ).then(r => r.rows[0]);
+        if (!motoboy || pedido.motoboy_id !== motoboy.id) {
+          const e: Error & { code?: string } = new Error("Você só pode fechar pedidos atribuídos a você");
+          e.code = "FORBIDDEN";
+          throw e;
+        }
       }
 
       if (pedido.status === "cancelado") {

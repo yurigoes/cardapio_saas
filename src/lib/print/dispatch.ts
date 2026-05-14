@@ -4,7 +4,7 @@
  * travar o fluxo do pedido caso o agente esteja offline.
  */
 import { query, queryOne } from "@/lib/db/client";
-import { enqueuePrint } from "@/lib/print/queue";
+import { enqueuePrint, type SetorImpressora, type TipoCupom } from "@/lib/print/queue";
 import {
   formatarCozinha, formatarCupomCliente,
   formatarFechamentoCaixa, formatarCupomMotoboySintetico, formatarCupomMotoboyAnalitico,
@@ -62,45 +62,84 @@ async function carregarPedido(empresaId: string, pedidoId: string) {
   };
 }
 
+// Cascade de fallback: tenta o setor preferido, depois "balcao", depois
+// QUALQUER impressora ativa da empresa. Pequenos restaurantes geralmente
+// têm 1 impressora só, e essa fallback final é o que evita "nada imprime".
+async function enqueueCascade(
+  empresaId: string,
+  pedidoId: string | undefined,
+  conteudo: string,
+  tipo: TipoCupom,
+  setoresPreferidos: SetorImpressora[],
+): Promise<{ jobIds: string[]; setor_usado: string | null }> {
+  for (const setor of setoresPreferidos) {
+    const ids = await enqueuePrint({ empresaId, pedidoId, setor, tipo, conteudo });
+    if (ids.length > 0) return { jobIds: ids, setor_usado: setor };
+  }
+  // Fallback: pega QUALQUER impressora ativa da empresa
+  const qualquer = await query<{ id: string; setor: string }>(
+    `SELECT id, setor FROM impressoras
+      WHERE empresa_id = $1 AND ativa = true
+      ORDER BY created_at LIMIT 1`,
+    [empresaId]
+  );
+  if (qualquer.length > 0) {
+    const ids = await enqueuePrint({
+      empresaId, pedidoId, setor: qualquer[0].setor as SetorImpressora, tipo, conteudo,
+    });
+    if (ids.length > 0) return { jobIds: ids, setor_usado: qualquer[0].setor };
+  }
+  return { jobIds: [], setor_usado: null };
+}
+
 /**
  * Enfileira cupom da cozinha (sem preço) ao criar um novo pedido.
  * Não bloqueia — chama em background.
+ * Retorna info útil pro caller logar/avisar.
  */
-export async function dispatchCupomCozinha(empresaId: string, pedidoId: string): Promise<void> {
+export async function dispatchCupomCozinha(empresaId: string, pedidoId: string): Promise<{
+  ok: boolean; jobs: number; setor_usado: string | null; motivo?: string;
+}> {
   try {
     const data = await carregarPedido(empresaId, pedidoId);
-    if (!data || data.itens.length === 0) return;
+    if (!data || data.itens.length === 0) {
+      return { ok: false, jobs: 0, setor_usado: null, motivo: "pedido sem itens" };
+    }
 
     const conteudo = formatarCozinha(data.empresaNome, {
       ...data.pedido,
       cliente_endereco: data.pedido.cliente_endereco ?? null,
       itens: data.itens,
-      subtotal: 0, total: 0, // cozinha ignora
+      subtotal: 0, total: 0,
     });
 
-    await enqueuePrint({
-      empresaId, pedidoId,
-      setor:    "cozinha",
-      tipo:     "cozinha",
-      conteudo,
-    });
+    const { jobIds, setor_usado } = await enqueueCascade(
+      empresaId, pedidoId, conteudo, "cozinha",
+      ["cozinha", "balcao"],
+    );
+    if (jobIds.length === 0) {
+      console.warn("[print/dispatch/cozinha] nenhuma impressora ativa", { empresaId, pedidoId });
+      return { ok: false, jobs: 0, setor_usado: null, motivo: "nenhuma impressora ativa" };
+    }
+    return { ok: true, jobs: jobIds.length, setor_usado };
   } catch (err) {
     console.warn("[print/dispatch/cozinha]", (err as Error).message);
+    return { ok: false, jobs: 0, setor_usado: null, motivo: (err as Error).message };
   }
 }
 
 /**
  * Enfileira cupom do cliente (com preços) ao fechar o pedido.
- * Setor padrão: 'caixa' (cai em 'balcao' como fallback se caixa não tem impressora).
+ * Cascata de setores: caixa → balcao → qualquer impressora ativa.
  */
 export async function dispatchCupomCliente(
   empresaId: string,
   pedidoId: string,
   formaPagamento?: string,
-): Promise<void> {
+): Promise<{ ok: boolean; jobs: number; setor_usado: string | null; motivo?: string }> {
   try {
     const data = await carregarPedido(empresaId, pedidoId);
-    if (!data) return;
+    if (!data) return { ok: false, jobs: 0, setor_usado: null, motivo: "pedido não encontrado" };
 
     const conteudo = formatarCupomCliente(data.empresaNome, {
       ...data.pedido,
@@ -109,23 +148,18 @@ export async function dispatchCupomCliente(
       forma_pagamento: formaPagamento ?? null,
     });
 
-    // tenta caixa primeiro; se não tem nenhuma ativa, cai em balcao
-    const ids = await enqueuePrint({
-      empresaId, pedidoId,
-      setor:    "caixa",
-      tipo:     "cupom",
-      conteudo,
-    });
-    if (ids.length === 0) {
-      await enqueuePrint({
-        empresaId, pedidoId,
-        setor:    "balcao",
-        tipo:     "cupom",
-        conteudo,
-      });
+    const { jobIds, setor_usado } = await enqueueCascade(
+      empresaId, pedidoId, conteudo, "cupom",
+      ["caixa", "balcao"],
+    );
+    if (jobIds.length === 0) {
+      console.warn("[print/dispatch/cliente] nenhuma impressora ativa", { empresaId, pedidoId });
+      return { ok: false, jobs: 0, setor_usado: null, motivo: "nenhuma impressora ativa" };
     }
+    return { ok: true, jobs: jobIds.length, setor_usado };
   } catch (err) {
     console.warn("[print/dispatch/cliente]", (err as Error).message);
+    return { ok: false, jobs: 0, setor_usado: null, motivo: (err as Error).message };
   }
 }
 
@@ -188,12 +222,10 @@ export async function dispatchFechamentoCaixa(empresaId: string, caixaId: string
       diferencas_por_forma: c.diferencas_por_forma,
     });
 
-    const ids = await enqueuePrint({
-      empresaId, setor: "caixa", tipo: "cupom", conteudo,
-    });
-    if (ids.length === 0) {
-      await enqueuePrint({ empresaId, setor: "balcao", tipo: "cupom", conteudo });
-    }
+    await enqueueCascade(
+      empresaId, undefined, conteudo, "cupom",
+      ["caixa", "balcao"],
+    );
   } catch (err) {
     console.warn("[print/dispatch/fechamento]", (err as Error).message);
   }

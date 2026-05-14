@@ -69,11 +69,17 @@ export async function POST(req: NextRequest) {
       usuario:   { sub, empresaId },
     });
 
+    // Pega DPO email do branding pra mensagem
+    const branding = await queryOne<{ valor: { dpo_email?: string | null; email?: string | null } }>(
+      `SELECT valor FROM settings WHERE chave = 'saas_branding'`
+    );
+    const dpoEmail = branding?.valor?.dpo_email ?? branding?.valor?.email ?? "o suporte";
+
     return ok({
       empresa:                empresa.nome_fantasia,
       acesso_suspenso_em:     new Date().toISOString(),
       exclusao_definitiva_em: exclusaoFinal,
-      mensagem: "Sua conta foi suspensa. Os dados serão excluídos definitivamente em 30 dias. Pra reativar dentro desse prazo, contate dpo@tthreedigital.com.br.",
+      mensagem: `Sua conta foi suspensa. Os dados serão excluídos definitivamente em 30 dias. Pra reativar dentro desse prazo, contate ${dpoEmail}.`,
     });
   } catch (err) {
     console.error("[LGPD/ExcluirConta]", err);

@@ -7,8 +7,10 @@ import {
   Loader2, Check,
 } from "lucide-react";
 import { confirmar, alertar } from "@/components/ui/ConfirmModal";
+import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 
 export default function LgpdPage() {
+  const branding = useSaasBranding();
   const [exportando, setExportando] = useState(false);
   const [excluindo, setExcluindo]   = useState(false);
   const [confirmacao, setConfirmacao] = useState("");
@@ -121,12 +123,15 @@ export default function LgpdPage() {
             ver Política de Privacidade <ExternalLink className="h-3 w-3" />
           </Link>
         </p>
-        <p className="text-slate-300">
-          <strong>Encarregado (DPO):</strong>{" "}
-          <a href="mailto:dpo@tthreedigital.com.br" className="text-emerald-400 inline-flex items-center gap-1">
-            <Mail className="h-3 w-3" /> dpo@tthreedigital.com.br
-          </a>
-        </p>
+        {(branding.dpo_email || branding.email) && (
+          <p className="text-slate-300">
+            <strong>Encarregado (DPO){branding.dpo_nome ? `: ${branding.dpo_nome}` : ""}:</strong>{" "}
+            <a href={`mailto:${branding.dpo_email ?? branding.email}`} className="text-emerald-400 inline-flex items-center gap-1">
+              <Mail className="h-3 w-3" /> {branding.dpo_email ?? branding.email}
+            </a>
+            {branding.dpo_telefone && <span className="text-slate-400"> · {branding.dpo_telefone}</span>}
+          </p>
+        )}
       </section>
 
       {/* Excluir conta — zona de perigo */}
@@ -140,7 +145,11 @@ export default function LgpdPage() {
           <div>
             <p>Suspende o acesso imediatamente e <strong>exclui todos os dados em 30 dias</strong>.</p>
             <p className="mt-1">Dentro desse prazo dá pra reverter contatando{" "}
-              <a href="mailto:dpo@tthreedigital.com.br" className="underline">dpo@tthreedigital.com.br</a>.
+              {branding.dpo_email || branding.email ? (
+                <a href={`mailto:${branding.dpo_email ?? branding.email}`} className="underline">
+                  {branding.dpo_email ?? branding.email}
+                </a>
+              ) : <span>o suporte</span>}.
               Depois de 30 dias, é definitivo.</p>
           </div>
         </div>

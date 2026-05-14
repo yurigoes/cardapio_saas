@@ -38,13 +38,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Verifica se já há caixa aberto
-    const aberto = await queryOne<{ id: string }>(
-      `SELECT id FROM caixas WHERE empresa_id = $1 AND status = 'aberto' LIMIT 1`,
-      [empresaId]
+    // Verifica se ESTE usuário já tem caixa aberto
+    const meu = await queryOne<{ id: string }>(
+      `SELECT id FROM caixas
+        WHERE empresa_id = $1 AND usuario_abertura_id = $2 AND status = 'aberto'
+        LIMIT 1`,
+      [empresaId, usuarioId]
     );
-    if (aberto) {
-      return conflict("Já existe um caixa aberto. Feche-o antes de abrir um novo.");
+    if (meu) {
+      return conflict("Você já tem um caixa aberto. Feche-o antes de abrir um novo.");
     }
 
     const novo = await queryOne<{ id: string; aberto_em: string }>(
@@ -57,10 +59,9 @@ export async function POST(req: NextRequest) {
 
     return ok({ id: novo?.id, aberto_em: novo?.aberto_em });
   } catch (err) {
-    // Race condition: o índice único parcial pode ter pegado
     const msg = err instanceof Error ? err.message : "Erro";
-    if (msg.includes("idx_caixas_aberto_unique") || msg.includes("duplicate key")) {
-      return conflict("Já existe um caixa aberto.");
+    if (msg.includes("idx_caixas_aberto_por_usuario") || msg.includes("duplicate key")) {
+      return conflict("Você já tem um caixa aberto.");
     }
     console.error("[Caixa/Abrir]", err);
     return serverError();

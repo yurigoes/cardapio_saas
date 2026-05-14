@@ -87,9 +87,27 @@ export async function PATCH(req: NextRequest) {
 
   if (Object.keys(updates).length === 0) return badRequest("Nenhum campo para atualizar");
 
+  // Campos JSONB precisam de serialização explícita + cast — alguns ambientes
+  // têm a coluna como TEXT (migração antiga) e o pg-driver serializa array JS
+  // como tupla Postgres '{a,b}' em vez de JSON, quebrando leituras futuras.
+  const JSONB_FIELDS = new Set([
+    "evolution_eventos", "n8n_eventos", "dias_funcionamento", "modulos_ativos",
+  ]);
+
   try {
-    const setClauses = Object.keys(updates).map((k, i) => `${k} = $${i + 2}`).join(", ");
-    const values = [empresaId, ...Object.values(updates)];
+    const setClauses = Object.keys(updates).map((k, i) => {
+      if (JSONB_FIELDS.has(k)) {
+        return `${k} = $${i + 2}::jsonb`;
+      }
+      return `${k} = $${i + 2}`;
+    }).join(", ");
+
+    const values = [
+      empresaId,
+      ...Object.entries(updates).map(([k, v]) =>
+        JSONB_FIELDS.has(k) ? JSON.stringify(v ?? []) : v
+      ),
+    ];
 
     const updated = await queryOne<{ id: string }>(
       `UPDATE empresas SET ${setClauses}, updated_at = NOW()

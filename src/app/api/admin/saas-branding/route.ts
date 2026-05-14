@@ -12,12 +12,20 @@ import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
 
 const KEY = "saas_branding";
 const DEFAULT = {
-  nome:      "Cardápio SaaS",
-  logo_url:  null as string | null,
-  email:     null as string | null,
-  telefone:  null as string | null,
-  whatsapp:  null as string | null,
-  site:      null as string | null,
+  nome:        "Cardápio SaaS",
+  logo_url:    null as string | null,
+  email:       null as string | null,
+  telefone:    null as string | null,
+  whatsapp:    null as string | null,
+  site:        null as string | null,
+  // Contatos LGPD/legal
+  dpo_nome:    null as string | null,
+  dpo_email:   null as string | null,
+  dpo_telefone: null as string | null,
+  // Endereço completo (usado em termos/privacidade/cobrança)
+  endereco:    null as string | null,
+  cnpj:        null as string | null,
+  razao_social: null as string | null,
 };
 
 export async function GET(req: NextRequest) {
@@ -36,12 +44,18 @@ export async function GET(req: NextRequest) {
 }
 
 const schema = z.object({
-  nome:     z.string().min(1).max(100).optional(),
-  logo_url: z.string().url().nullable().optional(),
-  email:    z.string().email().nullable().optional(),
-  telefone: z.string().max(30).nullable().optional(),
-  whatsapp: z.string().max(30).nullable().optional(),
-  site:     z.string().url().nullable().optional(),
+  nome:         z.string().min(1).max(100).optional(),
+  logo_url:     z.string().url().nullable().optional(),
+  email:        z.string().email().nullable().optional(),
+  telefone:     z.string().max(30).nullable().optional(),
+  whatsapp:     z.string().max(30).nullable().optional(),
+  site:         z.string().url().nullable().optional(),
+  dpo_nome:     z.string().max(150).nullable().optional(),
+  dpo_email:    z.string().email().nullable().optional(),
+  dpo_telefone: z.string().max(30).nullable().optional(),
+  endereco:     z.string().max(500).nullable().optional(),
+  cnpj:         z.string().max(20).nullable().optional(),
+  razao_social: z.string().max(200).nullable().optional(),
 }).strict();
 
 export async function PATCH(req: NextRequest) {

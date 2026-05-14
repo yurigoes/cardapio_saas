@@ -3,8 +3,10 @@
 import { useState, FormEvent } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Lock, Mail, ChefHat } from "lucide-react";
+import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 
 export default function LoginPage() {
+  const branding = useSaasBranding();
   const [email,    setEmail]    = useState("");
   const [senha,    setSenha]    = useState("");
   const [mostrar,  setMostrar]  = useState(false);
@@ -76,13 +78,22 @@ export default function LoginPage() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-md"
       >
-        {/* Logo */}
+        {/* Logo — absoluta quando há logo_url, senão fallback */}
         <div className="mb-8 text-center">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 ring-1 ring-emerald-500/40">
-            <ChefHat className="h-8 w-8 text-emerald-400" />
-          </div>
+          {branding.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={branding.logo_url}
+              alt={branding.nome}
+              className="mx-auto h-20 w-auto max-w-[260px] object-contain"
+            />
+          ) : (
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 ring-1 ring-emerald-500/40">
+              <ChefHat className="h-8 w-8 text-emerald-400" />
+            </div>
+          )}
           <h1 className="mt-4 text-2xl font-bold text-white">
-            Cardápio SaaS
+            {branding.nome}
           </h1>
           <p className="mt-1 text-sm text-slate-400">
             Sistema de gestão para restaurantes
@@ -163,7 +174,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-600">
-          Cardápio SaaS © {new Date().getFullYear()} — Todos os direitos reservados
+          {branding.nome} © {new Date().getFullYear()} — Todos os direitos reservados
         </p>
       </motion.div>
     </main>

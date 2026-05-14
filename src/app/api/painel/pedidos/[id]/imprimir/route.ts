@@ -35,21 +35,28 @@ export async function POST(
   if (!pedido) return notFound("Pedido não encontrado");
 
   try {
-    const acoes: Promise<void>[] = [];
+    const resultados: { tipo: string; ok: boolean; jobs: number; setor_usado: string | null; motivo?: string }[] = [];
     if (tipo === "cozinha" || tipo === "ambos") {
-      acoes.push(dispatchCupomCozinha(empresaId, params.id));
+      const r = await dispatchCupomCozinha(empresaId, params.id);
+      resultados.push({ tipo: "cozinha", ...r });
     }
     if (tipo === "cliente" || tipo === "ambos") {
-      acoes.push(dispatchCupomCliente(empresaId, params.id));
+      const r = await dispatchCupomCliente(empresaId, params.id);
+      resultados.push({ tipo: "cliente", ...r });
     }
-    await Promise.all(acoes);
+
+    const todosOk = resultados.every(r => r.ok);
+    const jobsTotal = resultados.reduce((acc, r) => acc + r.jobs, 0);
+    const falhas = resultados.filter(r => !r.ok);
 
     return ok({
-      enfileirado: true,
+      enfileirado:  todosOk,
       tipo,
-      mensagem: tipo === "ambos"
-        ? "Cupom enviado pra cozinha e cupom do cliente enfileirados nas impressoras"
-        : `Cupom (${tipo}) enfileirado na impressora correspondente`,
+      jobs:         jobsTotal,
+      detalhes:     resultados,
+      mensagem:     todosOk
+        ? `Cupom (${tipo}) enfileirado em ${jobsTotal} impressora(s)`
+        : `Falha em: ${falhas.map(f => `${f.tipo} (${f.motivo})`).join(", ")}. Cadastre uma impressora ativa em /painel/impressoras.`,
     });
   } catch (err) {
     console.error("[Pedidos/Imprimir]", err);
