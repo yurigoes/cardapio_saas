@@ -142,6 +142,28 @@ export default function PdvPage() {
   // Finalizar — cria pedido
   async function finalizar() {
     if (cart.length === 0) return;
+
+    // Se tem cliente identificado E o cliente tem endereço, pergunta entrega/retira
+    let tipoFinal: "balcao" | "delivery" = "balcao";
+    let enderecoEntrega: Record<string, string> | null = null;
+    if (cliente?.id) {
+      const { confirmar } = await import("@/components/ui/ConfirmModal");
+      const ehDelivery = await confirmar({
+        titulo:   "Entrega ou retira no balcão?",
+        mensagem: `Cliente: ${cliente.nome ?? cliente.telefone}\n\nO pedido vai sair pra ENTREGA ou cliente vai RETIRAR no balcão?`,
+        okLabel:     "🛵 Sair pra entrega",
+        cancelLabel: "🛍 Retirar no balcão",
+      });
+      if (ehDelivery) {
+        tipoFinal = "delivery";
+        // Tenta puxar endereço cadastrado do cliente
+        try {
+          const c = await fetch(`/api/painel/clientes/${cliente.id}`, { headers: auth() }).then(r => r.json());
+          if (c.success && c.data?.endereco) enderecoEntrega = c.data.endereco;
+        } catch {}
+      }
+    }
+
     setCriandoPedido(true);
     setErro(null);
     try {
@@ -149,9 +171,11 @@ export default function PdvPage() {
         method:  "POST",
         headers: { "Content-Type": "application/json", ...auth() },
         body:    JSON.stringify({
-          tipo:        "balcao",
+          tipo:        tipoFinal,
           cliente_id:  cliente?.id || undefined,
           cliente_nome: cliente?.nome || undefined,
+          cliente_telefone: cliente?.telefone || undefined,
+          cliente_endereco: enderecoEntrega || undefined,
           itens: cart.map(i => ({
             produto_id:     i.produto.id,
             nome:           i.produto.nome,
@@ -162,7 +186,7 @@ export default function PdvPage() {
       });
       const d = await r.json();
       if (!d.success) {
-        setErro(d.error?.message ?? "Falha ao criar pedido");
+        setErro(d.error?.message ?? d.error ?? "Falha ao criar pedido");
         return;
       }
       setPedidoCriado({
