@@ -122,6 +122,8 @@ const FORMA_ICON: Record<string, React.ElementType> = {
 export default function CaixaPage() {
   const [tab, setTab] = useState<Tab>("atual");
   const [caixa, setCaixa]     = useState<CaixaAtual | null>(null);
+  const [outrosAbertos, setOutrosAbertos] = useState<{ id: string; usuario_abertura_nome: string | null; aberto_em: string }[]>([]);
+  const [caixaCompartilhadoId, setCaixaCompartilhadoId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast]     = useState<{ type: "ok" | "err"; msg: string } | null>(null);
 
@@ -165,13 +167,19 @@ export default function CaixaPage() {
   const fetch_ = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await fetch("/api/painel/caixa/atual", { headers: authHeader() });
+      const url = caixaCompartilhadoId
+        ? `/api/painel/caixa/atual?id=${caixaCompartilhadoId}`
+        : "/api/painel/caixa/atual";
+      const res  = await fetch(url, { headers: authHeader() });
       const data = await res.json();
-      if (data.success) setCaixa(data.data.caixa);
+      if (data.success) {
+        setCaixa(data.data.caixa);
+        setOutrosAbertos(data.data.outros_abertos ?? []);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [caixaCompartilhadoId]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
   useEffect(() => {
@@ -477,12 +485,65 @@ export default function CaixaPage() {
 
       {/* ── Sem caixa aberto ───────────────────────────────────────────────── */}
       {tab === "atual" && !caixa && !loading && (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-12 text-center">
-          <Lock className="mx-auto h-12 w-12 text-slate-600" />
-          <p className="mt-3 text-sm font-semibold text-white">Caixa fechado</p>
-          <p className="mt-1 text-xs text-slate-500">
-            Abra o caixa para começar a registrar vendas, sangrias e reforços.
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-12 text-center">
+            <Lock className="mx-auto h-12 w-12 text-slate-600" />
+            <p className="mt-3 text-sm font-semibold text-white">Você não tem caixa aberto</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Abra um caixa próprio (clique em &ldquo;Abrir caixa&rdquo; acima) ou use um caixa de outro operador.
+            </p>
+          </div>
+
+          {/* Caixas abertos de outros usuários */}
+          {outrosAbertos.length > 0 && (
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+                Caixas de outros operadores ({outrosAbertos.length})
+              </p>
+              <div className="space-y-2">
+                {outrosAbertos.map(o => (
+                  <div key={o.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-900 p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-white truncate">
+                        {o.usuario_abertura_nome ?? "Operador"}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Aberto {new Date(o.aberto_em).toLocaleString("pt-BR", {
+                          day: "2-digit", month: "2-digit",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setCaixaCompartilhadoId(o.id)}
+                      className="rounded-lg bg-brand hover:opacity-90 px-3 py-1.5 text-xs font-bold text-white"
+                    >
+                      Usar este
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-[10px] text-slate-500">
+                Ao usar um caixa de outro operador você compartilha vendas e relatórios.
+                As ações continuam registradas com seu nome.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Indicador de caixa compartilhado */}
+      {caixa && caixaCompartilhadoId && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 flex items-center justify-between gap-3">
+          <p className="text-xs text-amber-200">
+            <strong>Modo compartilhado:</strong> usando caixa de {caixa.usuario_abertura_nome ?? "outro operador"}
           </p>
+          <button
+            onClick={() => setCaixaCompartilhadoId(null)}
+            className="rounded-lg border border-white/10 hover:bg-white/5 px-3 py-1 text-xs text-slate-300"
+          >
+            Voltar pro meu
+          </button>
         </div>
       )}
 

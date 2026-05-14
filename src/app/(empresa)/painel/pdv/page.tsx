@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { FecharContaModal } from "@/components/pedidos/FecharContaModal";
+import { EntregaModal, type EntregaResult } from "@/components/pdv/EntregaModal";
 
 interface Categoria { id: string; nome: string; ordem: number; }
 interface Produto {
@@ -54,6 +55,9 @@ export default function PdvPage() {
   const [criandoPedido, setCriandoPedido] = useState(false);
   const [pedidoCriado, setPedidoCriado]   = useState<{ id: string; numero: number; total: number } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [taxaPadraoEmpresa, setTaxaPadraoEmpresa] = useState<number | null>(null);
+  const [entregaModalOpen, setEntregaModalOpen] = useState(false);
+  const [enderecoCliente, setEnderecoCliente] = useState<Partial<import("@/components/pdv/EntregaModal").EnderecoEntrega> | null>(null);
 
   const buscaInput = useRef<HTMLInputElement>(null);
 
@@ -74,6 +78,18 @@ export default function PdvPage() {
 
   useEffect(() => { carregar(); }, [carregar]);
   useEffect(() => { buscaInput.current?.focus(); }, []);
+
+  // Carrega taxa padrão da empresa pra pré-popular EntregaModal
+  useEffect(() => {
+    fetch("/api/painel/config", { headers: auth() })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.taxa_entrega != null) {
+          setTaxaPadraoEmpresa(Number(d.data.taxa_entrega));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Filtro
   const produtosFiltrados = useMemo(() => {
@@ -139,31 +155,12 @@ export default function PdvPage() {
     } finally { setBuscandoCliente(false); }
   }
 
-  // Finalizar — cria pedido
-  async function finalizar() {
-    if (cart.length === 0) return;
-
-    // Se tem cliente identificado E o cliente tem endereço, pergunta entrega/retira
-    let tipoFinal: "balcao" | "delivery" = "balcao";
-    let enderecoEntrega: Record<string, string> | null = null;
-    if (cliente?.id) {
-      const { confirmar } = await import("@/components/ui/ConfirmModal");
-      const ehDelivery = await confirmar({
-        titulo:   "Entrega ou retira no balcão?",
-        mensagem: `Cliente: ${cliente.nome ?? cliente.telefone}\n\nO pedido vai sair pra ENTREGA ou cliente vai RETIRAR no balcão?`,
-        okLabel:     "🛵 Sair pra entrega",
-        cancelLabel: "🛍 Retirar no balcão",
-      });
-      if (ehDelivery) {
-        tipoFinal = "delivery";
-        // Tenta puxar endereço cadastrado do cliente
-        try {
-          const c = await fetch(`/api/painel/clientes/${cliente.id}`, { headers: auth() }).then(r => r.json());
-          if (c.success && c.data?.endereco) enderecoEntrega = c.data.endereco;
-        } catch {}
-      }
-    }
-
+  // Cria o pedido. Se tipo=delivery, taxa e endereço vêm do EntregaModal.
+  async function criarPedido(opts: {
+    tipo: "balcao" | "delivery";
+    enderecoEntrega?: Record<string, string> | null;
+    taxaEntrega?: number;
+  }) {
     setCriandoPedido(true);
     setErro(null);
     try {
@@ -171,11 +168,12 @@ export default function PdvPage() {
         method:  "POST",
         headers: { "Content-Type": "application/json", ...auth() },
         body:    JSON.stringify({
-          tipo:        tipoFinal,
-          cliente_id:  cliente?.id || undefined,
-          cliente_nome: cliente?.nome || undefined,
+          tipo:             opts.tipo,
+          cliente_id:       cliente?.id || undefined,
+          cliente_nome:     cliente?.nome || undefined,
           cliente_telefone: cliente?.telefone || undefined,
-          cliente_endereco: enderecoEntrega || undefined,
+          cliente_endereco: opts.enderecoEntrega || undefined,
+          taxa_entrega:     opts.taxaEntrega ?? undefined,
           itens: cart.map(i => ({
             produto_id:     i.produto.id,
             nome:           i.produto.nome,
@@ -192,9 +190,52 @@ export default function PdvPage() {
       setPedidoCriado({
         id:     d.data.id,
         numero: d.data.numero,
-        total:  subtotal,
+        total:  subtotal + (opts.taxaEntrega ?? 0),
       });
     } finally { setCriandoPedido(false); }
+  }
+
+  // Finalizar — pergunta tipo, abre modal entrega se necessário
+  async function finalizar() {
+    if (cart.length === 0) return;
+
+    // Sem cliente identificado: vai sempre balcão
+    if (!cliente?.id) {
+      await criarPedido({ tipo: "balcao" });
+      return;
+    }
+
+    const { confirmar } = await import("@/components/ui/ConfirmModal");
+    const ehDelivery = await confirmar({
+      titulo:      "Entrega ou retira no balcão?",
+      mensagem:    `Cliente: ${cliente.nome ?? cliente.telefone}`,
+      okLabel:     "🛵 Sair pra entrega",
+      cancelLabel: "🛍 Retirar no balcão",
+    });
+
+    if (!ehDelivery) {
+      await criarPedido({ tipo: "balcao" });
+      return;
+    }
+
+    // Delivery: busca endereço cadastrado e abre modal
+    let enderecoCadastrado: Record<string, string> | null = null;
+    try {
+      const c = await fetch(`/api/painel/clientes/${cliente.id}`, { headers: auth() }).then(r => r.json());
+      if (c.success && c.data?.endereco) enderecoCadastrado = c.data.endereco;
+    } catch {}
+    setEnderecoCliente(enderecoCadastrado);
+    setEntregaModalOpen(true);
+  }
+
+  // Callback do EntregaModal — usuário confirmou endereço + taxa
+  async function handleEntregaConfirmada(r: EntregaResult) {
+    setEntregaModalOpen(false);
+    await criarPedido({
+      tipo: "delivery",
+      enderecoEntrega: r.endereco as unknown as Record<string, string>,
+      taxaEntrega: r.taxa_entrega,
+    });
   }
 
   function novoPedido() {
@@ -429,6 +470,16 @@ export default function PdvPage() {
           onClosed={novoPedido}
         />
       )}
+
+      {/* Modal de endereço/taxa de entrega */}
+      <EntregaModal
+        open={entregaModalOpen}
+        cliente={cliente}
+        enderecoCadastrado={enderecoCliente}
+        taxaPadrao={taxaPadraoEmpresa ?? undefined}
+        onClose={() => setEntregaModalOpen(false)}
+        onConfirm={handleEntregaConfirmada}
+      />
     </div>
   );
 }
