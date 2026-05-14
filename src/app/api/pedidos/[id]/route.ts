@@ -6,6 +6,7 @@ import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { notificarEvolution, type EvolutionEvento } from "@/lib/notify/evolution";
 import { cancelarJobsPedido } from "@/lib/print/queue";
+import { invalidarRastreio } from "@/lib/delivery/rastreio";
 
 // Map de status do pedido → ID do evento Evolution (WA_EVENTOS no painel)
 const STATUS_TO_EVENTO: Partial<Record<PedidoStatus, EvolutionEvento>> = {
@@ -124,6 +125,11 @@ export async function PATCH(
         `UPDATE mesas SET status = 'livre', pedido_ativo_id = NULL WHERE id = $1`,
         [pedido.mesa_id]
       );
+    }
+
+    // Se entregue, invalida link de rastreio
+    if (body.status === "entregue") {
+      invalidarRastreio(params.id).catch(() => {});
     }
 
     // Cancela jobs de impressão pendentes se pedido foi cancelado

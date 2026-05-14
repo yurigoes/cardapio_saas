@@ -28,11 +28,15 @@ export async function GET(
       taxa_entrega: string;
       tempo_entrega_min: number | null;
       pedido_minimo: string;
+      whatsapp: string | null;
+      delivery_aceita_fora_zona: boolean | null;
     }>(
       `SELECT id,
               COALESCE(taxa_entrega, 0)    AS taxa_entrega,
               tempo_entrega_min,
-              COALESCE(pedido_minimo, 0)   AS pedido_minimo
+              COALESCE(pedido_minimo, 0)   AS pedido_minimo,
+              whatsapp,
+              COALESCE(delivery_aceita_fora_zona, false) AS delivery_aceita_fora_zona
          FROM empresas
         WHERE slug = $1 AND deleted_at IS NULL AND ${EMPRESA_OPERACIONAL_SQL}`,
       [params.slug]
@@ -47,16 +51,41 @@ export async function GET(
         tempo_min:     zona.tempo_min,
         zona_nome:     zona.nome,
         pedido_minimo: Number(empresa.pedido_minimo),
+        whatsapp:      empresa.whatsapp,
         fallback:      false,
+        atende:        true,
       });
     }
 
+    // Sem zona match — verifica se aceita fora ou rejeita
+    if (!empresa.delivery_aceita_fora_zona) {
+      // Lista zonas cadastradas pra mostrar pro cliente
+      const { query } = await import("@/lib/db/client");
+      const zonas = await query<{ nome: string; bairro: string | null; cep_inicio: string | null; cep_fim: string | null }>(
+        `SELECT nome, bairro, cep_inicio, cep_fim
+           FROM zonas_entrega WHERE empresa_id = $1 AND ativo = true
+          ORDER BY nome LIMIT 20`,
+        [empresa.id]
+      ).catch(() => []);
+      return ok({
+        atende:        false,
+        whatsapp:      empresa.whatsapp,
+        zonas_cobertas: zonas,
+        mensagem:      cep || bairro
+          ? "Não atendemos delivery na sua região. Entre em contato pelo WhatsApp ou retire no balcão."
+          : "Informe CEP ou bairro pra consultar entrega.",
+      });
+    }
+
+    // Aceita fora de zona — usa taxa genérica
     return ok({
       taxa:          Number(empresa.taxa_entrega),
       tempo_min:     empresa.tempo_entrega_min,
       zona_nome:     null,
       pedido_minimo: Number(empresa.pedido_minimo),
+      whatsapp:      empresa.whatsapp,
       fallback:      true,
+      atende:        true,
     });
   } catch (err) {
     console.error("[Pub/TaxaEntrega]", err);
