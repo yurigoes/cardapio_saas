@@ -151,6 +151,8 @@ export async function POST(req: NextRequest) {
     if (err instanceof Error && err.message.includes("unsupported")) {
       return badRequest("Formato de imagem não suportado ou arquivo corrompido");
     }
-    return serverError("Falha no upload da imagem");
+    // Detalhamento melhor pra debug
+    const detalhe = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    return serverError(`Falha no upload: ${detalhe.slice(0, 300)}`);
   }
 }

@@ -98,7 +98,8 @@ export async function middleware(req: NextRequest) {
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sdk.mercadopago.com https://js.stripe.com https://unpkg.com blob:",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sdk.mercadopago.com https://js.stripe.com https://unpkg.com https://static.cloudflareinsights.com blob:",
+      "script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' https://sdk.mercadopago.com https://js.stripe.com https://unpkg.com https://static.cloudflareinsights.com blob:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
       "worker-src 'self' blob:",
       "img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:* http://minio:*",
