@@ -85,7 +85,10 @@ async function renovarToken(cfg: IfoodConfig): Promise<string> {
 
   const r = await fetch(`${base}/authentication/v1.0/oauth/token`, {
     method:  "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "accept":       "application/json",
+    },
     body:    body.toString(),
     signal:  AbortSignal.timeout(15_000),
   });

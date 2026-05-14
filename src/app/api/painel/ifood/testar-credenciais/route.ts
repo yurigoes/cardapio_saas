@@ -71,7 +71,10 @@ export async function POST(req: NextRequest) {
     try {
       const r = await fetch(`${BASE}/authentication/v1.0/oauth/token`, {
         method:  "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "accept":       "application/json",
+        },
         body:    t.body.toString(),
         signal:  AbortSignal.timeout(15_000),
       });
@@ -111,13 +114,20 @@ export async function POST(req: NextRequest) {
     secret_chars:      cfg.client_secret.length,
     secret_preview:    cfg.client_secret.slice(0, 4) + "..." + cfg.client_secret.slice(-4),
     diagnostico: ultimo.http === 401
-      ? "iFood rejeitou as credenciais. Causas comuns:\n" +
-        "1. App tipo errado: Centralizado precisa estar VINCULADO ao merchant — entre no portal, app → 'Permissões' → confirme merchant ID associado\n" +
-        "2. Secret vencido/regenerado: vá no iFood developer, REGENERE o secret e cole o NOVO aqui (o antigo invalida)\n" +
-        "3. App não ativado: 'Aplicativo de teste' precisa estar ATIVO — confira em 'Detalhes' do app no portal\n" +
-        "4. Tipo errado pra essa flow: nosso código usa client_credentials (Centralizado). Pra Distribuído precisa de userCode flow (não suportado ainda)"
+      ? "iFood rejeitou as credenciais. Causa MAIS COMUM (confirmada pela docs oficial):\n\n" +
+        "🔴 STORE OWNER PRECISA APROVAR A APP NO PARTNER PORTAL.\n" +
+        "Mesmo com client_id/secret corretos, iFood retorna 401 até o dono da loja aprovar a request no Portal Parceiro.\n\n" +
+        "Passos pra resolver (Centralizado):\n" +
+        "1. iFood developer → 'Meus Apps' → seu app → aba 'Permissões'\n" +
+        "2. Localiza loja por ID/CNPJ → confirma → 'Solicitar acesso'\n" +
+        "3. Dono da loja entra em https://portal.ifood.com.br → vê notificação de pedido de acesso → APROVA\n" +
+        "4. Volta aqui e clica 'Verificar credenciais' de novo — agora deve funcionar\n\n" +
+        "Outras causas possíveis:\n" +
+        "• App ainda não foi homologado (process. obrigatório do iFood pré-uso)\n" +
+        "• Secret regenerado depois de salvar — re-cole o secret atual do portal\n" +
+        "• App tipo Distribuído usado com client_credentials (precisa flow userCode — não suportado ainda)"
       : ultimo.http === 400
-      ? "Body inválido — pode ser caractere especial no secret. Tente regenerar."
-      : "Erro genérico — confira o portal iFood pra status do app.",
+      ? "Body inválido — caractere especial no secret OU campo missing."
+      : "Erro genérico — verifica status do app no portal iFood.",
   });
 }

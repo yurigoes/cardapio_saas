@@ -312,6 +312,38 @@ export default function IfoodPage() {
         )}
       </div>
 
+      {/* Pré-requisitos iFood */}
+      <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 text-xs space-y-3">
+        <h4 className="font-bold text-blue-300 flex items-center gap-2">
+          📋 Pré-requisitos do iFood (FAÇA ANTES DE TESTAR)
+        </h4>
+        <div className="text-slate-300 space-y-2">
+          <p>
+            Mesmo com client_id/secret corretos, iFood retorna <strong className="text-red-300">401 Unauthorized</strong>
+            {" "}até a loja autorizar a app no portal. Esses passos são obrigatórios:
+          </p>
+          <ol className="list-decimal list-inside space-y-1 pl-2">
+            <li>
+              No <a href="https://developer.ifood.com.br" target="_blank" rel="noopener" className="text-blue-300 underline">
+                iFood Developer
+              </a>: <strong>Meus Apps</strong> → seu app → aba <strong>Permissões</strong>
+            </li>
+            <li>
+              Localiza loja por <strong>ID</strong> ou <strong>CNPJ</strong> → confirma → <strong>&quot;Solicitar acesso&quot;</strong>
+            </li>
+            <li>
+              Dono da loja entra em <a href="https://portal.ifood.com.br" target="_blank" rel="noopener" className="text-blue-300 underline">
+                portal.ifood.com.br
+              </a> → aba <strong>Apps Integrados</strong> ou notificações → <strong>APROVA</strong> a request
+            </li>
+            <li>Volta aqui → <strong>&quot;Verificar credenciais&quot;</strong> → agora deve dar ✓</li>
+          </ol>
+          <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-amber-200">
+            ⚠ <strong>Sem o passo 3 (aprovação no Portal)</strong>, polling sempre dá 401 — não é bug nosso, é fluxo do iFood.
+          </p>
+        </div>
+      </div>
+
       {/* Setup do cron */}
       <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs">
         <h4 className="font-bold text-amber-300 mb-2">⚙ Setup do cron no servidor</h4>
@@ -322,6 +354,8 @@ export default function IfoodPage() {
         </pre>
         <p className="mt-2 text-slate-500">
           Roda 1x/min. Cada execução faz 1 long-poll de até 30s no iFood.
+          <strong className="text-amber-300"> Use aspas simples no heredoc (&lt;&lt;&apos;EOF&apos;)</strong> pra
+          evitar expansão da var $CRON_SECRET.
         </p>
       </div>
     </div>
