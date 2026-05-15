@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Server, Monitor, Tv2, Smartphone, Printer, Box,
   Search, Filter, RefreshCw, Activity,
-  CheckCircle2, XCircle, Clock, AlertTriangle,
+  CheckCircle2, XCircle, Clock, AlertTriangle, ExternalLink,
 } from "lucide-react";
 
 interface Agente {
@@ -31,6 +31,7 @@ interface Agente {
   ultimo_pedido_em:  string | null;
   alertado_em:       string | null;
   alertas_count:     number;
+  rustdesk_id?:      string | null;
 }
 
 const TIPO_ICONS: Record<string, typeof Server> = {
@@ -193,12 +194,13 @@ export default function AdminMaquinasPage() {
               <th className="px-4 py-3 text-left">Último heartbeat</th>
               <th className="px-4 py-3 text-left">Fila</th>
               <th className="px-4 py-3 text-left">Versão</th>
+              <th className="px-4 py-3 text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
             {filtrados.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
                   {loading ? "Carregando..." : "Nenhuma máquina encontrada"}
                 </td>
               </tr>
@@ -248,6 +250,28 @@ export default function AdminMaquinasPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500">{a.versao ?? "—"}</td>
+                  <td className="px-4 py-3 text-right">
+                    {a.rustdesk_id ? (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const r = await fetch(`/api/admin/agentes/${a.id}/rustdesk-connect`, { headers: authHeaders() });
+                            const data = await r.json();
+                            if (!r.ok || !data.success) { alert(data?.error || "Falha"); return; }
+                            window.location.href = data.data.url;
+                          } catch (e) {
+                            alert(e instanceof Error ? e.message : "Erro");
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-blue-500/15 border border-blue-500/30 px-2 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-500/25"
+                        title="Abrir cliente RustDesk"
+                      >
+                        <ExternalLink className="h-3 w-3" /> Conectar
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-600">sem suporte</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}

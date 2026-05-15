@@ -1,0 +1,40 @@
+# RustDesk self-hosted server (hbbs + hbbr)
+# Roda na mesma VPS do cardapio_saas. Sobe em portas dedicadas (21115-21119).
+#
+# Deploy:
+#   cd rustdesk && docker compose -f docker-compose.rustdesk.yml up -d
+#
+# Portas necessárias no firewall:
+#   21115/tcp  — NAT type test
+#   21116/tcp  — TCP hole punching + connection (hbbs)
+#   21116/udp  — heartbeat (hbbs)
+#   21117/tcp  — relay (hbbr)
+#   21118/tcp  — web client (opcional)
+#   21119/tcp  — web client (opcional)
+#
+# Após primeira execução, hbbs gera id_ed25519.pub em ./data/ — esse é
+# o "key" público que distribuímos no instalador do agente.
+
+services:
+  hbbs:
+    container_name: rustdesk-hbbs
+    image: rustdesk/rustdesk-server:latest
+    command: hbbs -r ${RUSTDESK_RELAY_HOST}:21117 -k _
+    volumes:
+      - ./data:/root
+    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      - hbbr
+    environment:
+      - ALWAYS_USE_RELAY=Y     # força sempre passar pelo relay (mais lento, mais confiável)
+      - RUSTDESK_API_RUSTDESK_ID_SERVER=${RUSTDESK_RELAY_HOST}:21116
+
+  hbbr:
+    container_name: rustdesk-hbbr
+    image: rustdesk/rustdesk-server:latest
+    command: hbbr -k _
+    volumes:
+      - ./data:/root
+    network_mode: host
+    restart: unless-stopped

@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
               a.status, a.ultimo_hb_em, a.registrado_em, a.primeiro_hb_em,
               a.fila_pendente, a.ultimo_pedido_em,
               a.alertado_em, a.alertas_count,
+              a.rustdesk_id,
               a.empresa_id,
               e.nome_fantasia AS empresa_nome
          FROM agentes a

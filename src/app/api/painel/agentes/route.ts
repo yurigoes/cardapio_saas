@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       `SELECT id, agente_id, tipo, nome, hostname, ip_ultimo::text,
               plataforma, versao, status, ultimo_hb_em,
               registrado_em, primeiro_hb_em, fila_pendente, ultimo_pedido_em,
-              token_prefix
+              token_prefix, rustdesk_id
          FROM agentes
         WHERE empresa_id = $1 AND deleted_at IS NULL
         ORDER BY tipo ASC, nome ASC`,

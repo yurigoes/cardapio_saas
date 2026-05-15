@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import {
   Server, Monitor, Tv2, Smartphone, Printer, Box,
   Plus, RefreshCw, Trash2, Copy, CheckCircle2,
-  XCircle, Clock, AlertTriangle, X, KeyRound,
+  XCircle, Clock, AlertTriangle, X, KeyRound, Link2, ExternalLink, ShieldCheck,
 } from "lucide-react";
 
 interface Agente {
@@ -29,6 +29,15 @@ interface Agente {
   registrado_em:     string;
   fila_pendente:     number;
   token_prefix:      string;
+  rustdesk_id?:      string | null;
+}
+
+interface RustDeskConfig {
+  password?:    string;
+  rustdesk_id?: string | null;
+  relay_host?:  string | null;
+  public_key?:  string | null;
+  auto_aceite?: boolean;
 }
 
 const TIPOS: Array<{ value: string; label: string; icon: typeof Server; desc: string }> = [
@@ -74,6 +83,83 @@ export default function PainelMaquinasPage() {
   const [tokenGerado, setTokenGerado] = useState<{ raw: string; nome: string } | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  // RustDesk
+  const [rdAgente, setRdAgente] = useState<Agente | null>(null);
+  const [rdConfig, setRdConfig] = useState<RustDeskConfig | null>(null);
+  const [rdNovoId, setRdNovoId] = useState("");
+  const [rdAutoAceite, setRdAutoAceite] = useState(false);
+  const [rdSalvando, setRdSalvando] = useState(false);
+
+  async function abrirRustDesk(a: Agente) {
+    setRdAgente(a);
+    setRdConfig(null);
+    setRdNovoId(a.rustdesk_id ?? "");
+    setRdAutoAceite(false);
+    setErro(null);
+    try {
+      const r = await fetch(`/api/painel/agentes/${a.id}/rustdesk`, { headers: authHeaders() });
+      const data = await r.json();
+      if (data.success) {
+        setRdConfig({
+          relay_host:  data.data.relay_host,
+          public_key:  data.data.public_key,
+          rustdesk_id: data.data.rustdesk_id,
+          auto_aceite: data.data.auto_aceite,
+        });
+        setRdAutoAceite(!!data.data.auto_aceite);
+      } else {
+        setErro(data.error ?? "Erro ao carregar config");
+      }
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro");
+    }
+  }
+
+  async function gerarSenhaRustDesk() {
+    if (!rdAgente) return;
+    setRdSalvando(true); setErro(null);
+    try {
+      const r = await fetch(`/api/painel/agentes/${rdAgente.id}/rustdesk`, {
+        method:  "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          rustdesk_id: rdNovoId.trim() || undefined,
+          auto_aceite: rdAutoAceite,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.success) throw new Error(data?.error || "Falha");
+      setRdConfig({
+        password:    data.data.password,
+        rustdesk_id: data.data.rustdesk_id,
+        relay_host:  data.data.relay_host,
+        public_key:  data.data.public_key,
+        auto_aceite: data.data.auto_aceite,
+      });
+      carregar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro");
+    } finally { setRdSalvando(false); }
+  }
+
+  async function conectarRustDesk(a: Agente) {
+    try {
+      const r = await fetch(`/api/painel/agentes/${a.id}/rustdesk/connect`, { headers: authHeaders() });
+      const data = await r.json();
+      if (!r.ok || !data.success) throw new Error(data?.error || "Falha");
+      window.location.href = data.data.url;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao conectar");
+    }
+  }
+
+  function copyTexto(t: string) {
+    navigator.clipboard.writeText(t).then(() => {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    });
+  }
 
   async function carregar() {
     setLoading(true);
@@ -221,6 +307,26 @@ export default function PainelMaquinasPage() {
                   </div>
                 )}
               </dl>
+
+              {/* RustDesk actions */}
+              <div className="mt-3 flex gap-1.5 border-t border-white/5 pt-3">
+                {a.rustdesk_id ? (
+                  <button
+                    onClick={() => conectarRustDesk(a)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-500/15 border border-blue-500/30 px-2 py-1.5 text-[11px] font-medium text-blue-300 hover:bg-blue-500/25"
+                    title="Abre o cliente RustDesk com este agente"
+                  >
+                    <ExternalLink className="h-3 w-3" /> Conectar
+                  </button>
+                ) : null}
+                <button
+                  onClick={() => abrirRustDesk(a)}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-[11px] font-medium text-slate-300 hover:bg-white/5"
+                  title="Configurar suporte remoto"
+                >
+                  <Link2 className="h-3 w-3" /> {a.rustdesk_id ? "Recriar senha" : "Configurar suporte"}
+                </button>
+              </div>
             </div>
           );
         })}
@@ -350,6 +456,135 @@ export default function PainelMaquinasPage() {
             >
               Já copiei, fechar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal RustDesk: configura suporte remoto */}
+      {rdAgente && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) { setRdAgente(null); setRdConfig(null); } }}
+        >
+          <div className="w-full max-w-xl rounded-2xl border border-blue-500/30 bg-slate-900 p-6 shadow-2xl max-h-[90vh] overflow-auto">
+            <div className="mb-4 flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-blue-500/15 p-2">
+                  <ShieldCheck className="h-5 w-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Suporte remoto — {rdAgente.nome}</h3>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    Acesso seguro via RustDesk self-hosted (sem TeamViewer/AnyDesk).
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setRdAgente(null); setRdConfig(null); }}
+                className="rounded p-1 text-slate-500 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {!rdConfig?.relay_host && (
+              <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-300">
+                ⚠ RustDesk Server ainda não foi configurado nesta VPS.<br/>
+                Avise o administrador master pra rodar:<br/>
+                <code className="mt-1 inline-block rounded bg-slate-950 px-2 py-1">sudo bash scripts/install-rustdesk-server.sh</code>
+              </div>
+            )}
+
+            {rdConfig?.relay_host && (
+              <>
+                <div className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-950 p-3 text-xs">
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-500">Relay</p>
+                    <p className="font-mono text-slate-300">{rdConfig.relay_host}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-500">Status</p>
+                    <p className={rdConfig.rustdesk_id ? "text-emerald-400" : "text-amber-400"}>
+                      {rdConfig.rustdesk_id ? `ID ${rdConfig.rustdesk_id}` : "Aguardando 1ª config"}
+                    </p>
+                  </div>
+                </div>
+
+                <label className="mb-1 block text-xs font-medium text-slate-400">
+                  ID RustDesk do agente <span className="text-slate-600">(9 dígitos — pega no cliente)</span>
+                </label>
+                <input
+                  type="text"
+                  value={rdNovoId}
+                  onChange={(e) => setRdNovoId(e.target.value)}
+                  placeholder="Ex: 123456789"
+                  className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-blue-500/50 focus:outline-none"
+                />
+
+                <label className="mb-3 flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-slate-950 p-3">
+                  <input
+                    type="checkbox"
+                    checked={rdAutoAceite}
+                    onChange={(e) => setRdAutoAceite(e.target.checked)}
+                    className="h-4 w-4 accent-blue-500"
+                  />
+                  <div>
+                    <p className="text-xs font-medium text-white">Auto-aceitar conexões do master</p>
+                    <p className="text-[10px] text-slate-500">
+                      Se ON: master conecta sem prompt na máquina (TI-friendly).
+                      Se OFF: máquina pede confirmação no popup nativo.
+                    </p>
+                  </div>
+                </label>
+
+                {erro && (
+                  <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/15 px-3 py-2 text-xs text-red-300">{erro}</div>
+                )}
+
+                {rdConfig?.password ? (
+                  <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+                    <p className="mb-1 text-xs font-bold text-amber-300">⚠ Senha gerada — copie agora</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 break-all rounded bg-slate-950 px-2 py-1 text-xs text-amber-200">{rdConfig.password}</code>
+                      <button
+                        onClick={() => copyTexto(rdConfig.password!)}
+                        className="rounded bg-amber-500 px-2 py-1 text-[10px] font-bold text-slate-950 hover:bg-amber-400"
+                      >
+                        {copiado ? "✓" : <Copy className="h-3 w-3" />}
+                      </button>
+                    </div>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-[11px] text-amber-300">
+                        Ver comando pra instalar no agente Linux
+                      </summary>
+                      <pre className="mt-2 overflow-auto rounded bg-slate-950 p-2 text-[10px] text-slate-300">{`# Cole na máquina (Linux Debian/Ubuntu):
+sudo bash <(curl -fsSL https://app.tthreedigital.com.br/install-agent.sh) \\
+  --relay ${rdConfig.relay_host} \\
+  --key   "${rdConfig.public_key}" \\
+  --pass  "${rdConfig.password}"${rdConfig.auto_aceite ? " \\\n  --auto-aceite" : ""}
+
+# Depois copie o ID que aparecer e cole acima.`}</pre>
+                    </details>
+                  </div>
+                ) : null}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setRdAgente(null); setRdConfig(null); }}
+                    className="flex-1 rounded-lg border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5"
+                  >
+                    Fechar
+                  </button>
+                  <button
+                    onClick={gerarSenhaRustDesk}
+                    disabled={rdSalvando}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-600 disabled:opacity-50"
+                  >
+                    {rdSalvando ? "Gerando..." : <><KeyRound className="h-4 w-4" /> Gerar senha + salvar</>}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
