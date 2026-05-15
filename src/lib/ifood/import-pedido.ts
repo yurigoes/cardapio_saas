@@ -103,9 +103,11 @@ export async function importarPedidoIfood(
   // Auto-aceite (FORA da transaction — chamada externa pra iFood)
   if (!result.ja_existia && autoAceite) {
     try {
-      const ifoodCfg = await getIfoodConfig(empresaId);
-      if (ifoodCfg) {
-        const ok = await confirmOrder(ifoodCfg, ord.id);
+      // Pedidos simulados (prefixo SIM-) pulam a chamada real ao iFood
+      const ehSimulado = typeof ord.id === "string" && ord.id.startsWith("SIM-");
+      const ifoodCfg = ehSimulado ? null : await getIfoodConfig(empresaId);
+      const ok = ehSimulado ? true : (ifoodCfg ? await confirmOrder(ifoodCfg, ord.id) : false);
+      if (ehSimulado || ifoodCfg) {
         if (ok) {
           await queryOne(
             `UPDATE pedidos
