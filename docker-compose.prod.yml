@@ -243,6 +243,9 @@ services:
     image: cardapio-saas:latest
     container_name: cardapio_app
     restart: unless-stopped
+    # Expõe porta no host pra Cloudflare Tunnel (cloudflared aponta pra localhost:3000)
+    ports:
+      - "127.0.0.1:3000:3000"
     environment:
       NODE_ENV:                production
       PORT:                    3000
