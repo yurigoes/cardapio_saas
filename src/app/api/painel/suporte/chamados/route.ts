@@ -19,36 +19,42 @@ export async function GET(req: NextRequest) {
   // Master e suporte veem todos; demais só da própria empresa
   const onlyEmpresa = !isAgent;
 
-  const rows = await query(
-    `SELECT c.id, c.assunto, c.prioridade, c.status, c.canal, c.tags,
-            c.criado_em::text, c.atualizado_em::text, c.ultima_msg_em::text,
-            c.fechado_em::text, c.empresa_id,
-            e.nome_fantasia AS empresa_nome,
-            u.nome AS atribuido_nome,
-            (SELECT COUNT(*) FROM suporte_mensagens m
-              WHERE m.chamado_id = c.id AND m.lido_em IS NULL AND m.autor_tipo != 'agente') AS msgs_nao_lidas
-       FROM suporte_chamados c
-       JOIN empresas e ON e.id = c.empresa_id
-       LEFT JOIN usuarios u ON u.id = c.atribuido_a
-      WHERE c.deleted_at IS NULL OR c.deleted_at IS NULL
-        ${onlyEmpresa ? "AND c.empresa_id = $1" : ""}
-      ORDER BY
-        CASE c.status
-          WHEN 'aberto' THEN 1
-          WHEN 'em_andamento' THEN 2
-          WHEN 'aguardando_cliente' THEN 3
-          WHEN 'resolvido' THEN 4
-          WHEN 'fechado' THEN 5
-        END,
-        CASE c.prioridade
-          WHEN 'urgente' THEN 1 WHEN 'alta' THEN 2 WHEN 'normal' THEN 3 ELSE 4
-        END,
-        c.atualizado_em DESC
-      LIMIT 200`,
-    onlyEmpresa ? [empresaId] : []
-  ).catch(() => []);
-
-  return ok({ chamados: rows });
+  // 2 fixes:
+  // - Removido c.deleted_at IS NULL (coluna não existe na tabela)
+  // - JOIN → LEFT JOIN em empresas (chamados internos do SaaS sem empresa_id)
+  try {
+    const rows = await query(
+      `SELECT c.id, c.assunto, c.prioridade, c.status, c.canal, c.tags,
+              c.criado_em::text, c.atualizado_em::text, c.ultima_msg_em::text,
+              c.fechado_em::text, c.empresa_id,
+              COALESCE(e.nome_fantasia, '(sem empresa)') AS empresa_nome,
+              u.nome AS atribuido_nome,
+              (SELECT COUNT(*) FROM suporte_mensagens m
+                WHERE m.chamado_id = c.id AND m.lido_em IS NULL AND m.autor_tipo != 'agente') AS msgs_nao_lidas
+         FROM suporte_chamados c
+         LEFT JOIN empresas e ON e.id = c.empresa_id
+         LEFT JOIN usuarios u ON u.id = c.atribuido_a
+        ${onlyEmpresa ? "WHERE c.empresa_id = $1" : ""}
+        ORDER BY
+          CASE c.status
+            WHEN 'aberto' THEN 1
+            WHEN 'em_andamento' THEN 2
+            WHEN 'aguardando_cliente' THEN 3
+            WHEN 'resolvido' THEN 4
+            WHEN 'fechado' THEN 5
+          END,
+          CASE c.prioridade
+            WHEN 'urgente' THEN 1 WHEN 'alta' THEN 2 WHEN 'normal' THEN 3 ELSE 4
+          END,
+          c.atualizado_em DESC
+        LIMIT 200`,
+      onlyEmpresa ? [empresaId] : []
+    );
+    return ok({ chamados: rows });
+  } catch (err) {
+    console.error("[Chamados/GET]", err);
+    return ok({ chamados: [] });
+  }
 }
 
 const novoSchema = z.object({

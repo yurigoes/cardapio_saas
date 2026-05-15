@@ -24,7 +24,7 @@ export async function GET(
             COALESCE(s.admin_validado, false)   AS admin_validado,
             COALESCE(s.usuario_validado, false) AS usuario_validado
        FROM suporte_chamados c
-       JOIN empresas e ON e.id = c.empresa_id
+       LEFT JOIN empresas e ON e.id = c.empresa_id
        LEFT JOIN v_chamado_selos s ON s.chamado_id = c.id
       WHERE c.id = $1 ${onlyEmpresa ? "AND c.empresa_id = $2" : ""}`,
     onlyEmpresa ? [params.id, empresaId] : [params.id]
