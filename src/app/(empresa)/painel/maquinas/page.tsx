@@ -73,6 +73,117 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function InstalacaoTabs({
+  relay, publicKey, password, autoAceite, onCopy,
+}: {
+  relay: string; publicKey: string; password: string; autoAceite: boolean;
+  onCopy: (s: string) => void;
+}) {
+  const [tab, setTab] = useState<"windows" | "linux">("windows");
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://app.tthreedigital.com.br";
+
+  const cmdLinux = `sudo bash <(curl -fsSL ${origin}/install-agent.sh) \\
+  --relay ${relay} \\
+  --key   "${publicKey}" \\
+  --pass  "${password}"${autoAceite ? " \\\n  --auto-aceite" : ""}`;
+
+  const cmdWinPS = `iwr ${origin}/install-agent.ps1 -OutFile $env:TEMP\\rd.ps1 -UseBasicParsing; ` +
+    `Start-Process powershell "-NoProfile -ExecutionPolicy Bypass -File $env:TEMP\\rd.ps1 ` +
+    `-Relay '${relay}' -Key '${publicKey}' -Pass '${password}'${autoAceite ? " -AutoAceite" : ""}" -Verb RunAs`;
+
+  return (
+    <div className="mt-3">
+      <div className="mb-2 flex gap-1 border-b border-amber-500/20">
+        {(["windows", "linux"] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-3 py-1.5 text-[11px] font-medium border-b-2 transition ${
+              tab === t
+                ? "border-amber-400 text-amber-300"
+                : "border-transparent text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            {t === "windows" ? "🪟 Windows" : "🐧 Linux"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "windows" && (
+        <div className="space-y-2">
+          <p className="text-[11px] text-amber-300">
+            <strong>Opção A — One-liner PowerShell</strong> (abra PowerShell como admin):
+          </p>
+          <div className="relative">
+            <pre className="overflow-auto rounded bg-slate-950 p-2 pr-10 text-[10px] text-slate-300">{cmdWinPS}</pre>
+            <button
+              onClick={() => onCopy(cmdWinPS)}
+              className="absolute top-1 right-1 rounded bg-slate-800 p-1 text-slate-400 hover:bg-slate-700"
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          </div>
+
+          <p className="mt-3 text-[11px] text-amber-300">
+            <strong>Opção B — Double-click .bat</strong> (mais simples, sem terminal):
+          </p>
+          <div className="flex items-center gap-2">
+            <a
+              href={`${origin}/install-agent.bat`}
+              download
+              className="flex items-center gap-1.5 rounded bg-amber-500 px-3 py-1.5 text-[11px] font-bold text-slate-950 hover:bg-amber-400"
+            >
+              ⬇ Baixar .bat
+            </a>
+            <p className="text-[10px] text-slate-500">
+              Cole os valores abaixo quando o .bat pedir.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-1 text-[10px] mt-1">
+            <div className="rounded bg-slate-950 px-2 py-1">
+              <p className="text-slate-500">Relay:</p>
+              <p className="font-mono text-slate-300 truncate">{relay}</p>
+            </div>
+            <div className="rounded bg-slate-950 px-2 py-1">
+              <p className="text-slate-500">Senha:</p>
+              <p className="font-mono text-slate-300 truncate">{password}</p>
+            </div>
+            <div className="rounded bg-slate-950 px-2 py-1">
+              <p className="text-slate-500">Auto-aceite:</p>
+              <p className="text-slate-300">{autoAceite ? "s" : "n"}</p>
+            </div>
+          </div>
+
+          <details className="mt-2">
+            <summary className="cursor-pointer text-[10px] text-slate-500">Ver chave pública (longa)</summary>
+            <code className="mt-1 block break-all rounded bg-slate-950 p-2 text-[9px] text-slate-400">{publicKey}</code>
+          </details>
+        </div>
+      )}
+
+      {tab === "linux" && (
+        <div className="space-y-2">
+          <p className="text-[11px] text-amber-300">
+            Cole na máquina (Debian/Ubuntu, com sudo):
+          </p>
+          <div className="relative">
+            <pre className="overflow-auto rounded bg-slate-950 p-2 pr-10 text-[10px] text-slate-300">{cmdLinux}</pre>
+            <button
+              onClick={() => onCopy(cmdLinux)}
+              className="absolute top-1 right-1 rounded bg-slate-800 p-1 text-slate-400 hover:bg-slate-700"
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-500">
+            Após instalar, copie o <strong>ID</strong> que aparecer e cole no campo acima.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PainelMaquinasPage() {
   const [agentes, setAgentes] = useState<Agente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -515,6 +626,9 @@ export default function PainelMaquinasPage() {
         </div>
       )}
 
+      {/* Modal RustDesk: tabs Linux/Windows */}
+      {/* Componente abaixo */}
+
       {/* Modal RustDesk: configura suporte remoto */}
       {rdAgente && (
         <div
@@ -608,18 +722,14 @@ export default function PainelMaquinasPage() {
                         {copiado ? "✓" : <Copy className="h-3 w-3" />}
                       </button>
                     </div>
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-[11px] text-amber-300">
-                        Ver comando pra instalar no agente Linux
-                      </summary>
-                      <pre className="mt-2 overflow-auto rounded bg-slate-950 p-2 text-[10px] text-slate-300">{`# Cole na máquina (Linux Debian/Ubuntu):
-sudo bash <(curl -fsSL https://app.tthreedigital.com.br/install-agent.sh) \\
-  --relay ${rdConfig.relay_host} \\
-  --key   "${rdConfig.public_key}" \\
-  --pass  "${rdConfig.password}"${rdConfig.auto_aceite ? " \\\n  --auto-aceite" : ""}
 
-# Depois copie o ID que aparecer e cole acima.`}</pre>
-                    </details>
+                    <InstalacaoTabs
+                      relay={rdConfig.relay_host!}
+                      publicKey={rdConfig.public_key!}
+                      password={rdConfig.password}
+                      autoAceite={!!rdConfig.auto_aceite}
+                      onCopy={copyTexto}
+                    />
                   </div>
                 ) : null}
 
