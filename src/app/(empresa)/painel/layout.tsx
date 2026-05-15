@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Bike, DollarSign,
   Package, Users, Settings, LogOut, ChefHat, Bell, Tag, BarChart3,
   MapPin, CreditCard, Zap, LayoutGrid, Tv2, Wallet, Activity, ScrollText,
-  Receipt, Sun, Moon, Database, Key, Printer, ShieldCheck, Mail, Server, LifeBuoy,
+  Receipt, Sun, Moon, Database, Key, Printer, ShieldCheck, Mail, Server, LifeBuoy, MessageCircle,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
 import { useTheme } from "@/lib/hooks/useTheme";
@@ -63,7 +63,8 @@ const ALL_NAV = [
   { href: "/painel/backup",      label: "Backup",      icon: Database,        modulo: null         },
   { href: "/painel/config",      label: "Configurações",icon: Settings,       modulo: null         },
   { href: "/painel/lgpd",        label: "Privacidade", icon: ShieldCheck,     modulo: null         },
-  { href: "/painel/suporte",     label: "Suporte",     icon: LifeBuoy,        modulo: null,        suporteOnly: true },
+  { href: "/painel/suporte",     label: "Meus chamados", icon: MessageCircle, modulo: null         },
+  { href: "/painel/ajuda",       label: "Ajuda",       icon: LifeBuoy,        modulo: null,        suporteOnly: true },
 ];
 
 export default function EmpresaLayout({ children }: { children: React.ReactNode }) {

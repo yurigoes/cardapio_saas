@@ -6,7 +6,7 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, ChefHat,
   Bike, MapPin, DollarSign, Users, LogOut, Settings,
   ShieldCheck, Building2, Plus, X, ChevronDown, Trash2,
-  Eye, EyeOff, Tag, Monitor, LifeBuoy,
+  Eye, EyeOff, Tag, Monitor, LifeBuoy, MessageCircle,
 } from "lucide-react";
 import { confirmar } from "@/components/ui/ConfirmModal";
 import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
@@ -484,9 +484,18 @@ function OperadorView({ usuario, empresa }: { usuario: Usuario; empresa: Empresa
       .catch(() => {});
   }, []);
 
-  const cardSuporte: ModuloCard = {
+  // Cards de atendimento
+  const cardChamados: ModuloCard = {
     href: "/painel/suporte",
-    label: "Suporte",
+    label: "Meus chamados",
+    descricao: "Abrir chamado + histórico de solicitações",
+    icon: MessageCircle,
+    cor: "from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 hover:border-emerald-500/60",
+    roles: ["admin", "master", "operador", "garcom", "caixa", "cozinha", "gerente", "atendente", "delivery", "motoboy", "financeiro"],
+  };
+  const cardAjuda: ModuloCard = {
+    href: "/painel/ajuda",
+    label: "Ajuda",
     descricao: "Centro de ajuda + tutoriais de instalação",
     icon: LifeBuoy,
     cor: "from-amber-500/20 to-amber-600/10 border-amber-500/30 hover:border-amber-500/60",
@@ -495,7 +504,8 @@ function OperadorView({ usuario, empresa }: { usuario: Usuario; empresa: Empresa
 
   const modulosDisponiveis = [
     ...MODULOS.filter((m) => m.roles.includes(role)),
-    ...(suporteLiberado ? [cardSuporte] : []),
+    cardChamados,
+    ...(suporteLiberado ? [cardAjuda] : []),
   ];
 
   function handleLogout() {
