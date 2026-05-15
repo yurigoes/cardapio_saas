@@ -33,11 +33,12 @@ interface Agente {
 }
 
 interface RustDeskConfig {
-  password?:    string;
-  rustdesk_id?: string | null;
-  relay_host?:  string | null;
-  public_key?:  string | null;
-  auto_aceite?: boolean;
+  password?:     string;
+  agent_token?:  string;       // novo token gerado a cada save (pra HB Windows)
+  rustdesk_id?:  string | null;
+  relay_host?:   string | null;
+  public_key?:   string | null;
+  auto_aceite?:  boolean;
 }
 
 const TIPOS: Array<{ value: string; label: string; icon: typeof Server; desc: string }> = [
@@ -74,22 +75,27 @@ function authHeaders(): HeadersInit {
 }
 
 function InstalacaoTabs({
-  relay, publicKey, password, autoAceite, onCopy,
+  relay, publicKey, password, autoAceite, agentToken, onCopy,
 }: {
   relay: string; publicKey: string; password: string; autoAceite: boolean;
+  agentToken?: string;
   onCopy: (s: string) => void;
 }) {
   const [tab, setTab] = useState<"windows" | "linux">("windows");
   const origin = typeof window !== "undefined" ? window.location.origin : "https://app.tthreedigital.com.br";
 
+  // Heartbeat do Linux já é cron. Pra Windows passamos -AgentToken pra
+  // criar scheduled task de heartbeat na máquina.
+  const tokenArgPS  = agentToken ? ` -AgentToken '${agentToken}' -ApiBase '${origin}'` : "";
+  const tokenArgSH  = agentToken ? ` --token '${agentToken}' --api-base '${origin}'`  : "";
+
   const cmdLinux = `curl -fsSL ${origin}/install-agent.sh | sudo bash -s -- \\
   --relay ${relay} \\
   --key   "${publicKey}" \\
-  --pass  "${password}"${autoAceite ? " \\\n  --auto-aceite" : ""}`;
+  --pass  "${password}"${autoAceite ? " \\\n  --auto-aceite" : ""}${tokenArgSH ? " \\\n " + tokenArgSH : ""}`;
 
-  // Roda direto na sessão atual (script auto-eleva UAC internamente se precisar)
   const cmdWinPS = `iwr ${origin}/install-agent.ps1 -OutFile $env:TEMP\\rd.ps1 -UseBasicParsing
-& $env:TEMP\\rd.ps1 -Relay '${relay}' -Key '${publicKey}' -Pass '${password}'${autoAceite ? " -AutoAceite" : ""}`;
+& $env:TEMP\\rd.ps1 -Relay '${relay}' -Key '${publicKey}' -Pass '${password}'${autoAceite ? " -AutoAceite" : ""}${tokenArgPS}`;
 
   return (
     <div className="mt-3">
@@ -245,6 +251,7 @@ export default function PainelMaquinasPage() {
       if (!r.ok || !data.success) throw new Error(data?.error || "Falha");
       setRdConfig({
         password:    data.data.password,
+        agent_token: data.data.agent_token,
         rustdesk_id: data.data.rustdesk_id,
         relay_host:  data.data.relay_host,
         public_key:  data.data.public_key,
@@ -256,12 +263,28 @@ export default function PainelMaquinasPage() {
     } finally { setRdSalvando(false); }
   }
 
+  // Modal de conexão com senha copiável
+  const [conectModal, setConectModal] = useState<{
+    nome: string; rustdesk_id: string; password: string; url: string;
+  } | null>(null);
+
   async function conectarRustDesk(a: Agente) {
     try {
       const r = await fetch(`/api/painel/agentes/${a.id}/rustdesk/connect`, { headers: authHeaders() });
       const data = await r.json();
       if (!r.ok || !data.success) throw new Error(data?.error || "Falha");
-      window.location.href = data.data.url;
+
+      // Mostra modal com senha copiável + tenta abrir URL automaticamente.
+      // Algumas versões do cliente RustDesk não populam senha via URL,
+      // então o usuário pode colar manualmente.
+      setConectModal({
+        nome:        a.nome,
+        rustdesk_id: a.rustdesk_id ?? data.data.agent?.rustdesk_id ?? "?",
+        password:    data.data.password ?? "",
+        url:         data.data.url,
+      });
+      // Tenta abrir cliente — se já tem o handler instalado abre direto
+      try { window.open(data.data.url, "_self"); } catch {/* */}
     } catch (e) {
       alert(e instanceof Error ? e.message : "Erro ao conectar");
     }
@@ -727,6 +750,7 @@ export default function PainelMaquinasPage() {
                       relay={rdConfig.relay_host!}
                       publicKey={rdConfig.public_key!}
                       password={rdConfig.password}
+                      agentToken={rdConfig.agent_token}
                       autoAceite={!!rdConfig.auto_aceite}
                       onCopy={copyTexto}
                     />
@@ -750,6 +774,60 @@ export default function PainelMaquinasPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de conexão RustDesk: mostra senha pra copiar */}
+      {conectModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setConectModal(null); }}>
+          <div className="w-full max-w-md rounded-2xl border border-blue-500/30 bg-slate-900 p-6 shadow-2xl">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="rounded-lg bg-blue-500/15 p-2">
+                <ExternalLink className="h-5 w-5 text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-white">Conectar a {conectModal.nome}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Tentamos abrir o RustDesk automaticamente. Se não abrir ou pedir senha:
+                </p>
+              </div>
+              <button onClick={() => setConectModal(null)} className="rounded p-1 text-slate-500 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mb-3 rounded-lg bg-slate-950 p-3">
+              <p className="text-[10px] uppercase text-slate-500 mb-1">ID</p>
+              <p className="font-mono text-sm text-white mb-3">{conectModal.rustdesk_id}</p>
+              <p className="text-[10px] uppercase text-slate-500 mb-1">Senha (clique pra copiar)</p>
+              <button onClick={() => copyTexto(conectModal.password)}
+                className="group flex w-full items-center gap-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-left hover:bg-amber-500/20 transition">
+                <code className="flex-1 font-mono text-sm text-amber-200 break-all">{conectModal.password}</code>
+                {copiado ? <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" /> : <Copy className="h-4 w-4 text-amber-400 flex-shrink-0" />}
+              </button>
+            </div>
+
+            <div className="mb-4 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-[11px] text-slate-300">
+              <p className="font-semibold text-blue-300 mb-1">Como conectar:</p>
+              <ol className="list-decimal list-inside space-y-0.5 text-slate-400">
+                <li>O cliente RustDesk deve abrir sozinho (se já estiver instalado e configurado pro nosso relay)</li>
+                <li>Se pedir senha, cole a senha amarela acima</li>
+                <li>Se não abrir, clica no botão abaixo pra forçar</li>
+              </ol>
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={() => setConectModal(null)}
+                className="flex-1 rounded-lg border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5">
+                Fechar
+              </button>
+              <button onClick={() => { window.location.href = conectModal.url; }}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-600">
+                <ExternalLink className="h-4 w-4" /> Abrir RustDesk
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -24,21 +24,26 @@ if grep -q '^VAPID_PUBLIC_KEY=' "$ENV_FILE" && grep -q '^VAPID_PRIVATE_KEY=' "$E
 fi
 
 echo "→ Gerando chaves VAPID..."
-KEYS=$(docker exec cardapio_app npx --yes web-push generate-vapid-keys 2>&1 || \
-       npx --yes web-push generate-vapid-keys 2>&1)
 
-PUB=$(echo "$KEYS" | grep -i "Public Key:" -A 0 | head -1 | awk '{print $NF}')
-PRIV=$(echo "$KEYS" | grep -i "Private Key:" -A 0 | head -1 | awk '{print $NF}')
+# Usa node direto dentro do container (web-push já está em deps).
+# Se container está parado/reiniciando, tenta no host.
+NODE_SCRIPT='const wp=require("web-push");const k=wp.generateVAPIDKeys();console.log("PUB="+k.publicKey);console.log("PRIV="+k.privateKey);'
 
-if [[ -z "$PUB" || -z "$PRIV" ]]; then
-  # Fallback: grep próximo ao output
-  PUB=$(echo "$KEYS"  | grep -A1 "Public Key:"  | tail -1 | tr -d ' \n\r')
-  PRIV=$(echo "$KEYS" | grep -A1 "Private Key:" | tail -1 | tr -d ' \n\r')
+KEYS=$(docker exec cardapio_app node -e "$NODE_SCRIPT" 2>&1)
+if [[ $? -ne 0 ]] || [[ "$KEYS" != *"PUB="* ]]; then
+  echo "→ container indisponível, tentando no host..."
+  KEYS=$(cd "$PROJETO_DIR" && node -e "$NODE_SCRIPT" 2>&1)
 fi
 
+PUB=$(echo "$KEYS"  | grep -oP '^PUB=\K.*'  | head -1 | tr -d '\r')
+PRIV=$(echo "$KEYS" | grep -oP '^PRIV=\K.*' | head -1 | tr -d '\r')
+
 if [[ -z "$PUB" || -z "$PRIV" ]]; then
-  echo "✖ falha ao parsear chaves. Output bruto:"
+  echo "✖ falha ao gerar chaves. Output bruto:"
   echo "$KEYS"
+  echo ""
+  echo "Tente manualmente:"
+  echo "  docker exec cardapio_app node -e '$NODE_SCRIPT'"
   exit 1
 fi
 

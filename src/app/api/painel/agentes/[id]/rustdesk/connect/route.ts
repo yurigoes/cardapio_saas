@@ -57,6 +57,7 @@ export async function GET(
 
     return ok({
       url,
+      password: senha,    // pra UI mostrar/copiar caso URL handler não popule
       agent: { id: a.id, nome: a.nome, rustdesk_id: a.rustdesk_id },
     });
   } catch (err) {

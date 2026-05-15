@@ -24,7 +24,9 @@ param(
   [Parameter(Mandatory = $true)] [string]$Relay,
   [Parameter(Mandatory = $true)] [string]$Key,
   [Parameter(Mandatory = $true)] [string]$Pass,
-  [switch]$AutoAceite
+  [switch]$AutoAceite,
+  [string]$AgentToken = "",
+  [string]$ApiBase    = "https://app.tthreedigital.com.br"
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,6 +49,8 @@ if (-not (Test-Admin)) {
   $argList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$($MyInvocation.MyCommand.Path)`"",
                "-Relay", "`"$Relay`"", "-Key", "`"$Key`"", "-Pass", "`"$Pass`"")
   if ($AutoAceite) { $argList += "-AutoAceite" }
+  if ($AgentToken) { $argList += "-AgentToken"; $argList += "`"$AgentToken`"" }
+  if ($ApiBase)    { $argList += "-ApiBase";    $argList += "`"$ApiBase`"" }
   Start-Process -FilePath "powershell.exe" -ArgumentList $argList -Verb RunAs
   exit 0
 }
@@ -164,6 +168,48 @@ try {
   $RustDeskId = & $RustDeskExe --get-id 2>$null | Select-Object -First 1
   if ($RustDeskId) { $RustDeskId = $RustDeskId.Trim() }
 } catch {}
+
+# --- 9. Heartbeat scheduled task (se token fornecido) --------------------
+
+if ($AgentToken) {
+  Write-Step "Criando scheduled task de heartbeat (1 min)..."
+  try {
+    # Remove task antigo se houver
+    Unregister-ScheduledTask -TaskName "CardapioSaaS-Heartbeat" -Confirm:$false -ErrorAction SilentlyContinue
+
+    $hbScript = @"
+`$ErrorActionPreference='SilentlyContinue'
+`$body = @{
+  hostname   = [Environment]::MachineName
+  plataforma = 'windows'
+  versao     = 'pdv-windows-1.0'
+} | ConvertTo-Json -Compress
+Invoke-RestMethod -Uri '$ApiBase/api/sync/heartbeat' -Method POST `
+  -Headers @{Authorization='Bearer $AgentToken'; 'Content-Type'='application/json'} `
+  -Body `$body -TimeoutSec 10 | Out-Null
+"@
+    $hbPath = "$env:ProgramData\RustDesk\heartbeat.ps1"
+    Set-Content -LiteralPath $hbPath -Value $hbScript -Encoding UTF8
+
+    $action  = New-ScheduledTaskAction -Execute "powershell.exe" `
+      -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$hbPath`""
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) `
+      -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 365)
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+      -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+
+    Register-ScheduledTask -TaskName "CardapioSaaS-Heartbeat" `
+      -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
+
+    Write-Ok "Heartbeat task criada (1 hb a cada 1min). Bate o primeiro agora..."
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $hbPath
+  } catch {
+    Write-Err "Falha ao criar scheduled task: $($_.Exception.Message)"
+  }
+} else {
+  Write-Host "  (sem -AgentToken: heartbeat nao configurado, painel ficara em 'Aguardando 1 hb')" -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "==========================================================" -ForegroundColor Green

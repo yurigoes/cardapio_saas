@@ -21,12 +21,17 @@ KEY="${RUSTDESK_KEY:-}"
 PASS="${RUSTDESK_PASS:-}"
 AUTO_ACEITE="${RUSTDESK_AUTO_ACEITE:-N}"
 
+AGENT_TOKEN=""
+API_BASE="https://app.tthreedigital.com.br"
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --relay)         RELAY="$2"; shift 2 ;;
     --key)           KEY="$2";   shift 2 ;;
     --pass)          PASS="$2";  shift 2 ;;
     --auto-aceite)   AUTO_ACEITE="Y"; shift ;;
+    --token)         AGENT_TOKEN="$2"; shift 2 ;;
+    --api-base)      API_BASE="$2"; shift 2 ;;
     *) echo "Arg desconhecido: $1"; exit 1 ;;
   esac
 done
@@ -119,6 +124,23 @@ fi
 
 # Garante serviço habilitado
 systemctl enable --now rustdesk 2>/dev/null || true
+
+# Cria cron de heartbeat (se token fornecido)
+if [[ -n "$AGENT_TOKEN" ]]; then
+  cat > /etc/cron.d/cardapio-heartbeat <<EOF
+* * * * * root curl -fsS -X POST -H 'Authorization: Bearer $AGENT_TOKEN' -H 'Content-Type: application/json' -d "{\"hostname\":\"\$(hostname)\",\"plataforma\":\"linux\",\"versao\":\"agent-1.0\"}" $API_BASE/api/sync/heartbeat > /dev/null 2>&1
+EOF
+  chmod 644 /etc/cron.d/cardapio-heartbeat
+  systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null || true
+  echo "  ✓ Heartbeat cron criado em /etc/cron.d/cardapio-heartbeat"
+
+  # Bate o primeiro hb agora
+  curl -fsS -X POST \
+    -H "Authorization: Bearer $AGENT_TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d "{\"hostname\":\"$(hostname)\",\"plataforma\":\"linux\",\"versao\":\"agent-1.0\"}" \
+    "$API_BASE/api/sync/heartbeat" > /dev/null 2>&1 && echo "  ✓ 1º heartbeat enviado"
+fi
 
 # Mostra ID do RustDesk gerado
 sleep 3

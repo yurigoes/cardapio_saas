@@ -17,6 +17,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { queryOne } from "@/lib/db/client";
 import { ok, forbidden, badRequest, notFound, serverError } from "@/lib/utils/response";
 import { encryptField } from "@/lib/ifood/client";
+import { generateAgentToken } from "@/lib/agentes/token";
 
 const ALLOWED = ["master", "admin"];
 
@@ -108,8 +109,12 @@ export async function POST(
     );
     if (!a) return notFound("Agente não encontrado");
 
-    const senhaPlain = gerarSenhaForte(16);
+    const senhaPlain   = gerarSenhaForte(16);
     const senhaCifrada = encryptField(senhaPlain);
+
+    // Gera novo agent_token a cada call (rotaciona). Vai junto no comando
+    // de instalação pra criar scheduled task de heartbeat.
+    const agentTok = generateAgentToken();
 
     await queryOne(
       `UPDATE agentes
@@ -117,20 +122,24 @@ export async function POST(
               rustdesk_id            = COALESCE($2, rustdesk_id),
               rustdesk_auto_aceite   = COALESCE($3, rustdesk_auto_aceite),
               rustdesk_registrado_em = COALESCE(rustdesk_registrado_em, NOW()),
+              token_hash             = $4,
+              token_prefix           = $5,
               updated_at             = NOW()
-        WHERE id = $4`,
-      [senhaCifrada, body.rustdesk_id ?? null, body.auto_aceite ?? null, params.id]
+        WHERE id = $6`,
+      [senhaCifrada, body.rustdesk_id ?? null, body.auto_aceite ?? null,
+       agentTok.hash, agentTok.prefix, params.id]
     );
 
     const relay = relayInfo();
 
     return ok({
       password:    senhaPlain,        // ÚNICA vez em cleartext
+      agent_token: agentTok.raw,      // ÚNICA vez em cleartext (pra heartbeat)
       rustdesk_id: body.rustdesk_id ?? null,
       auto_aceite: body.auto_aceite ?? false,
       relay_host:  relay.relay_host,
       public_key:  relay.public_key,
-      aviso:       "Anote esta senha agora — depois fica cifrada no banco.",
+      aviso:       "Anote senha + token agora — não podem ser recuperados depois.",
     });
   } catch (err) {
     console.error("[Agentes/Rustdesk/POST]", err);
