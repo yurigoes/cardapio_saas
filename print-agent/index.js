@@ -19,15 +19,20 @@ const path = require("path");
 const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.3.0";
+const VERSION     = "1.3.1";
 
 // ─── ESC/POS bytes ──────────────────────────────────────────
 const ESC = 0x1b;
 const GS  = 0x1d;
-const INIT    = Buffer.from([ESC, 0x40]);
-const CUT     = Buffer.from([GS,  0x56, 0x00]);
-const FEED3   = Buffer.from([ESC, 0x64, 0x03]);
-const ALIGN_L = Buffer.from([ESC, 0x61, 0x00]);
+const INIT     = Buffer.from([ESC, 0x40]);                  // ESC @ — reset
+const CUT      = Buffer.from([GS,  0x56, 0x00]);            // GS V 0 — corte total
+const FEED2    = Buffer.from([ESC, 0x64, 0x02]);            // ESC d 2 — pula 2 linhas
+const ALIGN_L  = Buffer.from([ESC, 0x61, 0x00]);            // ESC a 0 — esquerda
+// Codepage WPC1252 (Windows-1252 / Latin-1) — universal em térmicas,
+// suporta todos acentos PT-BR (ã, ç, õ, é, etc).
+// ESC t 16 = page 16 = WPC1252 na maioria das EPSON/Bematech/Daruma.
+const CODEPAGE = Buffer.from([ESC, 0x74, 0x10]);            // ESC t 16
+const CHARSET  = Buffer.from([ESC, 0x52, 0x08]);            // ESC R 8 — Brasil
 
 let _configMtime = 0;
 function loadConfig(force = false) {
@@ -113,9 +118,29 @@ function imprimirTCP(ip, porta, payload) {
   });
 }
 
+// Tabela de transliteração pra chars sem equivalente direto em CP1252
+const REPLACE = [
+  [/—|–/g, "-"],
+  [/“|”/g, '"'],
+  [/‘|’/g, "'"],
+  [/…/g, "..."],
+  [/✓/g,  "[OK]"],
+  [/✗|✖/g, "[X]"],
+  [/⚠/g,  "[!]"],
+  [/•/g,  "*"],
+];
+
+function sanitize(s) {
+  let out = String(s);
+  for (const [re, sub] of REPLACE) out = out.replace(re, sub);
+  return out;
+}
+
 function montarPayloadTexto(conteudo) {
-  const body = Buffer.from(conteudo.replace(/\n/g, "\r\n") + "\r\n", "utf-8");
-  return Buffer.concat([INIT, ALIGN_L, body, FEED3, CUT]);
+  const limpo = sanitize(conteudo);
+  // Encoding latin1 = mesmos bytes que WPC1252 pra acentos PT-BR
+  const body = Buffer.from(limpo.replace(/\n/g, "\r\n") + "\r\n", "latin1");
+  return Buffer.concat([INIT, CHARSET, CODEPAGE, ALIGN_L, body, FEED2, CUT]);
 }
 
 // ─── Loop principal ─────────────────────────────────────────

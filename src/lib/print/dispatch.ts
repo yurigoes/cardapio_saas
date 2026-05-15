@@ -142,65 +142,21 @@ export async function dispatchCupomCliente(
     const data = await carregarPedido(empresaId, pedidoId);
     if (!data) return { ok: false, jobs: 0, setor_usado: null, motivo: "pedido não encontrado" };
 
-    // Tenta gerar cupom ESC/POS (com logo + QR). Se falhar (sharp/qrcode/fetch),
-    // cai pra texto plano. ESC/POS só vale se empresa tem logo configurada.
-    const empresaCompleta = await queryOne<{
-      logo_url: string | null; cnpj: string | null; whatsapp: string | null;
-    }>(
-      `SELECT logo_url, cnpj, whatsapp FROM empresas WHERE id = $1`,
-      [empresaId]
-    );
-
-    let conteudo: string;
-    let formato: "escpos" | "text" = "text";
+    // ESC/POS binário com logo+QR depende de comandos não suportados em
+    // todas impressoras (ex: EPSON TM-T20X ignora GS v 0). Usamos texto
+    // plano com URL de acompanhamento. Pra logo+QR REAIS, usuário pode
+    // imprimir via popup HTML do navegador (/imprimir/pedido/[id]?tipo=cliente).
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.tthreedigital.com.br";
-
-    try {
-      const { buildCupomClienteEscpos } = await import("./cupom-builder");
-      conteudo = await buildCupomClienteEscpos({
-        empresa: {
-          nome:     data.empresaNome,
-          cnpj:     empresaCompleta?.cnpj ?? null,
-          logo_url: empresaCompleta?.logo_url ?? null,
-          whatsapp: empresaCompleta?.whatsapp ?? null,
-        },
-        pedido: {
-          id:               pedidoId,
-          numero:           data.pedido.numero,
-          tipo:             data.pedido.tipo,
-          cliente_nome:     data.pedido.cliente_nome ?? null,
-          cliente_telefone: data.pedido.cliente_telefone ?? null,
-          cliente_endereco: data.pedido.cliente_endereco ?? null,
-          mesa_numero:      data.pedido.mesa_numero ?? null,
-          observacoes:      data.pedido.observacoes ?? null,
-          forma_pagamento:  formaPagamento ?? null,
-          subtotal:         data.pedido.subtotal,
-          desconto:         data.pedido.desconto ?? 0,
-          taxa_entrega:     data.pedido.taxa_entrega ?? 0,
-          total:            data.pedido.total,
-          itens:            data.itens.map(i => ({
-            nome:           i.nome,
-            quantidade:     i.quantidade,
-            preco_unitario: i.preco_unitario,
-            observacoes:    i.observacoes ?? null,
-          })),
-        },
-        baseUrl,
-      });
-      formato = "escpos";
-    } catch (err) {
-      console.warn("[print/dispatch/cliente] ESC/POS falhou, caindo pra texto:", (err as Error).message);
-      conteudo = formatarCupomCliente(data.empresaNome, {
-        ...data.pedido,
-        cliente_endereco: data.pedido.cliente_endereco ?? null,
-        itens: data.itens,
-        forma_pagamento: formaPagamento ?? null,
-      });
-    }
+    const conteudo = formatarCupomCliente(data.empresaNome, {
+      ...data.pedido,
+      cliente_endereco: data.pedido.cliente_endereco ?? null,
+      itens: data.itens,
+      forma_pagamento: formaPagamento ?? null,
+    }) + `\nAcompanhe: ${baseUrl}/p/${pedidoId.slice(0, 8)}\n`;
 
     const { jobIds, setor_usado } = await enqueueCascade(
       empresaId, pedidoId, conteudo, "cupom",
-      ["caixa", "balcao"], formato,
+      ["caixa", "balcao"],
     );
     if (jobIds.length === 0) {
       console.warn("[print/dispatch/cliente] nenhuma impressora ativa", { empresaId, pedidoId });
