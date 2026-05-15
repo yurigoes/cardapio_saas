@@ -19,7 +19,7 @@ const path = require("path");
 const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.2.2";
+const VERSION     = "1.3.0";
 
 // ─── ESC/POS bytes ──────────────────────────────────────────
 const ESC = 0x1b;
@@ -156,7 +156,11 @@ async function processarJob(job) {
     console.log(`  [alias] '${setor}' → '${resolved.setor}'`);
   }
 
-  const payload = montarPayloadTexto(job.conteudo || "");
+  // Se vier ESC/POS pré-formatado (base64), envia raw. Senão monta texto.
+  const formato = job.formato || "text";
+  const payload = formato === "escpos"
+    ? Buffer.from(job.conteudo || "", "base64")
+    : montarPayloadTexto(job.conteudo || "");
   const tipo    = conf.tipo || "tcp";
 
   try {

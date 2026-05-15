@@ -71,9 +71,10 @@ async function enqueueCascade(
   conteudo: string,
   tipo: TipoCupom,
   setoresPreferidos: SetorImpressora[],
+  formato: "escpos" | "text" = "text",
 ): Promise<{ jobIds: string[]; setor_usado: string | null }> {
   for (const setor of setoresPreferidos) {
-    const ids = await enqueuePrint({ empresaId, pedidoId, setor, tipo, conteudo });
+    const ids = await enqueuePrint({ empresaId, pedidoId, setor, tipo, conteudo, formato });
     if (ids.length > 0) return { jobIds: ids, setor_usado: setor };
   }
   // Fallback: pega QUALQUER impressora ativa da empresa
@@ -85,7 +86,7 @@ async function enqueueCascade(
   );
   if (qualquer.length > 0) {
     const ids = await enqueuePrint({
-      empresaId, pedidoId, setor: qualquer[0].setor as SetorImpressora, tipo, conteudo,
+      empresaId, pedidoId, setor: qualquer[0].setor as SetorImpressora, tipo, conteudo, formato,
     });
     if (ids.length > 0) return { jobIds: ids, setor_usado: qualquer[0].setor };
   }
@@ -141,16 +142,65 @@ export async function dispatchCupomCliente(
     const data = await carregarPedido(empresaId, pedidoId);
     if (!data) return { ok: false, jobs: 0, setor_usado: null, motivo: "pedido não encontrado" };
 
-    const conteudo = formatarCupomCliente(data.empresaNome, {
-      ...data.pedido,
-      cliente_endereco: data.pedido.cliente_endereco ?? null,
-      itens: data.itens,
-      forma_pagamento: formaPagamento ?? null,
-    });
+    // Tenta gerar cupom ESC/POS (com logo + QR). Se falhar (sharp/qrcode/fetch),
+    // cai pra texto plano. ESC/POS só vale se empresa tem logo configurada.
+    const empresaCompleta = await queryOne<{
+      logo_url: string | null; cnpj: string | null; whatsapp: string | null;
+    }>(
+      `SELECT logo_url, cnpj, whatsapp FROM empresas WHERE id = $1`,
+      [empresaId]
+    );
+
+    let conteudo: string;
+    let formato: "escpos" | "text" = "text";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.tthreedigital.com.br";
+
+    try {
+      const { buildCupomClienteEscpos } = await import("./cupom-builder");
+      conteudo = await buildCupomClienteEscpos({
+        empresa: {
+          nome:     data.empresaNome,
+          cnpj:     empresaCompleta?.cnpj ?? null,
+          logo_url: empresaCompleta?.logo_url ?? null,
+          whatsapp: empresaCompleta?.whatsapp ?? null,
+        },
+        pedido: {
+          id:               pedidoId,
+          numero:           data.pedido.numero,
+          tipo:             data.pedido.tipo,
+          cliente_nome:     data.pedido.cliente_nome ?? null,
+          cliente_telefone: data.pedido.cliente_telefone ?? null,
+          cliente_endereco: data.pedido.cliente_endereco ?? null,
+          mesa_numero:      data.pedido.mesa_numero ?? null,
+          observacoes:      data.pedido.observacoes ?? null,
+          forma_pagamento:  formaPagamento ?? null,
+          subtotal:         data.pedido.subtotal,
+          desconto:         data.pedido.desconto ?? 0,
+          taxa_entrega:     data.pedido.taxa_entrega ?? 0,
+          total:            data.pedido.total,
+          itens:            data.itens.map(i => ({
+            nome:           i.nome,
+            quantidade:     i.quantidade,
+            preco_unitario: i.preco_unitario,
+            observacoes:    i.observacoes ?? null,
+          })),
+        },
+        baseUrl,
+      });
+      formato = "escpos";
+    } catch (err) {
+      console.warn("[print/dispatch/cliente] ESC/POS falhou, caindo pra texto:", (err as Error).message);
+      conteudo = formatarCupomCliente(data.empresaNome, {
+        ...data.pedido,
+        cliente_endereco: data.pedido.cliente_endereco ?? null,
+        itens: data.itens,
+        forma_pagamento: formaPagamento ?? null,
+      });
+    }
 
     const { jobIds, setor_usado } = await enqueueCascade(
       empresaId, pedidoId, conteudo, "cupom",
-      ["caixa", "balcao"],
+      ["caixa", "balcao"], formato,
     );
     if (jobIds.length === 0) {
       console.warn("[print/dispatch/cliente] nenhuma impressora ativa", { empresaId, pedidoId });
