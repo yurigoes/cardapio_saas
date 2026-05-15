@@ -150,8 +150,17 @@ export async function notificarEvolution(
       return { enviado: false, motivo: "empresa não encontrada" };
     }
 
-    if (!empresa.evolution_url || !empresa.evolution_key) {
-      return { enviado: false, motivo: "evolution não configurado" };
+    // Fallback pra config global do SaaS (.env) se empresa não setou própria
+    const evoUrl = empresa.evolution_url || process.env.EVOLUTION_PUBLIC_URL || process.env.EVOLUTION_API_URL;
+    const evoKey = empresa.evolution_key || process.env.EVOLUTION_API_KEY;
+    if (!evoUrl || !evoKey) {
+      return { enviado: false, motivo: "evolution não configurado (nem por empresa nem global)" };
+    }
+    empresa.evolution_url = evoUrl;
+    empresa.evolution_key = evoKey;
+    // Default: liga eventos críticos automaticamente se empresa não configurou nenhum
+    if (!empresa.evolution_eventos || (Array.isArray(empresa.evolution_eventos) && empresa.evolution_eventos.length === 0)) {
+      empresa.evolution_eventos = ["novo_pedido", "confirmado", "saiu_entrega", "entregue"];
     }
 
     // Eventos podem vir como array ou JSON string (depende do driver)

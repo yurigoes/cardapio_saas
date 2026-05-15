@@ -19,6 +19,7 @@ import {
   Copy, CheckCircle2, ChevronRight, Info, BookOpen, Wrench, Activity,
   Zap, Terminal,
 } from "lucide-react";
+import { ContatoBox } from "./ContatoBox";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -164,6 +165,11 @@ export function HelpContent() {
 
       {/* Conteúdo */}
       <main className="min-w-0">
+
+        {/* Bloco de contato sempre visível no topo */}
+        <div className="mb-8">
+          <ContatoBox />
+        </div>
 
         {/* ─── Visão geral ─── */}
         <Section id="overview" icon={BookOpen} title="Visão geral"
