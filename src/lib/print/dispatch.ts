@@ -152,7 +152,7 @@ export async function dispatchCupomCliente(
       cliente_endereco: data.pedido.cliente_endereco ?? null,
       itens: data.itens,
       forma_pagamento: formaPagamento ?? null,
-    }) + `\nAcompanhe: ${baseUrl}/p/${pedidoId.slice(0, 8)}\n`;
+    }) + `\nAcompanhe: ${baseUrl}/p/${pedidoId}\n`;
 
     const { jobIds, setor_usado } = await enqueueCascade(
       empresaId, pedidoId, conteudo, "cupom",
