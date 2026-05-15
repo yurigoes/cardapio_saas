@@ -62,7 +62,7 @@ export async function importarPedidoIfood(
           subtotal, desconto, taxa_entrega, total,
           tipo_consumo, observacoes,
           ifood_aceite_status)
-       VALUES ($1, $2, 'pendente', $3::text, 'ifood', $3::varchar,
+       VALUES ($1, $2, 'pendente', $3::text, 'ifood', $3::text,
                $4, $5,
                $6, 0, 0, $7,
                $8, $9, 'pendente')
