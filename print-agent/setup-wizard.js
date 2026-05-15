@@ -17,11 +17,13 @@ const { listarImpressorasWindows } = require("./lib/windows-printer");
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
 
 const SETORES = [
-  { key: "autoatendimento", label: "Autoatendimento (totem)" },
-  { key: "pdv",             label: "PDV / Caixa" },
   { key: "cozinha",         label: "Cozinha" },
+  { key: "caixa",           label: "Caixa (cupom cliente + fechamento)" },
   { key: "bar",             label: "Bar" },
   { key: "balcao",          label: "Balcão / Retirada" },
+  { key: "motoboy",         label: "Motoboy (cupons de entrega)" },
+  { key: "autoatendimento", label: "Autoatendimento (totem)" },
+  { key: "pdv",             label: "PDV (legado — mesmo que caixa)" },
 ];
 
 function ask(rl, q, def) {
