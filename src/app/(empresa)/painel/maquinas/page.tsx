@@ -82,7 +82,7 @@ function InstalacaoTabs({
   const [tab, setTab] = useState<"windows" | "linux">("windows");
   const origin = typeof window !== "undefined" ? window.location.origin : "https://app.tthreedigital.com.br";
 
-  const cmdLinux = `sudo bash <(curl -fsSL ${origin}/install-agent.sh) \\
+  const cmdLinux = `curl -fsSL ${origin}/install-agent.sh | sudo bash -s -- \\
   --relay ${relay} \\
   --key   "${publicKey}" \\
   --pass  "${password}"${autoAceite ? " \\\n  --auto-aceite" : ""}`;
