@@ -13,10 +13,11 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
   const { empresaId, role } = auth.payload;
-  if (!empresaId) return forbidden();
+  const isAgent = role === "master" || role === "suporte";
+  if (!isAgent && !empresaId) return forbidden();
 
   // Master e suporte veem todos; demais só da própria empresa
-  const onlyEmpresa = role !== "master" && role !== "suporte";
+  const onlyEmpresa = !isAgent;
 
   const rows = await query(
     `SELECT c.id, c.assunto, c.prioridade, c.status, c.canal, c.tags,
@@ -60,8 +61,10 @@ const novoSchema = z.object({
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
-  const { empresaId, sub } = auth.payload;
-  if (!empresaId) return forbidden();
+  const { empresaId, sub, role } = auth.payload;
+  // Master/suporte abrindo chamado interno (não vinculado a empresa)
+  // não faz sentido — devem responder, não abrir. Mas permitimos.
+  if (!empresaId && role !== "master" && role !== "suporte") return forbidden();
 
   let body: z.infer<typeof novoSchema>;
   try { body = novoSchema.parse(await req.json()); }
@@ -77,7 +80,7 @@ export async function POST(req: NextRequest) {
          (empresa_id, usuario_id, assunto, prioridade, canal)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [empresaId, sub, body.assunto, body.prioridade, body.canal]
+      [empresaId ?? null, sub, body.assunto, body.prioridade, body.canal]
     );
 
     if (!chamado) return serverError("falha criar chamado");

@@ -1,4 +1,5 @@
 import { JWTRole } from "./jwt";
+import { query } from "@/lib/db/client";
 
 // ─────────────────────────────────────────────
 // Hierarquia de papéis
@@ -148,4 +149,58 @@ export function assertRole(userRole: JWTRole, minRole: JWTRole): void {
   if (!temRole(userRole, minRole)) {
     throw new Error(`Acesso negado: papel mínimo '${minRole}' necessário`);
   }
+}
+
+// ─────────────────────────────────────────────
+// Permissões dinâmicas (overrides via banco)
+// ─────────────────────────────────────────────
+
+interface OverrideRow { permissao: string; acao: "allow" | "deny"; }
+
+/**
+ * Verifica permissão consultando overrides em tempo real.
+ * Ordem de precedência:
+ *   1. Override por usuário (deny ou allow)
+ *   2. Override por role (deny ou allow)
+ *   3. PERMISSOES_POR_ROLE estático
+ *   4. Master sempre tem tudo (a não ser que override deny específico)
+ *
+ * Cache em memória 30s pra evitar query a cada call.
+ */
+const _cache = new Map<string, { exp: number; perms: Map<string, "allow" | "deny"> }>();
+const CACHE_MS = 30_000;
+
+async function loadOverrides(escopo: "role" | "user", id: string): Promise<Map<string, "allow" | "deny">> {
+  const key = `${escopo}:${id}`;
+  const hit = _cache.get(key);
+  if (hit && hit.exp > Date.now()) return hit.perms;
+  const rows = await query<OverrideRow>(
+    `SELECT permissao, acao FROM permissoes_overrides WHERE escopo = $1 AND escopo_id = $2`,
+    [escopo, id]
+  ).catch(() => []);
+  const map = new Map<string, "allow" | "deny">();
+  for (const r of rows) map.set(r.permissao, r.acao);
+  _cache.set(key, { exp: Date.now() + CACHE_MS, perms: map });
+  return map;
+}
+
+export function invalidarPermissoesCache(escopo?: "role" | "user", id?: string): void {
+  if (escopo && id) _cache.delete(`${escopo}:${id}`);
+  else _cache.clear();
+}
+
+export async function temPermissaoDinamica(
+  usuarioId: string,
+  role: JWTRole,
+  permissao: string
+): Promise<boolean> {
+  // 1. Override por usuário tem prioridade absoluta
+  const userOv = await loadOverrides("user", usuarioId);
+  if (userOv.has(permissao)) return userOv.get(permissao) === "allow";
+  // 2. Override por role
+  const roleOv = await loadOverrides("role", role);
+  if (roleOv.has(permissao)) return roleOv.get(permissao) === "allow";
+  // 3. Default estático
+  if (role === "master") return true;
+  return (PERMISSOES_POR_ROLE[role] as string[]).includes(permissao);
 }

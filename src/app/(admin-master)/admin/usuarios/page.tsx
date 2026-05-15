@@ -36,9 +36,51 @@ export default function AdminUsuariosPage() {
   const [salvando, setSalvando] = useState(false);
   const [erroNovo, setErroNovo] = useState<string | null>(null);
 
-  // Carrega empresas pra select
+  // Modal Editar
+  const [modalEdit, setModalEdit] = useState<Usuario | null>(null);
+  const [edit, setEdit] = useState({ nome: "", email: "", senha: "", role: "", empresa_id: "" as string, ativo: true });
+  const [erroEdit, setErroEdit] = useState<string | null>(null);
+
+  function abrirEditar(u: Usuario) {
+    setModalEdit(u);
+    setEdit({
+      nome: u.nome, email: u.email, senha: "",
+      role: u.role, empresa_id: u.empresa_id ?? "", ativo: u.ativo,
+    });
+    setErroEdit(null);
+  }
+
+  async function salvarEditar() {
+    if (!modalEdit) return;
+    setSalvando(true); setErroEdit(null);
+    try {
+      const exigeEmpresa = edit.role !== "master" && edit.role !== "suporte";
+      const body: Record<string, unknown> = {
+        nome:  edit.nome,
+        email: edit.email,
+        role:  edit.role,
+        empresa_id: exigeEmpresa ? (edit.empresa_id || null) : null,
+        ativo: edit.ativo,
+      };
+      if (edit.senha.length >= 8) body.senha = edit.senha;
+
+      const r = await fetch(`/api/admin/usuarios/${modalEdit.id}`, {
+        method: "PATCH",
+        headers: { ...auth(), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.success) throw new Error(d?.error || "Falha");
+      setModalEdit(null);
+      carregar();
+    } catch (e) {
+      setErroEdit(e instanceof Error ? e.message : "Erro");
+    } finally { setSalvando(false); }
+  }
+
+  // Carrega empresas pra select (em modal novo OU editar)
   useEffect(() => {
-    if (!modalNovo) return;
+    if (!modalNovo && !modalEdit) return;
     fetch("/api/admin/empresas?limit=500", { headers: auth() })
       .then(r => r.json())
       .then(d => {
@@ -49,7 +91,7 @@ export default function AdminUsuariosPage() {
         }
       });
     // eslint-disable-next-line
-  }, [modalNovo]);
+  }, [modalNovo, modalEdit]);
 
   async function criarUsuario() {
     setSalvando(true); setErroNovo(null);
@@ -176,12 +218,18 @@ export default function AdminUsuariosPage() {
                       {u.ultimo_login && <span>· login {fmtData(u.ultimo_login)}</span>}
                     </div>
                   </div>
-                  {u.empresa_id && (
-                    <a href={`/admin/empresas/${u.empresa_id}/gerenciar`}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 flex-shrink-0">
-                      <KeyRound className="h-3 w-3" /> Gerenciar
-                    </a>
-                  )}
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <button onClick={() => abrirEditar(u)}
+                      className="text-xs rounded border border-blue-500/30 bg-blue-500/10 text-blue-300 px-2 py-1 hover:bg-blue-500/20">
+                      Editar
+                    </button>
+                    {u.empresa_id && (
+                      <a href={`/admin/empresas/${u.empresa_id}/gerenciar`}
+                        className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                        <KeyRound className="h-3 w-3" /> Gerenciar
+                      </a>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -197,6 +245,72 @@ export default function AdminUsuariosPage() {
               className="rounded-lg border border-white/10 px-3 py-1.5 disabled:opacity-30 hover:bg-white/5">Próxima</button>
           </div>
         )}
+
+      {modalEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setModalEdit(null); }}>
+          <div className="w-full max-w-md rounded-2xl border border-blue-500/30 bg-slate-900 p-6 max-h-[90vh] overflow-auto">
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white">Editar usuário</h3>
+                <p className="text-xs text-slate-400">{modalEdit.email}</p>
+              </div>
+              <button onClick={() => setModalEdit(null)} className="text-slate-500 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">Nome</label>
+            <input value={edit.nome} onChange={e => setEdit(s => ({ ...s, nome: e.target.value }))}
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">E-mail</label>
+            <input type="email" value={edit.email} onChange={e => setEdit(s => ({ ...s, email: e.target.value }))}
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">Nova senha (deixe vazio pra manter)</label>
+            <input type="password" value={edit.senha} onChange={e => setEdit(s => ({ ...s, senha: e.target.value }))}
+              placeholder="Mín 8 chars (vazio = mantém atual)"
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm font-mono text-white" />
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">Função</label>
+            <select value={edit.role} onChange={e => setEdit(s => ({ ...s, role: e.target.value }))}
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white">
+              {ROLES_CRIAR.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+
+            {edit.role !== "master" && edit.role !== "suporte" && (
+              <>
+                <label className="mb-1 block text-xs font-medium text-slate-400">Empresa</label>
+                <select value={edit.empresa_id} onChange={e => setEdit(s => ({ ...s, empresa_id: e.target.value }))}
+                  className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white">
+                  <option value="">— Sem empresa —</option>
+                  {empresas.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
+                </select>
+              </>
+            )}
+
+            <label className="mb-3 flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={edit.ativo} onChange={e => setEdit(s => ({ ...s, ativo: e.target.checked }))}
+                className="h-4 w-4 accent-emerald-500" />
+              <span className="text-sm text-white">Usuário ativo</span>
+            </label>
+
+            {erroEdit && <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/15 px-3 py-2 text-xs text-red-300">{erroEdit}</div>}
+
+            <div className="flex gap-2">
+              <button onClick={() => setModalEdit(null)} disabled={salvando}
+                className="flex-1 rounded-lg border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">
+                Cancelar
+              </button>
+              <button onClick={salvarEditar} disabled={salvando}
+                className="flex-1 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-600 disabled:opacity-50">
+                {salvando ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalNovo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"

@@ -13,13 +13,14 @@ import { ok, forbidden } from "@/lib/utils/response";
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
-  const { empresaId } = auth.payload;
-  if (!empresaId) return forbidden();
+  const { empresaId, role } = auth.payload;
 
-  // Master sempre tem acesso
-  if (auth.payload.role === "master") {
+  // Master e suporte sempre têm acesso (são equipe interna do SaaS)
+  if (role === "master" || role === "suporte") {
     return ok({ liberado: true, master: true, duracao: "sempre", personalizado: false });
   }
+
+  if (!empresaId) return forbidden();
 
   const row = await queryOne<{
     id: string; duracao: string;
