@@ -15,8 +15,8 @@ export async function GET(req: NextRequest) {
   const { empresaId, role } = auth.payload;
   if (!empresaId) return forbidden();
 
-  // Master vê todos; demais só da própria empresa
-  const onlyEmpresa = role !== "master";
+  // Master e suporte veem todos; demais só da própria empresa
+  const onlyEmpresa = role !== "master" && role !== "suporte";
 
   const rows = await query(
     `SELECT c.id, c.assunto, c.prioridade, c.status, c.canal, c.tags,

@@ -4,16 +4,17 @@ import { JWTRole } from "./jwt";
 // Hierarquia de papéis
 // ─────────────────────────────────────────────
 export const ROLE_HIERARCHY: Record<JWTRole, number> = {
-  master:     100,
-  admin:       90,
-  gerente:     80,
-  financeiro:  70,
-  garcom:      50,
-  cozinha:     50,
-  atendente:   50,
-  delivery:    40,
-  motoboy:     30,
-  cliente:     10,
+  master:      100,
+  suporte:      95,    // entre master e admin: cross-tenant pra suporte
+  admin:        90,
+  gerente:      80,
+  financeiro:   70,
+  garcom:       50,
+  cozinha:      50,
+  atendente:    50,
+  delivery:     40,
+  motoboy:      30,
+  cliente:      10,
 };
 
 // ─────────────────────────────────────────────
@@ -47,6 +48,21 @@ export type Permissao =
 
 export const PERMISSOES_POR_ROLE: Record<JWTRole, Permissao[]> = {
   master: ["admin:tudo"],
+
+  // Suporte: cross-tenant pra atender chamados, mas sem editar empresas
+  // (não muda configuração, só ajuda a entender o que o cliente vê)
+  suporte: [
+    "empresa:ver",
+    "usuario:ver",
+    "cardapio:ver",
+    "pedido:ver",
+    "mesa:ver",
+    "cozinha:ver",
+    "financeiro:ver", "relatorio:ver",
+    "delivery:ver",
+    "estoque:ver",
+    "gateway:ver",
+  ],
 
   admin: [
     "empresa:ver", "empresa:editar",

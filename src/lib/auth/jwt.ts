@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify, JWTPayload } from "jose";
 
 export type JWTRole =
-  | "master" | "admin" | "gerente" | "garcom" | "cozinha"
+  | "master" | "suporte" | "admin" | "gerente" | "garcom" | "cozinha"
   | "atendente" | "financeiro" | "delivery" | "motoboy" | "cliente";
 
 export interface TokenPayload extends JWTPayload {

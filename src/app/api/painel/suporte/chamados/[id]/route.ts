@@ -18,7 +18,7 @@ export async function GET(
   if (isAuthError(auth)) return auth;
   const { empresaId, role } = auth.payload;
 
-  const onlyEmpresa = role !== "master";
+  const onlyEmpresa = role !== "master" && role !== "suporte";
   const chamado = await queryOne(
     `SELECT c.*, e.nome_fantasia AS empresa_nome
        FROM suporte_chamados c
@@ -33,17 +33,18 @@ export async function GET(
             criado_em::text, lido_em::text
        FROM suporte_mensagens
       WHERE chamado_id = $1
-        ${role !== "master" ? "AND interno = FALSE" : ""}
+        ${role !== "master" && role !== "suporte" ? "AND interno = FALSE" : ""}
       ORDER BY criado_em ASC`,
     [params.id]
   ).catch(() => []);
 
   // Marca como lidas (msgs do outro lado)
+  const isAgent = role === "master" || role === "suporte";
   await queryOne(
     `UPDATE suporte_mensagens SET lido_em = NOW()
       WHERE chamado_id = $1 AND lido_em IS NULL
         AND autor_tipo != $2`,
-    [params.id, role === "master" ? "agente" : "cliente"]
+    [params.id, isAgent ? "agente" : "cliente"]
   ).catch(() => {});
 
   return ok({ chamado, mensagens: msgs });
@@ -62,7 +63,7 @@ export async function PATCH(
 ) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
-  if (auth.payload.role !== "master") return forbidden();
+  if (auth.payload.role !== "master" && auth.payload.role !== "suporte") return forbidden();
 
   let body: z.infer<typeof patchSchema>;
   try { body = patchSchema.parse(await req.json()); }

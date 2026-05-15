@@ -5,7 +5,7 @@
  */
 import { useEffect, useState, useCallback } from "react";
 import {
-  Users, Search, RefreshCw, Filter, Building2, Shield, KeyRound,
+  Users, Search, RefreshCw, Filter, Building2, Shield, KeyRound, Plus, X,
 } from "lucide-react";
 
 interface Usuario {
@@ -16,7 +16,8 @@ interface Usuario {
   empresa_nome: string | null; empresa_slug: string | null;
 }
 
-const ROLES = ["", "master", "admin", "gerente", "garcom", "cozinha", "financeiro", "atendente", "delivery", "motoboy"];
+const ROLES = ["", "master", "suporte", "admin", "gerente", "garcom", "cozinha", "financeiro", "atendente", "delivery", "motoboy"];
+const ROLES_CRIAR = ["suporte", "master", "admin", "gerente", "garcom", "cozinha", "financeiro", "atendente", "delivery", "motoboy"];
 const fmtData = (iso: string | null) => iso ? new Date(iso).toLocaleString("pt-BR") : "—";
 const isBloqueado = (iso: string | null) => !!iso && new Date(iso) > new Date();
 
@@ -27,6 +28,53 @@ export default function AdminUsuariosPage() {
   const [busca, setBusca]       = useState("");
   const [loading, setLoading]   = useState(true);
   const [page, setPage]         = useState(1);
+
+  // Modal Novo
+  const [modalNovo, setModalNovo] = useState(false);
+  const [empresas, setEmpresas]   = useState<Array<{ id: string; nome_fantasia: string }>>([]);
+  const [novo, setNovo] = useState({ nome: "", email: "", senha: "", role: "suporte", empresa_id: "" as string });
+  const [salvando, setSalvando] = useState(false);
+  const [erroNovo, setErroNovo] = useState<string | null>(null);
+
+  // Carrega empresas pra select
+  useEffect(() => {
+    if (!modalNovo) return;
+    fetch("/api/admin/empresas?limit=500", { headers: auth() })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          const lista = d.data?.empresas ?? d.data ?? [];
+          setEmpresas(lista.map((e: { id: string; nome_fantasia?: string; nome?: string }) =>
+            ({ id: e.id, nome_fantasia: e.nome_fantasia ?? e.nome ?? "?" })));
+        }
+      });
+    // eslint-disable-next-line
+  }, [modalNovo]);
+
+  async function criarUsuario() {
+    setSalvando(true); setErroNovo(null);
+    try {
+      const exigeEmpresa = novo.role !== "master" && novo.role !== "suporte";
+      const r = await fetch("/api/admin/usuarios", {
+        method: "POST",
+        headers: { ...auth(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome:  novo.nome,
+          email: novo.email,
+          senha: novo.senha,
+          role:  novo.role,
+          empresa_id: exigeEmpresa ? (novo.empresa_id || null) : null,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.success) throw new Error(d?.error || "Falha");
+      setModalNovo(false);
+      setNovo({ nome: "", email: "", senha: "", role: "suporte", empresa_id: "" });
+      carregar();
+    } catch (e) {
+      setErroNovo(e instanceof Error ? e.message : "Erro");
+    } finally { setSalvando(false); }
+  }
 
   const auth = () => ({ Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("access_token") : ""}` });
 
@@ -57,10 +105,16 @@ export default function AdminUsuariosPage() {
             </h1>
             <p className="text-sm text-slate-400">Todos usuários do sistema (todas empresas + masters)</p>
           </div>
-          <button onClick={carregar}
-            className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Atualizar
-          </button>
+          <div className="flex gap-2">
+            <button onClick={carregar}
+              className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Atualizar
+            </button>
+            <button onClick={() => setModalNovo(true)}
+              className="flex items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-600">
+              <Plus className="h-3.5 w-3.5" /> Novo usuário
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
@@ -143,5 +197,72 @@ export default function AdminUsuariosPage() {
               className="rounded-lg border border-white/10 px-3 py-1.5 disabled:opacity-30 hover:bg-white/5">Próxima</button>
           </div>
         )}
+
+      {modalNovo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setModalNovo(false); }}>
+          <div className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-slate-900 p-6">
+            <div className="mb-4 flex items-start justify-between">
+              <h3 className="text-base font-bold text-white">Novo usuário</h3>
+              <button onClick={() => setModalNovo(false)} className="text-slate-500 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">Nome</label>
+            <input value={novo.nome} onChange={e => setNovo(s => ({ ...s, nome: e.target.value }))}
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">E-mail</label>
+            <input type="email" value={novo.email} onChange={e => setNovo(s => ({ ...s, email: e.target.value }))}
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">Senha (mín 8)</label>
+            <input type="password" value={novo.senha} onChange={e => setNovo(s => ({ ...s, senha: e.target.value }))}
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm font-mono text-white" />
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">Função</label>
+            <select value={novo.role} onChange={e => setNovo(s => ({ ...s, role: e.target.value }))}
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white">
+              {ROLES_CRIAR.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+
+            {novo.role !== "master" && novo.role !== "suporte" && (
+              <>
+                <label className="mb-1 block text-xs font-medium text-slate-400">Empresa</label>
+                <select value={novo.empresa_id} onChange={e => setNovo(s => ({ ...s, empresa_id: e.target.value }))}
+                  className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white">
+                  <option value="">— Escolha —</option>
+                  {empresas.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
+                </select>
+              </>
+            )}
+
+            {(novo.role === "suporte" || novo.role === "master") && (
+              <p className="mb-3 text-[11px] text-emerald-300 bg-emerald-500/10 rounded p-2">
+                {novo.role === "suporte"
+                  ? "Agente de suporte: vê e responde chamados de TODAS as empresas. Sem vínculo a empresa específica."
+                  : "Master: acesso total ao sistema."}
+              </p>
+            )}
+
+            {erroNovo && (
+              <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/15 px-3 py-2 text-xs text-red-300">{erroNovo}</div>
+            )}
+
+            <div className="flex gap-2">
+              <button onClick={() => setModalNovo(false)} disabled={salvando}
+                className="flex-1 rounded-lg border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">
+                Cancelar
+              </button>
+              <button onClick={criarUsuario}
+                disabled={salvando || novo.nome.length < 2 || novo.email.length < 3 || novo.senha.length < 8}
+                className="flex-1 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-600 disabled:opacity-50">
+                {salvando ? "Criando..." : "Criar usuário"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>);
 }
