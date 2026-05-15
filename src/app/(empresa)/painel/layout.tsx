@@ -285,7 +285,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         <main className="flex-1 p-6">{children}</main>
       </div>
       <PwaInstallPrompt />
-      {modulosEmpresa.includes("ifood") && <IfoodPendingPopup />}
+      <IfoodPendingPopup />{/* monta sempre — endpoint filtra por empresa */}
       <ModuloLockedModal
         modulo={moduloBloqueado}
         onClose={() => setModuloBloqueado(null)}

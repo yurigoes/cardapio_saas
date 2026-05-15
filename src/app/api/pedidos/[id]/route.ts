@@ -8,6 +8,7 @@ import { notificarEvolution, type EvolutionEvento } from "@/lib/notify/evolution
 import { cancelarJobsPedido } from "@/lib/print/queue";
 import { invalidarRastreio } from "@/lib/delivery/rastreio";
 import { dispatchCupomCozinha } from "@/lib/print/dispatch";
+import { syncIfoodAsync } from "@/lib/ifood/sync-status";
 
 // Map de status do pedido → ID do evento Evolution (WA_EVENTOS no painel)
 const STATUS_TO_EVENTO: Partial<Record<PedidoStatus, EvolutionEvento>> = {
@@ -144,6 +145,11 @@ export async function PATCH(
         && pedido.status === "pendente") {
       dispatchCupomCozinha(empresaId, params.id)
         .catch(e => console.warn("[Pedidos/PATCH] cozinha:", e));
+    }
+
+    // Sync com iFood (se origem='ifood' e tem ifood_order_id) — best-effort
+    if (pedido.status !== body.status) {
+      syncIfoodAsync(empresaId, params.id, body.status);
     }
 
     // WhatsApp ao cliente em transições relevantes (best-effort)

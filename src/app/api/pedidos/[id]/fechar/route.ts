@@ -23,6 +23,7 @@ import { ok, forbidden, notFound, badRequest, serverError, conflict } from "@/li
 import { auditLog } from "@/lib/security/audit";
 import { notificarEvolution } from "@/lib/notify/evolution";
 import { dispatchCupomCliente, dispatchCupomCozinha } from "@/lib/print/dispatch";
+import { syncIfoodAsync } from "@/lib/ifood/sync-status";
 import type { PoolClient } from "pg";
 
 const FORMAS = ["pix", "dinheiro", "credito", "debito", "vale", "outro"] as const;
@@ -248,6 +249,11 @@ export async function POST(
       },
       usuario:    { sub, empresaId },
     });
+
+    // Sync com iFood se entregue (despacho concluído) — best-effort
+    if (result.status === "entregue") {
+      syncIfoodAsync(empresaId, params.id, "entregue");
+    }
 
     // Notifica cliente que pedido foi entregue (best-effort)
     if (result.status === "entregue" && result.cliente_telefone) {

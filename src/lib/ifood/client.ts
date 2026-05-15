@@ -358,6 +358,48 @@ export async function confirmOrder(cfg: IfoodConfig, orderId: string): Promise<b
 }
 
 /**
+ * Marca pedido como "iniciada preparação" no iFood (opcional, mas recomendado).
+ * Endpoint: POST /order/v1.0/orders/{orderId}/startPreparation
+ */
+export async function startPreparation(cfg: IfoodConfig, orderId: string): Promise<boolean> {
+  const token = await getValidToken(cfg);
+  const r = await fetch(`${BASE}/order/v1.0/orders/${orderId}/startPreparation`, {
+    method:  "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    signal:  AbortSignal.timeout(15_000),
+  });
+  return r.ok;
+}
+
+/**
+ * Marca pedido como pronto pra retirada (TAKEOUT) no iFood.
+ * Endpoint: POST /order/v1.0/orders/{orderId}/readyToPickup
+ */
+export async function readyToPickup(cfg: IfoodConfig, orderId: string): Promise<boolean> {
+  const token = await getValidToken(cfg);
+  const r = await fetch(`${BASE}/order/v1.0/orders/${orderId}/readyToPickup`, {
+    method:  "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    signal:  AbortSignal.timeout(15_000),
+  });
+  return r.ok;
+}
+
+/**
+ * Marca pedido como despachado/saiu pra entrega (DELIVERY) no iFood.
+ * Endpoint: POST /order/v1.0/orders/{orderId}/dispatch
+ */
+export async function dispatchOrder(cfg: IfoodConfig, orderId: string): Promise<boolean> {
+  const token = await getValidToken(cfg);
+  const r = await fetch(`${BASE}/order/v1.0/orders/${orderId}/dispatch`, {
+    method:  "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    signal:  AbortSignal.timeout(15_000),
+  });
+  return r.ok;
+}
+
+/**
  * Cancela pedido no iFood. Códigos comuns:
  *   501 - "ITEM_UNAVAILABLE"        (item indisponível)
  *   801 - "PROBLEM_AT_RESTAURANT"   (problema no restaurante)

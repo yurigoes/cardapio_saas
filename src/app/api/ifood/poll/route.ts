@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       if (!cfg || !cfg.ativo) continue;
 
       const events = await pollEvents(cfg);
+      console.log(`[iFood/poll] empresa=${empresa_id} merchant=${cfg.merchant_id ?? '-'} mode=${cfg.mode ?? '-'} eventos_recebidos=${events.length}`);
 
       let importados = 0;
       const idsParaAck: string[] = [];
