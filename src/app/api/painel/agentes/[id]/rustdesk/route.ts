@@ -85,6 +85,9 @@ export async function GET(
 const postSchema = z.object({
   rustdesk_id:  z.string().min(4).max(20).optional(),
   auto_aceite:  z.boolean().optional(),
+  // Default: NÃO rotaciona senha. Só rotaciona se explicitamente pedido
+  // (botão "Gerar nova senha" na UI) OU se ainda não existe senha (1ª vez).
+  gerar_nova_senha: z.boolean().optional().default(false),
 }).strict();
 
 export async function POST(
@@ -97,49 +100,72 @@ export async function POST(
   const { empresaId } = auth.payload;
   if (!empresaId) return forbidden();
 
-  let body: z.infer<typeof postSchema> = {};
+  let body: z.infer<typeof postSchema> = { gerar_nova_senha: false };
   try { body = postSchema.parse(await req.json().catch(() => ({}))); }
   catch (err) { return badRequest(err instanceof Error ? err.message : "Body inválido"); }
 
   try {
-    const a = await queryOne<{ id: string }>(
-      `SELECT id FROM agentes
+    const a = await queryOne<{ id: string; rustdesk_password: string | null }>(
+      `SELECT id, rustdesk_password FROM agentes
         WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL`,
       [params.id, empresaId]
     );
     if (!a) return notFound("Agente não encontrado");
 
-    const senhaPlain   = gerarSenhaForte(16);
-    const senhaCifrada = encryptField(senhaPlain);
+    // Decide se rotaciona senha:
+    //   - Pediu explicitamente (botão "Gerar nova senha")
+    //   - Ainda não existe senha (1ª config)
+    const rotacionarSenha = body.gerar_nova_senha === true || !a.rustdesk_password;
 
-    // Gera novo agent_token a cada call (rotaciona). Vai junto no comando
-    // de instalação pra criar scheduled task de heartbeat.
-    const agentTok = generateAgentToken();
+    let senhaPlain: string | null = null;
+    let agentTokRaw: string | null = null;
 
-    await queryOne(
-      `UPDATE agentes
-          SET rustdesk_password      = $1,
-              rustdesk_id            = COALESCE($2, rustdesk_id),
-              rustdesk_auto_aceite   = COALESCE($3, rustdesk_auto_aceite),
-              rustdesk_registrado_em = COALESCE(rustdesk_registrado_em, NOW()),
-              token_hash             = $4,
-              token_prefix           = $5,
-              updated_at             = NOW()
-        WHERE id = $6`,
-      [senhaCifrada, body.rustdesk_id ?? null, body.auto_aceite ?? null,
-       agentTok.hash, agentTok.prefix, params.id]
-    );
+    if (rotacionarSenha) {
+      // Rotaciona senha + token de heartbeat junto
+      senhaPlain = gerarSenhaForte(16);
+      const senhaCifrada = encryptField(senhaPlain);
+      const agentTok = generateAgentToken();
+      agentTokRaw = agentTok.raw;
+
+      await queryOne(
+        `UPDATE agentes
+            SET rustdesk_password      = $1,
+                rustdesk_id            = COALESCE($2, rustdesk_id),
+                rustdesk_auto_aceite   = COALESCE($3, rustdesk_auto_aceite),
+                rustdesk_registrado_em = COALESCE(rustdesk_registrado_em, NOW()),
+                token_hash             = $4,
+                token_prefix           = $5,
+                updated_at             = NOW()
+          WHERE id = $6`,
+        [senhaCifrada, body.rustdesk_id ?? null, body.auto_aceite ?? null,
+         agentTok.hash, agentTok.prefix, params.id]
+      );
+    } else {
+      // Só atualiza rustdesk_id e/ou auto_aceite — preserva senha + token
+      await queryOne(
+        `UPDATE agentes
+            SET rustdesk_id            = COALESCE($1, rustdesk_id),
+                rustdesk_auto_aceite   = COALESCE($2, rustdesk_auto_aceite),
+                rustdesk_registrado_em = COALESCE(rustdesk_registrado_em, NOW()),
+                updated_at             = NOW()
+          WHERE id = $3`,
+        [body.rustdesk_id ?? null, body.auto_aceite ?? null, params.id]
+      );
+    }
 
     const relay = relayInfo();
 
     return ok({
-      password:    senhaPlain,        // ÚNICA vez em cleartext
-      agent_token: agentTok.raw,      // ÚNICA vez em cleartext (pra heartbeat)
+      password:    senhaPlain,         // null se não rotacionou
+      agent_token: agentTokRaw,        // null se não rotacionou
+      senha_rotacionada: rotacionarSenha,
       rustdesk_id: body.rustdesk_id ?? null,
       auto_aceite: body.auto_aceite ?? false,
       relay_host:  relay.relay_host,
       public_key:  relay.public_key,
-      aviso:       "Anote senha + token agora — não podem ser recuperados depois.",
+      aviso:       rotacionarSenha
+        ? "Anote senha + token agora — não podem ser recuperados depois. Atualize na máquina com 'rustdesk --password NOVA_SENHA'."
+        : "Configurações salvas. Senha não foi alterada.",
     });
   } catch (err) {
     console.error("[Agentes/Rustdesk/POST]", err);

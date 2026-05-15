@@ -238,22 +238,31 @@ export default function PainelMaquinasPage() {
     }
   }
 
-  async function gerarSenhaRustDesk() {
+  async function salvarRustDesk(gerarNovaSenha = false) {
     if (!rdAgente) return;
+    if (gerarNovaSenha && rdAgente.rustdesk_id && !confirm(
+      "Gerar NOVA senha vai invalidar a atual.\n\n" +
+      "Você precisa rodar manualmente na máquina:\n" +
+      "  rustdesk --password 'NOVA_SENHA'\n\n" +
+      "(Linux: como root. Windows: PowerShell como admin.)\n\n" +
+      "Tem certeza?"
+    )) return;
+
     setRdSalvando(true); setErro(null);
     try {
       const r = await fetch(`/api/painel/agentes/${rdAgente.id}/rustdesk`, {
         method:  "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body:    JSON.stringify({
-          rustdesk_id: rdNovoId.trim() || undefined,
-          auto_aceite: rdAutoAceite,
+          rustdesk_id:      rdNovoId.trim() || undefined,
+          auto_aceite:      rdAutoAceite,
+          gerar_nova_senha: gerarNovaSenha,
         }),
       });
       const data = await r.json();
       if (!r.ok || !data.success) throw new Error(data?.error || "Falha");
       setRdConfig({
-        password:    data.data.password,
+        password:    data.data.password,        // null se não rotacionou
         agent_token: data.data.agent_token,
         rustdesk_id: data.data.rustdesk_id,
         relay_host:  data.data.relay_host,
@@ -760,20 +769,42 @@ export default function PainelMaquinasPage() {
                   </div>
                 ) : null}
 
-                <div className="flex gap-2">
+                <div className="space-y-2">
+                  {/* Botão principal: salva ID/configs SEM tocar na senha */}
                   <button
-                    onClick={() => { setRdAgente(null); setRdConfig(null); }}
-                    className="flex-1 rounded-lg border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5"
-                  >
-                    Fechar
-                  </button>
-                  <button
-                    onClick={gerarSenhaRustDesk}
+                    onClick={() => salvarRustDesk(false)}
                     disabled={rdSalvando}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-600 disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-600 disabled:opacity-50"
                   >
-                    {rdSalvando ? "Gerando..." : <><KeyRound className="h-4 w-4" /> Gerar senha + salvar</>}
+                    {rdSalvando ? "Salvando..." : (
+                      <>{rdAgente.rustdesk_id ? "Salvar configurações" : "Gerar senha + salvar (1ª config)"}</>
+                    )}
                   </button>
+
+                  {/* Linha secundária: rotacionar senha + fechar */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setRdAgente(null); setRdConfig(null); }}
+                      className="flex-1 rounded-lg border border-white/10 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-white/5"
+                    >
+                      Fechar
+                    </button>
+                    {rdAgente.rustdesk_id && (
+                      <button
+                        onClick={() => salvarRustDesk(true)}
+                        disabled={rdSalvando}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                        title="Gera senha nova — você precisa atualizar manualmente na máquina"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" /> Gerar nova senha
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-600 text-center">
+                    {rdAgente.rustdesk_id
+                      ? "Senha atual permanece válida. Use 'Gerar nova senha' apenas se precisar trocar."
+                      : "Vai gerar a senha inicial dessa máquina."}
+                  </p>
                 </div>
               </>
             )}
