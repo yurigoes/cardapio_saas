@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Bike, DollarSign,
   Package, Users, Settings, LogOut, ChefHat, Bell, Tag, BarChart3,
   MapPin, CreditCard, Zap, LayoutGrid, Tv2, Wallet, Activity, ScrollText,
-  Receipt, Sun, Moon, Database, Key, Printer, ShieldCheck, Mail, Server,
+  Receipt, Sun, Moon, Database, Key, Printer, ShieldCheck, Mail, Server, LifeBuoy,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
 import { useTheme } from "@/lib/hooks/useTheme";
@@ -62,6 +62,7 @@ const ALL_NAV = [
   { href: "/painel/backup",      label: "Backup",      icon: Database,        modulo: null         },
   { href: "/painel/config",      label: "Configurações",icon: Settings,       modulo: null         },
   { href: "/painel/lgpd",        label: "Privacidade", icon: ShieldCheck,     modulo: null         },
+  { href: "/painel/suporte",     label: "Suporte",     icon: LifeBuoy,        modulo: null,        suporteOnly: true },
 ];
 
 export default function EmpresaLayout({ children }: { children: React.ReactNode }) {
@@ -105,14 +106,29 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
   const saasBranding = useSaasBranding();
   const { get: getModulo, recarregar: recarregarModulos } = useModulos();
   const [moduloBloqueado, setModuloBloqueado] = useState<ModuloStatus | null>(null);
+  const [suporteLiberado, setSuporteLiberado] = useState(false);
 
-  // Mostra TODOS os itens; bloqueia visualmente os que não estão no plano
-  const navItems = ALL_NAV.map(item => {
-    const incluso = item.modulo === null || modulosEmpresa.includes(item.modulo);
-    const moduloStatus = item.modulo ? getModulo(item.modulo) : undefined;
-    const ativo = incluso || (moduloStatus?.ativo ?? false);
-    return { ...item, locked: !ativo, moduloStatus };
-  });
+  // Verifica se empresa tem acesso ao Suporte (master libera por chave)
+  useEffect(() => {
+    if (!empresa) return;
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    fetch("/api/painel/suporte/status", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (d.success) setSuporteLiberado(!!d.data.liberado); })
+      .catch(() => {});
+  }, [empresa]);
+
+  // Mostra TODOS os itens; bloqueia visualmente os que não estão no plano.
+  // Itens com 'suporteOnly' só aparecem se empresa tem acesso liberado.
+  const navItems = ALL_NAV
+    .filter(item => !(item as { suporteOnly?: boolean }).suporteOnly || suporteLiberado)
+    .map(item => {
+      const incluso = item.modulo === null || modulosEmpresa.includes(item.modulo);
+      const moduloStatus = item.modulo ? getModulo(item.modulo) : undefined;
+      const ativo = incluso || (moduloStatus?.ativo ?? false);
+      return { ...item, locked: !ativo, moduloStatus };
+    });
 
   // Injeta manifest do PWA admin no head (só dentro de /painel)
   // ATENÇÃO: hook DEVE ficar antes de qualquer early return (regras de hooks)

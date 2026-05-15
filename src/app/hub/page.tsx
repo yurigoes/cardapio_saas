@@ -6,7 +6,7 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, ChefHat,
   Bike, MapPin, DollarSign, Users, LogOut, Settings,
   ShieldCheck, Building2, Plus, X, ChevronDown, Trash2,
-  Eye, EyeOff, Tag, Monitor,
+  Eye, EyeOff, Tag, Monitor, LifeBuoy,
 } from "lucide-react";
 import { confirmar } from "@/components/ui/ConfirmModal";
 import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
@@ -473,7 +473,30 @@ function MasterView({ usuario }: { usuario: Usuario }) {
 /* ─── visão normal (operadores) ──────────────── */
 function OperadorView({ usuario, empresa }: { usuario: Usuario; empresa: Empresa | null }) {
   const role = usuario.role;
-  const modulosDisponiveis = MODULOS.filter((m) => m.roles.includes(role));
+  const [suporteLiberado, setSuporteLiberado] = useState(false);
+
+  useEffect(() => {
+    const t = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    if (!t) return;
+    fetch("/api/painel/suporte/status", { headers: { Authorization: `Bearer ${t}` } })
+      .then(r => r.json())
+      .then(d => { if (d.success) setSuporteLiberado(!!d.data.liberado); })
+      .catch(() => {});
+  }, []);
+
+  const cardSuporte: ModuloCard = {
+    href: "/painel/suporte",
+    label: "Suporte",
+    descricao: "Centro de ajuda + tutoriais de instalação",
+    icon: LifeBuoy,
+    cor: "from-amber-500/20 to-amber-600/10 border-amber-500/30 hover:border-amber-500/60",
+    roles: ["admin", "master", "operador", "garcom", "caixa", "cozinha", "gerente"],
+  };
+
+  const modulosDisponiveis = [
+    ...MODULOS.filter((m) => m.roles.includes(role)),
+    ...(suporteLiberado ? [cardSuporte] : []),
+  ];
 
   function handleLogout() {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") ?? "" : "";
