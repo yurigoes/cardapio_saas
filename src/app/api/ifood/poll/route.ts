@@ -51,16 +51,21 @@ export async function POST(req: NextRequest) {
 
       for (const ev of events) {
         idsParaAck.push(ev.id);
+        const codeRaw = String(ev.code ?? "UNKNOWN").toUpperCase();
+        // Normaliza códigos iFood (Merchant API v1 usa 3 letras): PLC=PLACED, etc
+        const isPlaced = codeRaw === "PLACED" || codeRaw === "PLC";
+        console.log(`[iFood/poll] evento id=${ev.id} code=${codeRaw} orderId=${ev.orderId ?? '-'} placed=${isPlaced}`);
+
         // Salva evento bruto
         await queryOne(
           `INSERT INTO ifood_eventos
              (empresa_id, evento_id, tipo, pedido_ifood_id, payload)
            VALUES ($1, $2, $3, $4, $5::jsonb)
            ON CONFLICT (empresa_id, evento_id) DO NOTHING`,
-          [empresa_id, ev.id, ev.code ?? "UNKNOWN", ev.orderId ?? null, JSON.stringify(ev)]
+          [empresa_id, ev.id, codeRaw, ev.orderId ?? null, JSON.stringify(ev)]
         );
 
-        if (ev.code === "PLACED" && ev.orderId) {
+        if (isPlaced && ev.orderId) {
           try {
             const detail = await getOrderDetail(cfg, ev.orderId);
             if (detail) {
