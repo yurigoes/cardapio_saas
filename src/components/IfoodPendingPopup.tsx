@@ -18,7 +18,7 @@ interface PedidoPendente {
   numero: number;
   cliente_nome: string | null;
   total: string | number;
-  criado_em: string;
+  created_at: string;
   ifood_order_id: string | null;
 }
 

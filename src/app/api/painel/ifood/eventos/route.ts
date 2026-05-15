@@ -34,10 +34,10 @@ export async function GET(req: NextRequest) {
     params.push(limit, offset);
     const rows = await query(
       `SELECT id, evento_id, tipo, pedido_ifood_id, pedido_id,
-              payload, processado_em, ack_em, erro, criado_em
+              payload, processado_em, ack_em, erro, recebido_em
          FROM ifood_eventos
         WHERE ${where.join(" AND ")}
-        ORDER BY criado_em DESC
+        ORDER BY recebido_em DESC
         LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
          COUNT(*) FILTER (WHERE pedido_id IS NOT NULL)::text           AS pedidos_24h,
          COUNT(*) FILTER (WHERE erro IS NOT NULL)::text                AS erros_24h
        FROM ifood_eventos
-       WHERE empresa_id = $1 AND criado_em > NOW() - INTERVAL '24 hours'`,
+       WHERE empresa_id = $1 AND recebido_em > NOW() - INTERVAL '24 hours'`,
       [empresaId]
     );
 

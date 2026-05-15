@@ -21,15 +21,15 @@ export async function GET(req: NextRequest) {
       numero: number;
       cliente_nome: string | null;
       total: string;
-      criado_em: string;
+      created_at: string;
       ifood_order_id: string | null;
     }>(
-      `SELECT id, numero, cliente_nome, total, criado_em, ifood_order_id
+      `SELECT id, numero, cliente_nome, total, created_at, ifood_order_id
          FROM pedidos
         WHERE empresa_id = $1
           AND origem = 'ifood'
           AND ifood_aceite_status = 'pendente'
-        ORDER BY criado_em ASC
+        ORDER BY created_at ASC
         LIMIT 20`,
       [empresaId]
     ).catch(() => []);
