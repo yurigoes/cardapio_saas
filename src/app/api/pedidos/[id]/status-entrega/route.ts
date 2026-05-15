@@ -13,6 +13,7 @@ import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/re
 import { auditLog } from "@/lib/security/audit";
 import { notificarConfirmacaoCliente } from "@/lib/notify/evolution";
 import { enviarLinkRastreio } from "@/lib/delivery/rastreio";
+import { syncIfoodAsync } from "@/lib/ifood/sync-status";
 
 const STATUS = ["aguardando", "atribuido", "coletado", "em_rota", "entregue", "cancelado"] as const;
 
@@ -95,10 +96,19 @@ export async function POST(
     if (body.status === "atribuido" || body.status === "coletado" || body.status === "em_rota") {
       enviarLinkRastreio(empresaId, params.id)
         .catch(e => console.warn("[StatusEntrega] rastreio:", e));
+      // Pedido iFood despachado pra entrega → /dispatch
+      syncIfoodAsync(empresaId, params.id, "em_entrega");
+    }
+    if (body.status === "entregue") {
+      // Pedido iFood concluído
+      syncIfoodAsync(empresaId, params.id, "entregue");
     }
     if (body.status === "entregue") {
       notificarConfirmacaoCliente(empresaId, params.id)
         .catch(e => console.warn("[StatusEntrega] notify:", e));
+    }
+    if (body.status === "cancelado") {
+      syncIfoodAsync(empresaId, params.id, "cancelado");
     }
 
     return ok({ id: params.id, status_entrega: body.status });

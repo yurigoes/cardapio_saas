@@ -83,6 +83,59 @@ export async function POST(req: NextRequest) {
               [(err as Error).message.slice(0, 500), empresa_id, ev.id]
             );
           }
+        } else if (ev.orderId && !isPlaced) {
+          // Sync inverso: status mudou no iFood — replica no nosso pedido
+          // Mapa de codes iFood → status interno
+          const STATUS_MAP: Record<string, string> = {
+            CFM: "confirmado",      // CONFIRMED
+            INTEGRATED: "confirmado",
+            CONFIRMED:  "confirmado",
+            DSP: "em_entrega",       // DISPATCHED — saiu pra entrega
+            DISPATCHED: "em_entrega",
+            RTP: "pronto",           // READY_TO_PICKUP
+            READY_TO_PICKUP: "pronto",
+            CON: "entregue",         // CONCLUDED
+            CONCLUDED: "entregue",
+            CAN: "cancelado",        // CANCELLED
+            CANCELLED: "cancelado",
+            CANCELLATION_REQUESTED: "cancelado",
+          };
+          const novoStatus = STATUS_MAP[codeRaw];
+          if (novoStatus) {
+            try {
+              const upd = await queryOne<{ id: string; numero: number }>(
+                `UPDATE pedidos
+                    SET status     = $1,
+                        updated_at = NOW()
+                  WHERE empresa_id = $2
+                    AND ifood_order_id = $3
+                    AND status != $1
+                    AND status NOT IN ('entregue', 'cancelado')
+                  RETURNING id, numero`,
+                [novoStatus, empresa_id, ev.orderId]
+              );
+              if (upd) {
+                console.log(`[iFood/poll] sync inverso: pedido #${upd.numero} ${codeRaw} → status=${novoStatus}`);
+              }
+              await queryOne(
+                `UPDATE ifood_eventos SET pedido_id = $1, processado_em = NOW()
+                  WHERE empresa_id = $2 AND evento_id = $3`,
+                [upd?.id ?? null, empresa_id, ev.id]
+              );
+            } catch (err) {
+              await queryOne(
+                `UPDATE ifood_eventos SET erro = $1 WHERE empresa_id = $2 AND evento_id = $3`,
+                [(err as Error).message.slice(0, 500), empresa_id, ev.id]
+              ).catch(() => {});
+            }
+          } else {
+            // KEEPALIVE / DDCR / outros — só marca processado pra não ficar pendente eternamente
+            await queryOne(
+              `UPDATE ifood_eventos SET processado_em = NOW()
+                WHERE empresa_id = $1 AND evento_id = $2`,
+              [empresa_id, ev.id]
+            ).catch(() => {});
+          }
         }
       }
 

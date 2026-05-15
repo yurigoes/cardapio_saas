@@ -14,6 +14,7 @@ import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { auditLog } from "@/lib/security/audit";
 import { enviarLinkRastreio } from "@/lib/delivery/rastreio";
+import { syncIfoodAsync } from "@/lib/ifood/sync-status";
 import type { PoolClient } from "pg";
 
 const bodySchema = z.object({
@@ -101,6 +102,9 @@ export async function POST(
     if (body.motoboy_id) {
       enviarLinkRastreio(empresaId, params.id)
         .catch(e => console.warn("[AtribuirMotoboy] rastreio:", e));
+      // Se for pedido iFood, dispara /dispatch automaticamente
+      // (motoboy atribuído = pedido despachado pra entrega)
+      syncIfoodAsync(empresaId, params.id, "em_entrega");
     }
 
     return ok(result);

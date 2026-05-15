@@ -7,6 +7,7 @@ import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/re
 import { auditLog } from "@/lib/security/audit";
 import { registrarVendaPedido, registrarEstornoPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
+import { syncIfoodAsync } from "@/lib/ifood/sync-status";
 
 const statusSchema = z.object({
   // 'preparo' é alias do frontend → normalizado para 'preparando' antes da query
@@ -133,6 +134,12 @@ export async function PATCH(
     } catch (e) {
       // Falha de caixa não deve bloquear a transição de status
       console.error("[Pedidos/Status/CaixaIntegration]", e);
+    }
+
+    // ── Sync com iFood (se origem='ifood') ───────────────────────────────
+    // Replica a mudança de status no iFood: confirm/startPreparation/dispatch/etc
+    if (pedido.status !== body.status) {
+      syncIfoodAsync(empresaId, params.id, body.status, body.motivo);
     }
 
     // ── Web Push em transições relevantes ────────────────────────────────

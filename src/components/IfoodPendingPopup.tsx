@@ -23,7 +23,7 @@ interface PedidoPendente {
   ifood_order_id: string | null;
 }
 
-const POLL_MS = 8000;
+const POLL_MS = 3000;   // popup verifica novos pedidos pendentes a cada 3s
 
 /** Códigos iFood Merchant API /requestCancellation */
 const MOTIVOS_RECUSA: Array<{ code: string; label: string }> = [
