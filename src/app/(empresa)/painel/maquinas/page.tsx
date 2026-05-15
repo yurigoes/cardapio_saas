@@ -94,8 +94,11 @@ function InstalacaoTabs({
   --key   "${publicKey}" \\
   --pass  "${password}"${autoAceite ? " \\\n  --auto-aceite" : ""}${tokenArgSH ? " \\\n " + tokenArgSH : ""}`;
 
+  // Usa powershell.exe explícito + -ExecutionPolicy Bypass pra contornar
+  // política de execução restrita (default no Windows). Sem isso, & rd.ps1
+  // falha com 'execução de scripts foi desabilitada'.
   const cmdWinPS = `iwr ${origin}/install-agent.ps1 -OutFile $env:TEMP\\rd.ps1 -UseBasicParsing
-& $env:TEMP\\rd.ps1 -Relay '${relay}' -Key '${publicKey}' -Pass '${password}'${autoAceite ? " -AutoAceite" : ""}${tokenArgPS}`;
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:TEMP\\rd.ps1 -Relay '${relay}' -Key '${publicKey}' -Pass '${password}'${autoAceite ? " -AutoAceite" : ""}${tokenArgPS}`;
 
   return (
     <div className="mt-3">
