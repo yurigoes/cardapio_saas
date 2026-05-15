@@ -26,7 +26,7 @@ fi
 # Descobre IP público se não passou
 RELAY_HOST="${1:-}"
 if [[ -z "$RELAY_HOST" ]]; then
-  RELAY_HOST="$(curl -fsS ifconfig.me 2>/dev/null || curl -fsS ipinfo.io/ip 2>/dev/null || echo '')"
+  RELAY_HOST="$(curl -4 -fsS ifconfig.me 2>/dev/null || curl -4 -fsS ipinfo.io/ip 2>/dev/null || echo '')"
   if [[ -z "$RELAY_HOST" ]]; then
     echo "✖ não consegui detectar IP público — passe como argumento:"
     echo "  sudo bash $0 SEU.IP.AQUI"
