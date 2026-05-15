@@ -62,9 +62,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname     = usePathname();
   const branding     = useSaasBranding();
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string>("");
 
   useEffect(() => {
-    // Verifica autenticação e role master
     const token = localStorage.getItem("access_token");
     if (!token) {
       window.location.href = "/login";
@@ -76,14 +76,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     })
       .then((r) => r.json())
       .then((data) => {
-        if (!data.success || data.data?.usuario?.role !== "master") {
+        const role = data?.data?.usuario?.role;
+        // master e suporte podem acessar /admin
+        if (!data.success || (role !== "master" && role !== "suporte")) {
           window.location.href = "/login";
         } else {
+          setUserRole(role);
           setLoading(false);
         }
       })
       .catch(() => (window.location.href = "/login"));
   }, []);
+
+  // Pra suporte, mostra só seções relevantes (Atendimento + alguns)
+  const SUPORTE_SECOES_ALLOW = new Set([
+    "Atendimento", undefined, // grupo sem título = Dashboard
+  ]);
+  const NAV_VISIVEL = userRole === "suporte"
+    ? NAV.filter(g => SUPORTE_SECOES_ALLOW.has(g.titulo))
+    : NAV;
 
   function handleLogout() {
     const token = localStorage.getItem("access_token");
@@ -132,7 +143,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* Nav */}
         <nav className="flex-1 overflow-auto py-3">
-          {NAV.map((grupo, gi) => (
+          {NAV_VISIVEL.map((grupo, gi) => (
             <div key={gi} className="mb-3">
               {grupo.titulo && (
                 <p className="px-5 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">

@@ -81,8 +81,23 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
       .then((data) => {
         if (!data.success) { window.location.href = "/login"; return; }
         const role = data.data?.usuario?.role;
-        if (role === "master") { window.location.href = "/admin"; return; }
-        setEmpresa(data.data?.empresa);
+        // Master/suporte podem acessar páginas do painel diretamente
+        // (ex: /painel/suporte/chamados pra atender clientes).
+        // Redireciona pro /admin SÓ se entrar na raiz /painel sem path.
+        const path = typeof window !== "undefined" ? window.location.pathname : "";
+        const ehRaizPainel = path === "/painel" || path === "/painel/";
+        if ((role === "master" || role === "suporte") && ehRaizPainel) {
+          window.location.href = "/admin"; return;
+        }
+        // Master/suporte sem empresa: monta empresa fake pra layout não quebrar
+        const empresaData = data.data?.empresa ?? (
+          (role === "master" || role === "suporte")
+            ? { nome_fantasia: role === "master" ? "Master" : "Suporte",
+                logo_url: null, modulos_ativos: [],
+                cor_primaria: null, cor_secundaria: null }
+            : null
+        );
+        setEmpresa(empresaData);
 
         // Apply brand colors as CSS variables (incl. --color-primary-rgb p/ Tailwind brand)
         applyBrandColors({
