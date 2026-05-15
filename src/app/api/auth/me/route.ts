@@ -32,8 +32,10 @@ export async function GET(req: NextRequest) {
         logo_url:     string | null;
         status:       string;
         modulos_ativos: string[];
+        exige_agente_terminal: boolean;
       }>(
-        `SELECT id, nome_fantasia, slug, logo_url, status, modulos_ativos
+        `SELECT id, nome_fantasia, slug, logo_url, status, modulos_ativos,
+                COALESCE(exige_agente_terminal, false) AS exige_agente_terminal
          FROM empresas WHERE id = $1`,
         [auth.payload.empresaId]
       );

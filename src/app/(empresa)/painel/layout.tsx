@@ -19,6 +19,7 @@ import { useModulos, type ModuloStatus } from "@/lib/hooks/useModulos";
 import { Lock } from "lucide-react";
 import { VersaoFooter } from "@/components/VersaoFooter";
 import { IfoodPendingPopup } from "@/components/IfoodPendingPopup";
+import { AgentGate } from "@/components/AgentGate";
 
 interface Empresa {
   nome_fantasia:  string;
@@ -287,6 +288,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
       </div>
       <PwaInstallPrompt />
       <IfoodPendingPopup />{/* monta sempre — endpoint filtra por empresa */}
+      <AgentGate />{/* gate bloqueante se empresa.exige_agente_terminal=true */}
       <ModuloLockedModal
         modulo={moduloBloqueado}
         onClose={() => setModuloBloqueado(null)}

@@ -76,6 +76,8 @@ function authHeaders(): HeadersInit {
 export default function PainelMaquinasPage() {
   const [agentes, setAgentes] = useState<Agente[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exigeAgente, setExigeAgente] = useState(false);
+  const [salvandoExige, setSalvandoExige] = useState(false);
   const [modal,   setModal]   = useState(false);
   const [novoTipo, setNovoTipo] = useState<string>("retaguarda");
   const [novoNome, setNovoNome] = useState<string>("");
@@ -171,7 +173,28 @@ export default function PainelMaquinasPage() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => { carregar(); carregarExige(); }, []);
+
+  async function carregarExige() {
+    try {
+      const r = await fetch("/api/painel/config/exige-agente", { headers: authHeaders() });
+      const d = await r.json();
+      if (d.success) setExigeAgente(!!d.data.exige);
+    } catch {/* */}
+  }
+
+  async function toggleExige() {
+    setSalvandoExige(true);
+    try {
+      const novo = !exigeAgente;
+      const r = await fetch("/api/painel/config/exige-agente", {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ exige: novo }),
+      });
+      if (r.ok) setExigeAgente(novo);
+    } finally { setSalvandoExige(false); }
+  }
   useEffect(() => {
     const t = setInterval(carregar, 20000);
     return () => clearInterval(t);
@@ -240,6 +263,38 @@ export default function PainelMaquinasPage() {
           </button>
         </div>
       </header>
+
+      {/* Política de acesso */}
+      <div className="rounded-xl border border-white/10 bg-slate-900 p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-amber-500/15 p-2">
+              <ShieldCheck className="h-5 w-5 text-amber-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Exigir registro de máquina pra operar</p>
+              <p className="mt-1 text-xs text-slate-400 max-w-xl">
+                Quando ligado, o painel exige um token de agente em cada máquina nova antes de
+                permitir uso. Permite rastrear qual máquina fez cada ação e habilitar suporte
+                remoto via RustDesk. Operadores comuns não precisam saber configurar.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={toggleExige}
+            disabled={salvandoExige}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+              exigeAgente ? "bg-amber-500" : "bg-slate-700"
+            } disabled:opacity-50`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                exigeAgente ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
 
       {/* Lista */}
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
