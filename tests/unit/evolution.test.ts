@@ -5,13 +5,16 @@ import { describe, it, expect } from "vitest";
 import { TEMPLATES_DEFAULT, EVENTOS_VALIDOS } from "@/lib/notify/evolution";
 
 describe("EVENTOS_VALIDOS", () => {
-  it("cobre os 5 eventos do painel /integracoes", () => {
+  it("cobre todos os eventos do fluxo de pedido + cliente", () => {
     expect(EVENTOS_VALIDOS).toContain("novo_pedido");
     expect(EVENTOS_VALIDOS).toContain("confirmado");
+    expect(EVENTOS_VALIDOS).toContain("em_preparo");
     expect(EVENTOS_VALIDOS).toContain("pronto");
+    expect(EVENTOS_VALIDOS).toContain("saiu_entrega");
+    expect(EVENTOS_VALIDOS).toContain("entregue");
     expect(EVENTOS_VALIDOS).toContain("cancelado");
     expect(EVENTOS_VALIDOS).toContain("novo_cliente");
-    expect(EVENTOS_VALIDOS).toHaveLength(5);
+    expect(EVENTOS_VALIDOS).toHaveLength(8);
   });
 });
 
