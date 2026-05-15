@@ -48,10 +48,35 @@ case "$ARCH" in
 esac
 
 TMPDEB="/tmp/rustdesk-agent.deb"
-URL="https://github.com/rustdesk/rustdesk/releases/latest/download/rustdesk-1.3.0-${RUSTDESK_ARCH}.deb"
+
+# Descobre versão mais recente via GitHub API (fallback pra 1.3.9 se API falhar)
+VER="$(curl -fsSL https://api.github.com/repos/rustdesk/rustdesk/releases/latest 2>/dev/null \
+       | grep -oP '"tag_name":\s*"\K[^"]+' | head -1)"
+[[ -z "$VER" ]] && VER="1.3.9"
+echo "→ Versão alvo: $VER"
+
+# RustDesk já testou variantes de naming; tenta os mais comuns
+URLS=(
+  "https://github.com/rustdesk/rustdesk/releases/download/${VER}/rustdesk-${VER}-${RUSTDESK_ARCH}.deb"
+  "https://github.com/rustdesk/rustdesk/releases/download/${VER}/rustdesk-${VER}-${ARCH}.deb"
+)
 
 echo "→ baixando RustDesk para $RUSTDESK_ARCH..."
-curl -fsSL "$URL" -o "$TMPDEB"
+DOWNLOAD_OK=0
+for URL in "${URLS[@]}"; do
+  if curl -fsSL "$URL" -o "$TMPDEB" 2>/dev/null; then
+    echo "  ✓ $URL"
+    DOWNLOAD_OK=1; break
+  fi
+done
+if [[ "$DOWNLOAD_OK" != "1" ]]; then
+  echo "✖ falha ao baixar — tentou:"
+  printf '  %s\n' "${URLS[@]}"
+  echo ""
+  echo "  Verifique manualmente em: https://github.com/rustdesk/rustdesk/releases/tag/$VER"
+  echo "  e baixe o .deb compatível com $ARCH"
+  exit 1
+fi
 
 echo "→ instalando..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y "$TMPDEB" >/dev/null

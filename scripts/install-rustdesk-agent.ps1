@@ -62,7 +62,16 @@ if (-not (Test-Admin)) {
 }
 
 # ─── 2. Download RustDesk ────────────────────────────────────────────────────
-$RustDeskVer = "1.3.0"
+# Descobre versão mais recente via GitHub API
+$RustDeskVer = "1.3.9"   # fallback se API falhar
+try {
+  $resp = Invoke-RestMethod "https://api.github.com/repos/rustdesk/rustdesk/releases/latest" -TimeoutSec 10
+  if ($resp.tag_name) { $RustDeskVer = $resp.tag_name }
+} catch {
+  Write-Step "API GitHub falhou, usando versão fallback $RustDeskVer"
+}
+Write-Step "Versão alvo: $RustDeskVer"
+
 $RustDeskUrl = "https://github.com/rustdesk/rustdesk/releases/download/$RustDeskVer/rustdesk-$RustDeskVer-x86_64.exe"
 $Installer   = Join-Path $env:TEMP "rustdesk-setup.exe"
 
