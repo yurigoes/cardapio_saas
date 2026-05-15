@@ -9,8 +9,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Server, Monitor, Tv2, Smartphone, Printer, Box,
   Search, Filter, RefreshCw, Activity,
-  CheckCircle2, XCircle, Clock, AlertTriangle, ExternalLink,
+  CheckCircle2, XCircle, Clock, AlertTriangle, ExternalLink, Tv,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface Agente {
   id:                string;
@@ -72,6 +73,7 @@ function authHeaders(): HeadersInit {
 }
 
 export default function AdminMaquinasPage() {
+  const router = useRouter();
   const [agentes, setAgentes] = useState<Agente[]>([]);
   const [stats,   setStats]   = useState<Record<string, number>>({});
   const [busca,   setBusca]   = useState("");
@@ -251,26 +253,38 @@ export default function AdminMaquinasPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500">{a.versao ?? "—"}</td>
                   <td className="px-4 py-3 text-right">
-                    {a.rustdesk_id ? (
-                      <button
-                        onClick={async () => {
-                          try {
-                            const r = await fetch(`/api/admin/agentes/${a.id}/rustdesk-connect`, { headers: authHeaders() });
-                            const data = await r.json();
-                            if (!r.ok || !data.success) { alert(data?.error || "Falha"); return; }
-                            window.location.href = data.data.url;
-                          } catch (e) {
-                            alert(e instanceof Error ? e.message : "Erro");
-                          }
-                        }}
-                        className="inline-flex items-center gap-1 rounded-lg bg-blue-500/15 border border-blue-500/30 px-2 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-500/25"
-                        title="Abrir cliente RustDesk"
-                      >
-                        <ExternalLink className="h-3 w-3" /> Conectar
-                      </button>
-                    ) : (
-                      <span className="text-[10px] text-slate-600">sem suporte</span>
-                    )}
+                    <div className="flex items-center justify-end gap-1.5">
+                      {(a.tipo === "kiosk" || a.tipo === "tv" || a.tipo === "garcom") && (
+                        <button
+                          onClick={() => router.push(`/admin/maquinas/${a.id}/espelho`)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-purple-500/15 border border-purple-500/30 px-2 py-1 text-[11px] font-medium text-purple-300 hover:bg-purple-500/25"
+                          title="Ver tela em real-time"
+                        >
+                          <Tv className="h-3 w-3" /> Espelho
+                        </button>
+                      )}
+                      {a.rustdesk_id ? (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const r = await fetch(`/api/admin/agentes/${a.id}/rustdesk-connect`, { headers: authHeaders() });
+                              const data = await r.json();
+                              if (!r.ok || !data.success) { alert(data?.error || "Falha"); return; }
+                              window.location.href = data.data.url;
+                            } catch (e) {
+                              alert(e instanceof Error ? e.message : "Erro");
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-500/15 border border-blue-500/30 px-2 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-500/25"
+                          title="Abrir cliente RustDesk"
+                        >
+                          <ExternalLink className="h-3 w-3" /> Conectar
+                        </button>
+                      ) : null}
+                      {!a.rustdesk_id && a.tipo !== "kiosk" && a.tipo !== "tv" && a.tipo !== "garcom" && (
+                        <span className="text-[10px] text-slate-600">—</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

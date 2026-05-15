@@ -22,10 +22,13 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+import { KioskMirror } from "@/components/KioskMirror";
+
 export default function TotemLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
+      <KioskMirror />{/* só ativa se houver agent_token salvo */}
       {/* Register service worker */}
       <script
         dangerouslySetInnerHTML={{

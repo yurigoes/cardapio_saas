@@ -11,6 +11,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ChefHat, Tv2, Bike, AlertTriangle, Clock } from "lucide-react";
+import { KioskMirror } from "@/components/KioskMirror";
 
 interface Pedido {
   id: string; numero: number; tipo: string; status: string;
@@ -90,6 +91,7 @@ export default function KioskPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
+      <KioskMirror />{/* envia screenshots se há agent_token salvo */}
       <header className="sticky top-0 z-10 border-b border-white/5 bg-slate-950/80 backdrop-blur">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
