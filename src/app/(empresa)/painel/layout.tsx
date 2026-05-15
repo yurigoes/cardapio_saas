@@ -18,6 +18,7 @@ import { ModuloLockedModal } from "@/components/painel/ModuloLockedModal";
 import { useModulos, type ModuloStatus } from "@/lib/hooks/useModulos";
 import { Lock } from "lucide-react";
 import { VersaoFooter } from "@/components/VersaoFooter";
+import { IfoodPendingPopup } from "@/components/IfoodPendingPopup";
 
 interface Empresa {
   nome_fantasia:  string;
@@ -284,6 +285,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         <main className="flex-1 p-6">{children}</main>
       </div>
       <PwaInstallPrompt />
+      {modulosEmpresa.includes("ifood") && <IfoodPendingPopup />}
       <ModuloLockedModal
         modulo={moduloBloqueado}
         onClose={() => setModuloBloqueado(null)}

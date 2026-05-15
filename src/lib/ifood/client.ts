@@ -356,3 +356,29 @@ export async function confirmOrder(cfg: IfoodConfig, orderId: string): Promise<b
   });
   return r.ok;
 }
+
+/**
+ * Cancela pedido no iFood. Códigos comuns:
+ *   501 - "ITEM_UNAVAILABLE"        (item indisponível)
+ *   801 - "PROBLEM_AT_RESTAURANT"   (problema no restaurante)
+ *   902 - "INVALID_ADDRESS"         (endereço inválido)
+ *   908 - "OUT_OF_DELIVERY_AREA"    (fora da área)
+ */
+export async function cancelOrder(
+  cfg: IfoodConfig,
+  orderId: string,
+  reason: string,
+  cancellationCode = "801",
+): Promise<boolean> {
+  const token = await getValidToken(cfg);
+  const r = await fetch(`${BASE}/order/v1.0/orders/${orderId}/requestCancellation`, {
+    method:  "POST",
+    headers: {
+      Authorization:  `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ reason, cancellationCode }),
+    signal:  AbortSignal.timeout(15_000),
+  });
+  return r.ok;
+}

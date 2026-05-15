@@ -23,10 +23,10 @@ export async function GET(req: NextRequest) {
     const cfg = await queryOne(
       `SELECT id, client_id, merchant_id, ambiente, ativo, polling_ativo,
               ultimo_polling_em, ultimo_evento_id, ultimo_erro, ultimo_erro_em,
-              token_expira_em, mode, authorized_em
+              token_expira_em, mode, authorized_em, auto_aceite
          FROM ifood_config WHERE empresa_id = $1`,
       [empresaId]
-    );
+    ).catch(() => null);
 
     // Pega info se master configurou app distribuída.
     // Wrapped em catch — tabela pode não existir ainda (migration 053 pendente)

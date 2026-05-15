@@ -73,6 +73,7 @@ export default function IfoodPage() {
   const [userCodeData, setUserCodeData] = useState<{ user_code: string; verification_url_complete: string; expires_in: number } | null>(null);
   const [authorizationCode, setAuthorizationCode] = useState("");
   const [conectando, setConectando]   = useState(false);
+  const [autoAceite, setAutoAceite]   = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [msg, setMsg]         = useState<string | null>(null);
@@ -103,10 +104,25 @@ export default function IfoodPage() {
           setAmbiente(data.cfg.ambiente ?? "producao");
           setAtivo(data.cfg.ativo ?? true);
           setPollingAtivo(data.cfg.polling_ativo ?? false);
+          setAutoAceite((data.cfg as { auto_aceite?: boolean }).auto_aceite ?? false);
         }
       }
     } finally { setLoading(false); }
   }, []);
+
+  async function salvarAutoAceite(novo: boolean) {
+    setAutoAceite(novo); // optimistic
+    const t = localStorage.getItem("access_token") ?? "";
+    const d = await jsonFetch("/api/painel/ifood/auto-aceite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ auto_aceite: novo }),
+    });
+    if (!d.success) {
+      setAutoAceite(!novo); // rollback
+      await alertar({ titulo: "Falha ao salvar", mensagem: d.error?.message ?? "?", tipo: "perigo" });
+    }
+  }
 
   // ─── Distribuído: 2-step flow (start → connect) ─────────────────────────
   async function iniciarConexaoDistribuido() {
@@ -381,7 +397,7 @@ export default function IfoodPage() {
 
       {/* Status — empresa já conectada via Distribuído */}
       {cfg?.mode === "distribuido" && cfg.authorized_em && (
-        <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5">
+        <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 space-y-3">
           <div className="flex items-center gap-3">
             <CheckCircle2 className="h-6 w-6 text-emerald-400" />
             <div className="flex-1">
@@ -393,6 +409,42 @@ export default function IfoodPage() {
               </p>
             </div>
           </div>
+
+          {/* Toggle auto-aceite */}
+          <label className="flex items-start gap-2 cursor-pointer rounded-xl border border-white/10 bg-slate-900 p-3">
+            <input type="checkbox" checked={autoAceite}
+              onChange={e => salvarAutoAceite(e.target.checked)}
+              className="mt-0.5 accent-emerald-500" />
+            <div>
+              <p className="text-sm font-bold text-white">Aceite automático de pedidos</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Se ON: pedido novo é aceito automaticamente no iFood + cozinha imprime.<br />
+                Se OFF: aparece popup pra aceitar/recusar manualmente.
+              </p>
+            </div>
+          </label>
+
+          {/* Botões teste — sempre visíveis quando cfg existe */}
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+            <button onClick={testarCredenciais}
+              className="flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-xs font-medium text-blue-300 hover:bg-blue-500/20"
+              title="Testa OAuth do iFood (sem polling)">
+              <KeyRound className="h-3.5 w-3.5" /> Verificar credenciais
+            </button>
+            <button onClick={testarPoll}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-white/10">
+              Testar polling agora
+            </button>
+            <button onClick={simularPedido}
+              className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-300 hover:bg-amber-500/20">
+              <Play className="h-3.5 w-3.5" /> Simular pedido
+            </button>
+          </div>
+          {msg && (
+            <p className={`text-xs ${msg.includes("✓") ? "text-emerald-400" : "text-amber-400"}`}>
+              {msg}
+            </p>
+          )}
         </section>
       )}
 

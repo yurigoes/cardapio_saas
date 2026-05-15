@@ -4,22 +4,32 @@
  *
  * Mapeia campos essenciais; payload completo fica em ifood_eventos.payload.
  */
-import { transaction } from "@/lib/db/client";
+import { queryOne, transaction } from "@/lib/db/client";
 import type { PoolClient } from "pg";
 import type { IfoodOrderDetail } from "./client";
+import { confirmOrder, getIfoodConfig } from "./client";
 import { notificarEvolution } from "@/lib/notify/evolution";
+import { dispatchCupomCozinha } from "@/lib/print/dispatch";
 
 interface ImportResult {
   pedido_id:     string;
   numero:        number;
   ja_existia:    boolean;
+  auto_aceito?:  boolean;
 }
 
 export async function importarPedidoIfood(
   empresaId: string,
   ord:       IfoodOrderDetail
 ): Promise<ImportResult> {
-  return await transaction(async (client: PoolClient) => {
+  // Lê config pra saber se auto_aceite ligado (fora da transaction)
+  const cfg = await queryOne<{ auto_aceite: boolean }>(
+    `SELECT auto_aceite FROM ifood_config WHERE empresa_id = $1`,
+    [empresaId]
+  ).catch(() => null);
+  const autoAceite = !!cfg?.auto_aceite;
+
+  const result = await transaction(async (client: PoolClient) => {
     // Já importado?
     const ja = await client.query<{ id: string; numero: number }>(
       `SELECT id, numero FROM pedidos WHERE ifood_order_id = $1 LIMIT 1`,
@@ -43,17 +53,19 @@ export async function importarPedidoIfood(
 
     const cliente   = (ord.customer as { name?: string; phone?: string }) ?? {};
 
-    // INSERT pedido
+    // INSERT pedido — status pendente + ifood_aceite_status pendente
+    // (será atualizado p/ auto_aceito após o INSERT se autoAceite=true)
     const novoPed = await client.query<{ id: string; numero: number }>(
       `INSERT INTO pedidos
          (empresa_id, tipo, status, ifood_order_id, origem, origem_id,
           cliente_nome, cliente_telefone,
           subtotal, desconto, taxa_entrega, total,
-          tipo_consumo, observacoes)
+          tipo_consumo, observacoes,
+          ifood_aceite_status)
        VALUES ($1, $2, 'pendente', $3, 'ifood', $3,
                $4, $5,
                $6, 0, 0, $7,
-               $8, $9)
+               $8, $9, 'pendente')
        RETURNING id, numero`,
       [
         empresaId,
@@ -87,4 +99,34 @@ export async function importarPedidoIfood(
 
     return { pedido_id: novoPed.id, numero: novoPed.numero, ja_existia: false };
   });
+
+  // Auto-aceite (FORA da transaction — chamada externa pra iFood)
+  if (!result.ja_existia && autoAceite) {
+    try {
+      const ifoodCfg = await getIfoodConfig(empresaId);
+      if (ifoodCfg) {
+        const ok = await confirmOrder(ifoodCfg, ord.id);
+        if (ok) {
+          await queryOne(
+            `UPDATE pedidos
+                SET status = 'confirmado',
+                    ifood_aceite_status = 'auto_aceito',
+                    ifood_aceite_em = NOW()
+              WHERE id = $1`,
+            [result.pedido_id]
+          ).catch(() => {});
+          // Dispara cozinha (auto-aceito, segue fluxo normal)
+          dispatchCupomCozinha(empresaId, result.pedido_id)
+            .catch((e) => console.warn("[iFood/import] cozinha:", e));
+          return { ...result, auto_aceito: true };
+        } else {
+          console.warn(`[iFood/import] auto-aceite falhou pra ${ord.id}`);
+        }
+      }
+    } catch (err) {
+      console.warn("[iFood/import] auto-aceite error:", err);
+    }
+  }
+
+  return result;
 }
