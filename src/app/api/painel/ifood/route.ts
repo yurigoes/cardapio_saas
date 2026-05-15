@@ -28,10 +28,14 @@ export async function GET(req: NextRequest) {
       [empresaId]
     );
 
-    // Pega info se master configurou app distribuída (1 query simples)
+    // Pega info se master configurou app distribuída.
+    // Wrapped em catch — tabela pode não existir ainda (migration 053 pendente)
     const master = await queryOne<{ ativo: boolean; app_nome: string | null }>(
       `SELECT ativo, app_nome FROM saas_ifood_config WHERE id = 1`
-    ).catch(() => null);
+    ).catch((err) => {
+      console.warn("[Ifood/GET] saas_ifood_config indisponível:", err instanceof Error ? err.message : err);
+      return null;
+    });
 
     return ok({
       cfg: cfg ?? null,

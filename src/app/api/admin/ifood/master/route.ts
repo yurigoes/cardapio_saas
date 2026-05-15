@@ -31,16 +31,25 @@ export async function GET(req: NextRequest) {
       `SELECT client_id, client_secret, app_nome, ativo,
               ultimo_userCode_em, ultimo_erro, ultimo_erro_em
          FROM saas_ifood_config WHERE id = 1`
-    );
-    // Mascara
+    ).catch((err) => {
+      // Tabela não existe — orienta deploy
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("does not exist") || msg.includes("relation") || msg.includes("undefined_table")) {
+        return null;
+      }
+      throw err;
+    });
+
     if (r) {
       if (r.client_id)     r.client_id     = "********";
       if (r.client_secret) r.client_secret = "********";
     }
-    return ok(r ?? {});
+    return ok(r ?? {
+      _aviso: "Tabela saas_ifood_config não existe. Rode 'bash scripts/deploy.sh' na VPS pra aplicar migration 053.",
+    });
   } catch (err) {
     console.error("[Admin/Ifood/Master/GET]", err);
-    return serverError();
+    return serverError(err instanceof Error ? err.message : undefined);
   }
 }
 

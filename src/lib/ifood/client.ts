@@ -64,10 +64,15 @@ export function encryptField(plain: string): string {
 // ─── Master config (singleton) ───────────────────────────────────────────────
 
 export async function getMasterIfoodConfig(): Promise<MasterIfoodConfig | null> {
+  // Wrapped em catch — tabela pode não existir (migration 053 pendente)
   const row = await queryOne<{
     client_id: string | null; client_secret: string | null;
     app_nome: string | null; ativo: boolean;
-  }>(`SELECT client_id, client_secret, app_nome, ativo FROM saas_ifood_config WHERE id = 1`);
+  }>(`SELECT client_id, client_secret, app_nome, ativo FROM saas_ifood_config WHERE id = 1`)
+    .catch((err) => {
+      console.warn("[ifood/master] saas_ifood_config indisponível:", err instanceof Error ? err.message : err);
+      return null;
+    });
 
   if (!row || !row.ativo || !row.client_id || !row.client_secret) return null;
 

@@ -38,6 +38,33 @@ const fmtDate = (iso: string | null) => {
   return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "medium" });
 };
 
+/**
+ * Wrapper de fetch que detecta resposta HTML (404/500 page do Next) e
+ * retorna erro útil em vez de "Unexpected token '<', '<!DOCTYPE..."
+ */
+async function jsonFetch(url: string, init?: RequestInit): Promise<{ success: boolean; data?: unknown; error?: { message: string } }> {
+  const r = await fetch(url, init);
+  const ct = r.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) {
+    const txt = await r.text().catch(() => "");
+    const isHtml = /<!doctype|<html/i.test(txt);
+    return {
+      success: false,
+      error: {
+        message: isHtml
+          ? `Endpoint retornou HTML (status ${r.status}) — provavelmente 404 ou 500.\n\n` +
+            `Causas:\n` +
+            `1. Deploy ainda não aplicou esse endpoint — aguarde ou rode 'bash scripts/deploy.sh' na VPS\n` +
+            `2. Migration 053 não rodou — tabela 'saas_ifood_config' não existe\n` +
+            `3. Erro 500 interno — confira /admin/erros`
+          : `HTTP ${r.status}: ${txt.slice(0, 200)}`,
+      },
+    };
+  }
+  try { return await r.json(); }
+  catch (e) { return { success: false, error: { message: "Resposta JSON inválida: " + (e as Error).message } }; }
+}
+
 export default function IfoodPage() {
   const [cfg, setCfg]                 = useState<IfoodConfig | null>(null);
   const [masterDistribuido, setMasterDistribuido] = useState(false);
@@ -85,22 +112,18 @@ export default function IfoodPage() {
   async function iniciarConexaoDistribuido() {
     setMsg("Solicitando código ao iFood...");
     const t = localStorage.getItem("access_token") ?? "";
-    try {
-      const r = await fetch("/api/painel/ifood/distribuido/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
-      });
-      const d = await r.json();
-      if (d.success) {
-        setUserCodeData(d.data);
-        setMsg(null);
-        // Abre URL automaticamente
-        window.open(d.data.verification_url_complete, "_blank", "noopener");
-      } else {
-        await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "?", tipo: "perigo" });
-      }
-    } catch (e) {
-      await alertar({ titulo: "Erro de rede", mensagem: (e as Error).message, tipo: "perigo" });
+    const d = await jsonFetch("/api/painel/ifood/distribuido/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+    });
+    if (d.success && d.data) {
+      const data = d.data as { user_code: string; verification_url_complete: string; expires_in: number };
+      setUserCodeData(data);
+      setMsg(null);
+      // Abre URL automaticamente
+      window.open(data.verification_url_complete, "_blank", "noopener");
+    } else {
+      await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "?", tipo: "perigo" });
     }
   }
 
@@ -109,16 +132,16 @@ export default function IfoodPage() {
     setConectando(true);
     const t = localStorage.getItem("access_token") ?? "";
     try {
-      const r = await fetch("/api/painel/ifood/distribuido/connect", {
+      const d = await jsonFetch("/api/painel/ifood/distribuido/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
         body: JSON.stringify({ authorization_code: authorizationCode.trim() }),
       });
-      const d = await r.json();
-      if (d.success) {
+      if (d.success && d.data) {
+        const data = d.data as { mensagem?: string };
         await alertar({
           titulo:   "✓ Conectado!",
-          mensagem: d.data.mensagem ?? "iFood conectado.",
+          mensagem: data.mensagem ?? "iFood conectado.",
           tipo:     "sucesso",
         });
         setUserCodeData(null);
