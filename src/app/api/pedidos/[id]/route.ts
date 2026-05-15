@@ -4,7 +4,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { query, queryOne } from "@/lib/db/client";
 import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
-import { notificarEvolution, type EvolutionEvento } from "@/lib/notify/evolution";
+import { notificarClienteSobrePedido, type EvolutionEvento } from "@/lib/notify/evolution";
 import { cancelarJobsPedido } from "@/lib/print/queue";
 import { invalidarRastreio } from "@/lib/delivery/rastreio";
 import { dispatchCupomCozinha } from "@/lib/print/dispatch";
@@ -13,9 +13,10 @@ import { syncIfoodAsync } from "@/lib/ifood/sync-status";
 // Map de status do pedido → ID do evento Evolution (WA_EVENTOS no painel)
 const STATUS_TO_EVENTO: Partial<Record<PedidoStatus, EvolutionEvento>> = {
   confirmado: "confirmado",
-  em_preparo: "confirmado",
-  preparo:    "confirmado",
+  em_preparo: "em_preparo",
+  preparo:    "em_preparo",
   pronto:     "pronto",
+  entregue:   "entregue",
   cancelado:  "cancelado",
 };
 
@@ -152,14 +153,13 @@ export async function PATCH(
       syncIfoodAsync(empresaId, params.id, body.status);
     }
 
-    // WhatsApp ao cliente em transições relevantes (best-effort)
+    // WhatsApp ao cliente em transições relevantes (best-effort).
+    // Usa notificarClienteSobrePedido pra garantir que vai pro CLIENTE
+    // (busca telefone + nome + total do pedido em vez de assumir vars).
     const evento = STATUS_TO_EVENTO[body.status];
     if (evento && pedido.status !== body.status) {
-      notificarEvolution(empresaId, evento, {
-        telefone:     pedido.cliente_telefone,
-        pedidoNumero: pedido.numero,
-        total:        pedido.total != null ? Number(pedido.total) : null,
-      }).catch(e => console.warn("[Pedidos/PATCH] notify:", e));
+      notificarClienteSobrePedido(empresaId, params.id, evento)
+        .catch(e => console.warn("[Pedidos/PATCH] notify:", e));
     }
 
     return ok({ id: params.id, status: body.status });

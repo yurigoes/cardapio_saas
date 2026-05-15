@@ -37,6 +37,7 @@ interface ItemData {
 interface EmpresaData {
   nome_fantasia: string; cnpj: string | null;
   endereco: string | null; whatsapp: string | null;
+  logo_url?: string | null;
 }
 
 function fmtBRL(v: number | string) {
@@ -90,8 +91,8 @@ export default async function ImprimirPedidoPage({
   );
   if (!pedido) return <ErroPedido />;
 
-  const empresa = await queryOne<EmpresaData>(
-    `SELECT nome_fantasia, cnpj, NULL::text AS endereco, whatsapp
+  const empresa = await queryOne<EmpresaData & { logo_url: string | null }>(
+    `SELECT nome_fantasia, cnpj, NULL::text AS endereco, whatsapp, logo_url
      FROM empresas WHERE id = $1`,
     [empresaId]
   );
@@ -115,7 +116,7 @@ export default async function ImprimirPedidoPage({
           <Cabecalho empresa={empresa} pedido={pedido} tipo={tipo} />
           <Corpo pedido={pedido} itens={itens} tipo={tipo} />
           {tipo !== "cozinha" && <Totais pedido={pedido} />}
-          <Rodape tipo={tipo} />
+          <Rodape tipo={tipo} pedidoId={pedido.id} />
         </div>
 
         {/* Auto-print + auto-close */}
@@ -149,6 +150,13 @@ function Cabecalho({
 }) {
   return (
     <>
+      {empresa?.logo_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <div className="center" style={{ marginBottom: "4px" }}>
+          <img src={empresa.logo_url} alt={empresa.nome_fantasia}
+            style={{ maxWidth: "180px", maxHeight: "80px", objectFit: "contain" }} />
+        </div>
+      )}
       <div className="center bold large">{empresa?.nome_fantasia ?? "Restaurante"}</div>
       {empresa?.cnpj && <div className="center small">CNPJ {empresa.cnpj}</div>}
       <hr />
@@ -278,7 +286,16 @@ function Totais({ pedido }: { pedido: PedidoData }) {
   );
 }
 
-function Rodape({ tipo }: { tipo: string }) {
+function Rodape({ tipo, pedidoId }: { tipo: string; pedidoId?: string }) {
+  // QR só no cupom do cliente — outros não interessam ao consumidor final
+  const baseApp = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.tthreedigital.com.br";
+  const showQR  = tipo === "cliente" && pedidoId;
+  const qrUrl   = showQR ? `${baseApp}/p/${pedidoId}` : null;
+  // QR via API pública (Google Charts deprecou; usamos qrserver.com)
+  const qrImg   = qrUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrUrl)}`
+    : null;
+
   return (
     <>
       <hr />
@@ -287,6 +304,21 @@ function Rodape({ tipo }: { tipo: string }) {
          tipo === "comanda" ? "PRÉ-CONTA · NÃO É CUPOM FISCAL" :
          "Obrigado pela preferência!"}
       </div>
+      {qrImg && (
+        <>
+          <div className="center small bold" style={{ marginTop: "8px" }}>
+            ACOMPANHE SEU PEDIDO
+          </div>
+          <div className="center" style={{ margin: "4px 0" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrImg} alt="QR acompanhar"
+              style={{ width: "120px", height: "120px" }} />
+          </div>
+          <div className="center small" style={{ wordBreak: "break-all" }}>
+            {qrUrl}
+          </div>
+        </>
+      )}
       <div className="center small">
         impresso em {fmtDateTime(new Date().toISOString())}
       </div>
