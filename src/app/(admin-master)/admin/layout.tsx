@@ -45,10 +45,11 @@ const NAV: NavGroup[] = [
     { href: "/admin/ifood",     label: "iFood (master)", icon: Zap },
   ]},
   { titulo: "Atendimento", items: [
-    { href: "/admin/suporte/chamados",   label: "Chamados",         icon: MessageCircle },
-    { href: "/admin/suporte/dashboard",  label: "Dashboard TV",     icon: Tv2 },
-    { href: "/admin/suporte",            label: "Acessos Ajuda",    icon: LifeBuoy },
-    { href: "/admin/permissoes",         label: "Permissões",       icon: Shield },
+    { href: "/admin/suporte/chamados",       label: "Chamados",         icon: MessageCircle },
+    { href: "/admin/suporte/dashboard",      label: "Dashboard TV",     icon: Tv2 },
+    { href: "/admin/suporte/configuracoes",  label: "Configurações",    icon: Settings },
+    { href: "/admin/suporte",                label: "Acessos Ajuda",    icon: LifeBuoy },
+    { href: "/admin/permissoes",             label: "Permissões",       icon: Shield },
   ]},
   { titulo: "Sistema", items: [
     { href: "/admin/email",      label: "E-mail (SMTP)", icon: Mail },

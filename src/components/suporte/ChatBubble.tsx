@@ -63,8 +63,18 @@ export function ChatBubble() {
       const d = await r.json();
       if (r.ok && d.success) {
         setNovo(false); setAssunto(""); setMensagem("");
+        // Redireciona pra página do chamado individual
+        // (assim usuário vê que foi criado + pode acompanhar respostas)
+        if (d.data?.id && typeof window !== "undefined") {
+          window.location.href = `/painel/suporte/chamados/${d.data.id}`;
+          return;
+        }
         carregar();
+      } else {
+        alert("Erro: " + (d?.error ?? "falha ao criar chamado"));
       }
+    } catch (err) {
+      alert("Erro de rede: " + (err instanceof Error ? err.message : "?"));
     } finally { setEnviando(false); }
   }
 

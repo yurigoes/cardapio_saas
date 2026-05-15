@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Send, Loader2, AlertCircle, Lock, Clock, Mail, ShieldCheck, X, BadgeCheck } from "lucide-react";
+import { ArrowLeft, Send, Loader2, AlertCircle, Lock, Clock, Mail, ShieldCheck, X, BadgeCheck, MessageCircle } from "lucide-react";
 
 interface Mensagem {
   id: string;
@@ -63,6 +63,10 @@ export default function ChamadoPage() {
   const [enviandoEmail, setEnviandoEmail] = useState(false);
 
   const [modalVal, setModalVal]       = useState(false);
+  const [modalWA, setModalWA]         = useState(false);
+  const [waMensagem, setWaMensagem]   = useState("");
+  const [waTelefone, setWaTelefone]   = useState("");
+  const [enviandoWA, setEnviandoWA]   = useState(false);
   const [valTipo, setValTipo]         = useState<"admin" | "usuario" | "ambos">("ambos");
   const [solicitandoVal, setSolVal]   = useState(false);
 
@@ -97,6 +101,27 @@ export default function ChamadoPage() {
     } catch (e) {
       alert(e instanceof Error ? e.message : "Erro");
     } finally { setEnviandoEmail(false); }
+  }
+
+  async function enviarWhatsApp() {
+    setEnviandoWA(true);
+    try {
+      const r = await fetch(`/api/painel/suporte/chamados/${params.id}/whatsapp`, {
+        method:  "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          telefone: waTelefone || undefined,
+          mensagem: waMensagem || undefined,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.success) throw new Error(d?.error || "Falha");
+      setModalWA(false);
+      setWaMensagem(""); setWaTelefone("");
+      carregar();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro");
+    } finally { setEnviandoWA(false); }
   }
 
   async function solicitarValidacao() {
@@ -282,11 +307,15 @@ export default function ChamadoPage() {
           <span className="ml-auto flex gap-1">
             <button onClick={() => setModalEmail(true)}
               className="flex items-center gap-1 rounded border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-blue-300 hover:bg-blue-500/20">
-              <Mail className="h-3 w-3" /> Enviar email
+              <Mail className="h-3 w-3" /> Email
+            </button>
+            <button onClick={() => setModalWA(true)}
+              className="flex items-center gap-1 rounded border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-green-300 hover:bg-green-500/20">
+              <MessageCircle className="h-3 w-3" /> WhatsApp
             </button>
             <button onClick={() => setModalVal(true)}
               className="flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300 hover:bg-emerald-500/20">
-              <ShieldCheck className="h-3 w-3" /> Solicitar 2FA
+              <ShieldCheck className="h-3 w-3" /> 2FA
             </button>
           </span>
         </div>
@@ -425,6 +454,54 @@ export default function ChamadoPage() {
                 className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-600 disabled:opacity-50">
                 {enviandoEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                 Enviar email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: WhatsApp */}
+      {modalWA && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setModalWA(false); }}>
+          <div className="w-full max-w-md rounded-2xl border border-green-500/30 bg-slate-900 p-6">
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5 text-green-400" /> Disparar WhatsApp
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Usa template configurado em /admin/suporte/configuracoes se mensagem vazia.
+                </p>
+              </div>
+              <button onClick={() => setModalWA(false)} className="text-slate-500 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">
+              Telefone (vazio = pega do usuário do chamado)
+            </label>
+            <input type="tel" value={waTelefone} onChange={e => setWaTelefone(e.target.value)}
+              placeholder="(11) 99999-9999"
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">
+              Mensagem custom (vazio = template configurado)
+            </label>
+            <textarea value={waMensagem} onChange={e => setWaMensagem(e.target.value)} rows={5}
+              placeholder="Olá! Sobre seu chamado..."
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white resize-none" />
+
+            <div className="flex gap-2">
+              <button onClick={() => setModalWA(false)} disabled={enviandoWA}
+                className="flex-1 rounded-lg border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">
+                Cancelar
+              </button>
+              <button onClick={enviarWhatsApp} disabled={enviandoWA}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-600 disabled:opacity-50">
+                {enviandoWA ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Enviar
               </button>
             </div>
           </div>
