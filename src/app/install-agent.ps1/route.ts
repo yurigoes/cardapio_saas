@@ -17,7 +17,11 @@ export async function GET() {
   try {
     const path = join(process.cwd(), "scripts", "install-rustdesk-agent.ps1");
     const content = await readFile(path, "utf-8");
-    return new NextResponse(content, {
+    // PowerShell 5.1 (Windows default) precisa de BOM UTF-8 pra interpretar
+    // corretamente arquivo com chars > ASCII. Sem BOM, parser quebra com
+    // erros de "MissingEndCurlyBrace" mesmo em scripts válidos.
+    const bom = "﻿";
+    return new NextResponse(bom + content, {
       headers: {
         "Content-Type":  "text/plain; charset=utf-8",
         "Cache-Control": "no-cache",

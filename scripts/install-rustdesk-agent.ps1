@@ -1,33 +1,22 @@
 <#
 .SYNOPSIS
-  Instala RustDesk no Windows já apontado pro relay self-hosted da
-  Three Digital + senha permanente fornecida.
-
-.DESCRIPTION
-  - Auto-eleva pra admin (UAC) se não estiver
-  - Baixa instalador oficial RustDesk x64 (.exe)
-  - Instala silenciosamente
-  - Configura relay + key + senha permanente
-  - Habilita serviço pra subir no boot
-  - Mostra ID gerado pra colar no painel da Three Digital
+  Instala RustDesk no Windows apontado pro relay self-hosted da
+  Three Digital, com senha permanente fornecida.
 
 .PARAMETER Relay
   Host/IP do relay RustDesk (vem do painel)
 
 .PARAMETER Key
-  Chave pública Ed25519 do hbbs (vem do painel)
+  Chave publica Ed25519 do hbbs (vem do painel)
 
 .PARAMETER Pass
-  Senha permanente gerada no painel (mostrada uma vez)
+  Senha permanente gerada no painel
 
 .PARAMETER AutoAceite
-  Se passado, agente aceita conexão do master sem prompt
+  Se passado, agente aceita conexao do master sem prompt
 
 .EXAMPLE
-  PS C:\> .\install-rustdesk-agent.ps1 -Relay 1.2.3.4 -Key "AAAA...=" -Pass "abc123XYZ"
-
-.EXAMPLE  Via one-liner pelo browser:
-  PS C:\> iwr https://app.tthreedigital.com.br/install-agent.ps1 | iex; Install-RustDeskAgent -Relay ... -Key ... -Pass ...
+  .\install-rustdesk-agent.ps1 -Relay rustdesk.tthreedigital.com.br -Key "..." -Pass "..." -AutoAceite
 #>
 
 [CmdletBinding()]
@@ -41,11 +30,12 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference    = "SilentlyContinue"
 
-function Write-Step($msg) { Write-Host "→ $msg" -ForegroundColor Cyan }
-function Write-Ok($msg)   { Write-Host "✓ $msg" -ForegroundColor Green }
-function Write-Err($msg)  { Write-Host "✖ $msg" -ForegroundColor Red }
+function Write-Step($msg) { Write-Host "[*] $msg" -ForegroundColor Cyan }
+function Write-Ok($msg)   { Write-Host "[+] $msg" -ForegroundColor Green }
+function Write-Err($msg)  { Write-Host "[!] $msg" -ForegroundColor Red }
 
-# ─── 1. Auto-elevate ─────────────────────────────────────────────────────────
+# --- 1. Auto-elevate -------------------------------------------------------
+
 function Test-Admin {
   $current = [Security.Principal.WindowsIdentity]::GetCurrent()
   $principal = [Security.Principal.WindowsPrincipal]::new($current)
@@ -61,35 +51,29 @@ if (-not (Test-Admin)) {
   exit 0
 }
 
-# ─── 2. Download RustDesk ────────────────────────────────────────────────────
-# Tenta primeiro nosso servidor (cache local), depois GitHub direto.
-# Permite override via env: $env:RUSTDESK_DOWNLOAD_URL = "https://..."
+# --- 2. Download RustDesk --------------------------------------------------
 
 $Installer = Join-Path $env:TEMP "rustdesk-setup.exe"
 $Downloaded = $false
 
-# URL preferencial: nosso proxy/cache (rápido, sem depender de GitHub)
 $ServerUrl = $env:RUSTDESK_DOWNLOAD_URL
 if (-not $ServerUrl) {
-  # Tenta inferir do mesmo domínio que serviu este script
   $ServerUrl = "https://app.tthreedigital.com.br/installers/rustdesk-windows.exe"
 }
 
-# 1ª tentativa: nosso servidor
 try {
   Write-Step "Baixando RustDesk de $ServerUrl..."
-  Invoke-WebRequest -Uri $ServerUrl -OutFile $Installer -UseBasicParsing -TimeoutSec 120
+  Invoke-WebRequest -Uri $ServerUrl -OutFile $Installer -UseBasicParsing -TimeoutSec 180
   if ((Get-Item $Installer).Length -ge 5MB) {
     $Downloaded = $true
-    Write-Ok "Download via servidor próprio concluído ($([math]::Round((Get-Item $Installer).Length / 1MB, 1)) MB)"
+    Write-Ok ("Download via servidor proprio OK ({0:N1} MB)" -f ((Get-Item $Installer).Length / 1MB))
   }
 } catch {
-  Write-Step "Servidor próprio indisponível, tentando GitHub..."
+  Write-Step "Servidor proprio indisponivel, tentando GitHub..."
 }
 
-# 2ª tentativa: GitHub direto (fallback)
 if (-not $Downloaded) {
-  $RustDeskVer = "1.4.6"   # fallback de versão
+  $RustDeskVer = "1.4.6"
   try {
     $resp = Invoke-RestMethod "https://api.github.com/repos/rustdesk/rustdesk/releases/latest" -TimeoutSec 10
     if ($resp.tag_name) { $RustDeskVer = $resp.tag_name }
@@ -97,8 +81,8 @@ if (-not $Downloaded) {
   $RustDeskUrl = "https://github.com/rustdesk/rustdesk/releases/download/$RustDeskVer/rustdesk-$RustDeskVer-x86_64.exe"
   Write-Step "Baixando RustDesk $RustDeskVer do GitHub..."
   try {
-    Invoke-WebRequest -Uri $RustDeskUrl -OutFile $Installer -UseBasicParsing -TimeoutSec 120
-    Write-Ok "Download concluído ($([math]::Round((Get-Item $Installer).Length / 1MB, 1)) MB)"
+    Invoke-WebRequest -Uri $RustDeskUrl -OutFile $Installer -UseBasicParsing -TimeoutSec 180
+    Write-Ok ("Download OK ({0:N1} MB)" -f ((Get-Item $Installer).Length / 1MB))
   } catch {
     Write-Err "Falha em ambos os mirrors. Tente baixar manualmente em https://rustdesk.com/download"
     Read-Host "Pressione ENTER pra fechar"
@@ -106,7 +90,8 @@ if (-not $Downloaded) {
   }
 }
 
-# ─── 3. Install silenciosamente ──────────────────────────────────────────────
+# --- 3. Install silenciosamente -------------------------------------------
+
 Write-Step "Instalando RustDesk (silencioso, ~30s)..."
 Start-Process -FilePath $Installer -ArgumentList "--silent-install" -Wait -NoNewWindow
 
@@ -115,17 +100,20 @@ if (-not (Test-Path $RustDeskExe)) {
   $RustDeskExe = "${env:ProgramFiles(x86)}\RustDesk\rustdesk.exe"
 }
 if (-not (Test-Path $RustDeskExe)) {
-  Write-Err "rustdesk.exe não encontrado após install"
+  Write-Err "rustdesk.exe nao encontrado apos install"
+  Read-Host "Pressione ENTER pra fechar"
   exit 1
 }
 Write-Ok "Instalado em: $RustDeskExe"
 
-# ─── 4. Para serviço antes de mexer no config ────────────────────────────────
+# --- 4. Para servico antes de mexer no config -----------------------------
+
 Stop-Service -Name "RustDesk" -ErrorAction SilentlyContinue
 Stop-Process -Name "rustdesk" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
-# ─── 5. Escreve TOML de config (system-wide) ─────────────────────────────────
+# --- 5. Escreve TOML de config (system-wide) ------------------------------
+
 $ConfigDir  = "$env:ProgramData\RustDesk\config"
 $ConfigFile = Join-Path $ConfigDir "RustDesk2.toml"
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
@@ -155,29 +143,32 @@ api-server = ""$AutoAceiteBlock
 Set-Content -LiteralPath $ConfigFile -Value $Toml -Encoding UTF8
 Write-Ok "Config gravado em $ConfigFile"
 
-# ─── 6. Define senha permanente ──────────────────────────────────────────────
+# --- 6. Define senha permanente -------------------------------------------
+
 Write-Step "Configurando senha permanente..."
 & $RustDeskExe --password "$Pass" 2>&1 | Out-Null
 Start-Sleep -Seconds 1
 
-# ─── 7. Instala como serviço (auto-start no boot) ────────────────────────────
-Write-Step "Instalando como serviço Windows..."
+# --- 7. Instala como servico (auto-start no boot) -------------------------
+
+Write-Step "Instalando como servico Windows..."
 & $RustDeskExe --install-service 2>&1 | Out-Null
 Start-Sleep -Seconds 2
 Start-Service -Name "RustDesk" -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 4
 
-# ─── 8. Pega ID gerado ───────────────────────────────────────────────────────
+# --- 8. Pega ID gerado ----------------------------------------------------
+
 $RustDeskId = $null
 try {
   $RustDeskId = & $RustDeskExe --get-id 2>$null | Select-Object -First 1
-  $RustDeskId = $RustDeskId.Trim()
+  if ($RustDeskId) { $RustDeskId = $RustDeskId.Trim() }
 } catch {}
 
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║          RUSTDESK INSTALADO COM SUCESSO                  ║" -ForegroundColor Green
-Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "==========================================================" -ForegroundColor Green
+Write-Host "           RUSTDESK INSTALADO COM SUCESSO" -ForegroundColor Green
+Write-Host "==========================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Relay:  $Relay" -ForegroundColor White
 if ($RustDeskId) {
@@ -187,13 +178,13 @@ if ($RustDeskId) {
 }
 Write-Host "  Senha:  configurada (a que veio do painel)"
 if ($AutoAceite) {
-  Write-Host "  Modo:   AUTO-ACEITE — master conecta sem prompt" -ForegroundColor Magenta
+  Write-Host "  Modo:   AUTO-ACEITE - master conecta sem prompt" -ForegroundColor Magenta
 } else {
-  Write-Host "  Modo:   Confirmação — máquina pede aceite na 1ª conexão"
+  Write-Host "  Modo:   Confirmacao - maquina pede aceite na 1a conexao"
 }
 Write-Host ""
-Write-Host "PRÓXIMO PASSO:" -ForegroundColor Cyan
-Write-Host "  Volte no painel da Three Digital → Máquinas → Configurar suporte"
+Write-Host "PROXIMO PASSO:" -ForegroundColor Cyan
+Write-Host "  Volte no painel da Three Digital - Maquinas - Configurar suporte"
 Write-Host "  e cole o ID acima no campo 'rustdesk_id'."
 Write-Host ""
 Read-Host "Pressione ENTER pra fechar"
