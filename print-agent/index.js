@@ -29,14 +29,25 @@ const CUT     = Buffer.from([GS,  0x56, 0x00]);
 const FEED3   = Buffer.from([ESC, 0x64, 0x03]);
 const ALIGN_L = Buffer.from([ESC, 0x61, 0x00]);
 
-function loadConfig() {
+let _configMtime = 0;
+function loadConfig(force = false) {
   if (!fs.existsSync(CONFIG_PATH)) {
     console.error(`[FATAL] ${CONFIG_PATH} não existe — rode o setup primeiro.`);
     console.error(`        Windows: clique em setup.bat`);
     console.error(`        Outros:  node setup-wizard.js`);
     process.exit(1);
   }
-  return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+  // Hot-reload: relê só se arquivo mudou no disco
+  const stat = fs.statSync(CONFIG_PATH);
+  if (!force && cfg && stat.mtimeMs === _configMtime) return cfg;
+  _configMtime = stat.mtimeMs;
+  const novo = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+  if (cfg) {
+    console.log(`[CONFIG] recarregado do disco (setores: ${
+      Object.entries(novo.impressoras).filter(([, v]) => v.ativa).map(([k]) => k).join(",") || "nenhum"
+    })`);
+  }
+  return novo;
 }
 
 // ─── HTTP helpers ───────────────────────────────────────────
@@ -110,12 +121,39 @@ function montarPayloadTexto(conteudo) {
 // ─── Loop principal ─────────────────────────────────────────
 let cfg;
 
-async function processarJob(job) {
-  const setor = job.impressora.setor;
-  const conf  = cfg.impressoras[setor];
+// Aliases entre setor do backend e config local
+// (compatibilidade: 'caixa' ↔ 'pdv', 'retirada' ↔ 'balcao')
+const SETOR_ALIAS = {
+  caixa:    ["caixa", "pdv"],
+  pdv:      ["pdv", "caixa"],
+  retirada: ["retirada", "balcao"],
+  balcao:   ["balcao", "retirada"],
+};
 
-  if (!conf || !conf.ativa) {
-    return { sucesso: false, erro: `setor '${setor}' desativado neste agente` };
+function resolverSetor(setor, impressoras) {
+  // Tenta o nome exato primeiro, depois aliases
+  const candidatos = [setor, ...(SETOR_ALIAS[setor] || [])];
+  for (const c of candidatos) {
+    if (impressoras[c]?.ativa) return { setor: c, conf: impressoras[c] };
+  }
+  return null;
+}
+
+async function processarJob(job) {
+  // Hot-reload do config a cada job (pega mudanças do setup.bat sem restart)
+  cfg = loadConfig();
+
+  const setor = job.impressora.setor;
+  const resolved = resolverSetor(setor, cfg.impressoras);
+
+  if (!resolved) {
+    const setoresAtivos = Object.entries(cfg.impressoras)
+      .filter(([, v]) => v.ativa).map(([k]) => k).join(", ") || "nenhum";
+    return { sucesso: false, erro: `setor '${setor}' desativado neste agente (ativos: ${setoresAtivos})` };
+  }
+  const conf = resolved.conf;
+  if (resolved.setor !== setor) {
+    console.log(`  [alias] '${setor}' → '${resolved.setor}'`);
   }
 
   const payload = montarPayloadTexto(job.conteudo || "");
