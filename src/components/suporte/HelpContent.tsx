@@ -112,6 +112,7 @@ const SECTIONS = [
   { id: "client-rustdesk", icon: Network, label: "Cliente RustDesk (suporte)" },
   { id: "ifood",         icon: Zap,    label: "Integração iFood" },
   { id: "heartbeat",     icon: Activity, label: "Heartbeat manual" },
+  { id: "branding",      icon: Cog,    label: "White-label RustDesk" },
   { id: "troubleshooting", icon: Wrench, label: "Troubleshooting" },
 ];
 
@@ -568,6 +569,79 @@ curl -sS -X POST \\
   -H "x-cron-secret: $SECRET" \\
   ${origin}/api/cron/check-agentes-offline | jq`}</CodeBlock>
           </Step>
+        </Section>
+
+        {/* ─── White-label RustDesk ─── */}
+        <Section id="branding" icon={Cog} title="White-label RustDesk (logo + nome próprio)"
+          subtitle="Como personalizar o cliente RustDesk com a sua marca">
+
+          <Alert type="warning" title="Limitação da versão grátis">
+            O RustDesk gratuito não tem ferramenta gráfica de white-label. Pra ter logo + nome
+            customizados, você tem 3 caminhos. Em ordem de complexidade/custo:
+          </Alert>
+
+          <h3 className="text-sm font-bold text-white mt-4 mb-2">Caminho A — RustDesk Server Pro (pago, mais simples)</h3>
+          <p className="text-xs text-slate-400">
+            A licença Pro inclui um <strong>Custom Client Builder</strong> via interface web. Você
+            faz upload da sua logo, define nome do app, cores, escolhe quais botões esconder, e
+            o painel gera o instalador customizado pra Windows/Mac/Linux automaticamente.
+          </p>
+          <ul className="list-disc list-inside ml-2 mt-2 space-y-1 text-xs text-slate-400">
+            <li>Custo: ~US$10/mês por servidor (~R$60)</li>
+            <li>Site: <a href="https://rustdesk.com/pricing" target="_blank" rel="noopener" className="text-emerald-400 underline">rustdesk.com/pricing</a></li>
+            <li>Tempo: 30min pra ativar e gerar 1º instalador</li>
+            <li>Bonus: dashboard com lista de máquinas conectadas, controle de acesso por usuário, audit log</li>
+          </ul>
+
+          <h3 className="text-sm font-bold text-white mt-4 mb-2">Caminho B — Compilar do código-fonte (grátis, técnico)</h3>
+          <p className="text-xs text-slate-400">
+            RustDesk é open-source (AGPL). Você pode clonar o repo, alterar logo + nome em
+            arquivos de assets e build próprio. Requer conhecimento de Rust + Flutter.
+          </p>
+          <CodeBlock>{`# Numa máquina Linux com 8GB+ RAM
+git clone https://github.com/rustdesk/rustdesk.git
+cd rustdesk
+
+# 1. Substitui logo
+cp /caminho/sua-logo-256x256.png src/ui/assets/icon.png
+cp /caminho/sua-logo-128x128.png flutter/assets/logo.png
+cp /caminho/sua-logo-32x32.png   res/tray-icon.png
+
+# 2. Edita nome do app
+sed -i 's/RustDesk/SeuNome/g' src/ui/index.tis
+sed -i 's/RustDesk/SeuNome/g' Cargo.toml
+sed -i 's/rustdesk/seunome/g' libs/hbb_common/src/config.rs
+
+# 3. Build (demora ~30min)
+./build.py --hwcodec --flutter
+
+# Output: target/release/seunome.exe (Windows) ou .deb / .dmg`}</CodeBlock>
+          <Alert type="info">
+            Documentação oficial do white-label DIY: <a href="https://github.com/rustdesk/rustdesk/blob/master/CUSTOM-CLIENT.md" target="_blank" rel="noopener" className="text-emerald-400 underline">CUSTOM-CLIENT.md</a>
+          </Alert>
+
+          <h3 className="text-sm font-bold text-white mt-4 mb-2">Caminho C — Hack rápido só do nome no Windows (1 hora, grátis)</h3>
+          <p className="text-xs text-slate-400">
+            Se só quer mudar o que aparece no instalador + atalho do menu iniciar (sem alterar
+            o programa em si), edita o instalador com Resource Hacker:
+          </p>
+          <ol className="list-decimal list-inside ml-2 mt-2 space-y-1 text-xs text-slate-400">
+            <li>Baixa <a href="http://www.angusj.com/resourcehacker/" target="_blank" rel="noopener" className="text-emerald-400 underline">Resource Hacker</a> (grátis)</li>
+            <li>Abre o <code>rustdesk-1.4.6-x86_64.exe</code> que está em cache no nosso servidor</li>
+            <li>Aba <strong>String Table</strong> → substitui &quot;RustDesk&quot; por &quot;Suporte Three Digital&quot;</li>
+            <li>Aba <strong>Icon</strong> → substitui ícone pelo seu .ico (256x256)</li>
+            <li>Salva como novo .exe → faz upload pra <code>/installers/rustdesk-windows.exe</code> override</li>
+          </ol>
+          <Alert type="warning">
+            O AppName e marca dentro do programa continuam &quot;RustDesk&quot;. Pra mudar tudo, só Caminho A ou B.
+          </Alert>
+
+          <h3 className="text-sm font-bold text-white mt-4 mb-2">Recomendação</h3>
+          <Alert type="success">
+            Pra MVP: comece com <strong>Caminho A</strong> ($10/mês economiza dezenas de horas).
+            Se Three Digital crescer ao ponto de ter dev disponível, migra pro <strong>Caminho B</strong>
+            (zero custo recorrente). Caminho C é hack pontual, evita pra produção.
+          </Alert>
         </Section>
 
         {/* ─── Troubleshooting ─── */}

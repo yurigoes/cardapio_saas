@@ -49,14 +49,20 @@ esac
 
 TMPDEB="/tmp/rustdesk-agent.deb"
 
-# Descobre versão mais recente via GitHub API (fallback pra 1.3.9 se API falhar)
+# Tenta primeiro nosso proxy (cache + sem dependência de GitHub),
+# depois GitHub direto como fallback.
+SAAS_BASE="${RUSTDESK_DOWNLOAD_BASE:-https://app.tthreedigital.com.br}"
+ARCH_PARAM="$([[ "$RUSTDESK_ARCH" == "aarch64" ]] && echo "arm64" || echo "amd64")"
+
+URLS=(
+  "${SAAS_BASE}/installers/rustdesk-linux.deb?arch=${ARCH_PARAM}"
+)
+
+# Adiciona fallback do GitHub
 VER="$(curl -fsSL https://api.github.com/repos/rustdesk/rustdesk/releases/latest 2>/dev/null \
        | grep -oP '"tag_name":\s*"\K[^"]+' | head -1)"
-[[ -z "$VER" ]] && VER="1.3.9"
-echo "→ Versão alvo: $VER"
-
-# RustDesk já testou variantes de naming; tenta os mais comuns
-URLS=(
+[[ -z "$VER" ]] && VER="1.4.6"
+URLS+=(
   "https://github.com/rustdesk/rustdesk/releases/download/${VER}/rustdesk-${VER}-${RUSTDESK_ARCH}.deb"
   "https://github.com/rustdesk/rustdesk/releases/download/${VER}/rustdesk-${VER}-${ARCH}.deb"
 )
@@ -64,17 +70,17 @@ URLS=(
 echo "→ baixando RustDesk para $RUSTDESK_ARCH..."
 DOWNLOAD_OK=0
 for URL in "${URLS[@]}"; do
+  echo "  → tentando $URL"
   if curl -fsSL "$URL" -o "$TMPDEB" 2>/dev/null; then
-    echo "  ✓ $URL"
-    DOWNLOAD_OK=1; break
+    SIZE=$(stat -c%s "$TMPDEB" 2>/dev/null || stat -f%z "$TMPDEB")
+    if [[ "$SIZE" -gt 5000000 ]]; then
+      echo "  ✓ $URL ($(numfmt --to=iec-i --suffix=B $SIZE 2>/dev/null || echo $SIZE) bytes)"
+      DOWNLOAD_OK=1; break
+    fi
   fi
 done
 if [[ "$DOWNLOAD_OK" != "1" ]]; then
-  echo "✖ falha ao baixar — tentou:"
-  printf '  %s\n' "${URLS[@]}"
-  echo ""
-  echo "  Verifique manualmente em: https://github.com/rustdesk/rustdesk/releases/tag/$VER"
-  echo "  e baixe o .deb compatível com $ARCH"
+  echo "✖ falha ao baixar — tentou todos os mirrors"
   exit 1
 fi
 

@@ -2,11 +2,8 @@
 :: install-rustdesk-agent.bat
 :: Wrapper double-click pro install-rustdesk-agent.ps1
 ::
-:: Uso: edite RELAY/KEY/PASS abaixo OU passe como args:
-::   install-rustdesk-agent.bat <relay> <key> <pass>
-::
-:: O painel Three Digital em /painel/maquinas → Configurar suporte
-:: gera os 3 valores prontos pra copiar.
+:: Uso 1 (interativo): double-click → pede valores
+:: Uso 2 (args):       install-rustdesk-agent.bat <relay> <key> <pass> [s]
 
 setlocal enabledelayedexpansion
 
@@ -17,27 +14,59 @@ set "AUTOACEITE=%~4"
 
 if "%RELAY%"=="" (
     echo.
-    echo Cole os valores do painel Three Digital:
+    echo  ============================================
+    echo   Three Digital — Instalador RustDesk Agent
+    echo  ============================================
     echo.
-    set /p RELAY="Relay (ex: 1.2.3.4): "
-    set /p KEY="Chave publica: "
-    set /p PASS="Senha permanente: "
-    set /p AUTOACEITE="Auto-aceite? (s/n): "
+    set /p "RELAY=Relay (ex: rustdesk.tthreedigital.com.br): "
+    set /p "KEY=Chave publica: "
+    set /p "PASS=Senha permanente: "
+    set /p "AUTOACEITE=Auto-aceite? (s/n): "
 )
 
-set "PSARGS=-Relay '%RELAY%' -Key '%KEY%' -Pass '%PASS%'"
-if /i "%AUTOACEITE%"=="s" set "PSARGS=%PSARGS% -AutoAceite"
-if /i "%AUTOACEITE%"=="--auto-aceite" set "PSARGS=%PSARGS% -AutoAceite"
+if "!RELAY!"=="" goto :erro_args
+if "!KEY!"=="" goto :erro_args
+if "!PASS!"=="" goto :erro_args
 
-set "SCRIPT=%~dp0install-rustdesk-agent.ps1"
-
-if not exist "%SCRIPT%" (
-    echo Script PowerShell nao encontrado em %SCRIPT%
-    echo Baixando da Three Digital...
-    powershell -NoProfile -Command "iwr https://app.tthreedigital.com.br/install-agent.ps1 -OutFile '%TEMP%\install-rustdesk-agent.ps1' -UseBasicParsing"
-    set "SCRIPT=%TEMP%\install-rustdesk-agent.ps1"
+:: Sempre baixa script atualizado da Three Digital (em vez de depender de
+:: arquivo .ps1 ao lado, que pode estar desatualizado)
+set "SCRIPT=%TEMP%\install-rustdesk-agent.ps1"
+echo.
+echo  Baixando script de instalacao...
+powershell -NoProfile -Command "try { iwr https://app.tthreedigital.com.br/install-agent.ps1 -OutFile '%SCRIPT%' -UseBasicParsing -ErrorAction Stop; exit 0 } catch { exit 1 }"
+if errorlevel 1 (
+    echo  [ERRO] Nao consegui baixar o script. Verifique sua conexao.
+    pause
+    exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT%" %PSARGS%
+set "PSARGS=-Relay '!RELAY!' -Key '!KEY!' -Pass '!PASS!'"
+if /i "!AUTOACEITE!"=="s" set "PSARGS=!PSARGS! -AutoAceite"
+if /i "!AUTOACEITE!"=="y" set "PSARGS=!PSARGS! -AutoAceite"
+if /i "!AUTOACEITE!"=="--auto-aceite" set "PSARGS=!PSARGS! -AutoAceite"
 
-endlocal
+echo.
+echo  Executando instalador (pode pedir UAC)...
+echo.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%SCRIPT%' !PSARGS!"
+
+if errorlevel 1 (
+    echo.
+    echo  [ERRO] Instalacao falhou. Mensagem acima.
+    pause
+    exit /b 1
+)
+
+echo.
+echo  ============================================
+echo   Concluido! Cole o ID gerado no painel.
+echo  ============================================
+echo.
+pause
+exit /b 0
+
+:erro_args
+echo.
+echo  [ERRO] Faltou algum dado. Tente novamente.
+pause
+exit /b 1

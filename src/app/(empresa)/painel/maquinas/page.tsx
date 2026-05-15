@@ -87,9 +87,9 @@ function InstalacaoTabs({
   --key   "${publicKey}" \\
   --pass  "${password}"${autoAceite ? " \\\n  --auto-aceite" : ""}`;
 
-  const cmdWinPS = `iwr ${origin}/install-agent.ps1 -OutFile $env:TEMP\\rd.ps1 -UseBasicParsing; ` +
-    `Start-Process powershell "-NoProfile -ExecutionPolicy Bypass -File $env:TEMP\\rd.ps1 ` +
-    `-Relay '${relay}' -Key '${publicKey}' -Pass '${password}'${autoAceite ? " -AutoAceite" : ""}" -Verb RunAs`;
+  // Roda direto na sessão atual (script auto-eleva UAC internamente se precisar)
+  const cmdWinPS = `iwr ${origin}/install-agent.ps1 -OutFile $env:TEMP\\rd.ps1 -UseBasicParsing
+& $env:TEMP\\rd.ps1 -Relay '${relay}' -Key '${publicKey}' -Pass '${password}'${autoAceite ? " -AutoAceite" : ""}`;
 
   return (
     <div className="mt-3">

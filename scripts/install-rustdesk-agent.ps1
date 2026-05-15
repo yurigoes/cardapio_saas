@@ -62,25 +62,48 @@ if (-not (Test-Admin)) {
 }
 
 # ─── 2. Download RustDesk ────────────────────────────────────────────────────
-# Descobre versão mais recente via GitHub API
-$RustDeskVer = "1.3.9"   # fallback se API falhar
-try {
-  $resp = Invoke-RestMethod "https://api.github.com/repos/rustdesk/rustdesk/releases/latest" -TimeoutSec 10
-  if ($resp.tag_name) { $RustDeskVer = $resp.tag_name }
-} catch {
-  Write-Step "API GitHub falhou, usando versão fallback $RustDeskVer"
+# Tenta primeiro nosso servidor (cache local), depois GitHub direto.
+# Permite override via env: $env:RUSTDESK_DOWNLOAD_URL = "https://..."
+
+$Installer = Join-Path $env:TEMP "rustdesk-setup.exe"
+$Downloaded = $false
+
+# URL preferencial: nosso proxy/cache (rápido, sem depender de GitHub)
+$ServerUrl = $env:RUSTDESK_DOWNLOAD_URL
+if (-not $ServerUrl) {
+  # Tenta inferir do mesmo domínio que serviu este script
+  $ServerUrl = "https://app.tthreedigital.com.br/installers/rustdesk-windows.exe"
 }
-Write-Step "Versão alvo: $RustDeskVer"
 
-$RustDeskUrl = "https://github.com/rustdesk/rustdesk/releases/download/$RustDeskVer/rustdesk-$RustDeskVer-x86_64.exe"
-$Installer   = Join-Path $env:TEMP "rustdesk-setup.exe"
+# 1ª tentativa: nosso servidor
+try {
+  Write-Step "Baixando RustDesk de $ServerUrl..."
+  Invoke-WebRequest -Uri $ServerUrl -OutFile $Installer -UseBasicParsing -TimeoutSec 120
+  if ((Get-Item $Installer).Length -ge 5MB) {
+    $Downloaded = $true
+    Write-Ok "Download via servidor próprio concluído ($([math]::Round((Get-Item $Installer).Length / 1MB, 1)) MB)"
+  }
+} catch {
+  Write-Step "Servidor próprio indisponível, tentando GitHub..."
+}
 
-if (-not (Test-Path $Installer) -or (Get-Item $Installer).Length -lt 1MB) {
-  Write-Step "Baixando RustDesk $RustDeskVer..."
-  Invoke-WebRequest -Uri $RustDeskUrl -OutFile $Installer -UseBasicParsing
-  Write-Ok "Download concluído ($([math]::Round((Get-Item $Installer).Length / 1MB, 1)) MB)"
-} else {
-  Write-Step "Usando installer já em cache"
+# 2ª tentativa: GitHub direto (fallback)
+if (-not $Downloaded) {
+  $RustDeskVer = "1.4.6"   # fallback de versão
+  try {
+    $resp = Invoke-RestMethod "https://api.github.com/repos/rustdesk/rustdesk/releases/latest" -TimeoutSec 10
+    if ($resp.tag_name) { $RustDeskVer = $resp.tag_name }
+  } catch {}
+  $RustDeskUrl = "https://github.com/rustdesk/rustdesk/releases/download/$RustDeskVer/rustdesk-$RustDeskVer-x86_64.exe"
+  Write-Step "Baixando RustDesk $RustDeskVer do GitHub..."
+  try {
+    Invoke-WebRequest -Uri $RustDeskUrl -OutFile $Installer -UseBasicParsing -TimeoutSec 120
+    Write-Ok "Download concluído ($([math]::Round((Get-Item $Installer).Length / 1MB, 1)) MB)"
+  } catch {
+    Write-Err "Falha em ambos os mirrors. Tente baixar manualmente em https://rustdesk.com/download"
+    Read-Host "Pressione ENTER pra fechar"
+    exit 1
+  }
 }
 
 # ─── 3. Install silenciosamente ──────────────────────────────────────────────
