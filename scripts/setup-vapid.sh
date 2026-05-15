@@ -25,56 +25,49 @@ fi
 
 echo "→ Gerando chaves VAPID..."
 
-# Desativa set -e localmente pra capturar erros sem matar script
+# Usa só crypto nativo do Node (não precisa web-push instalado).
+# VAPID = ECDSA P-256, geramos via crypto.generateKeyPairSync.
+read -r -d '' NODE_SCRIPT <<'JS' || true
+const c = require('crypto');
+const { publicKey, privateKey } = c.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+const jwkPub  = publicKey.export({ format: 'jwk' });
+const jwkPriv = privateKey.export({ format: 'jwk' });
+const x = Buffer.from(jwkPub.x, 'base64url');
+const y = Buffer.from(jwkPub.y, 'base64url');
+const pub = Buffer.concat([Buffer.from([0x04]), x, y]);
+const priv = Buffer.from(jwkPriv.d, 'base64url');
+console.log('PUB=' + pub.toString('base64url'));
+console.log('PRIV=' + priv.toString('base64url'));
+JS
+
 set +e
 
-NODE_SCRIPT='const wp=require("web-push");const k=wp.generateVAPIDKeys();console.log("PUB="+k.publicKey);console.log("PRIV="+k.privateKey);'
-
-# Tenta 1: dentro do container app (web-push já em deps)
+# Tenta 1: docker exec (mais previsível)
 echo "  tentativa 1: docker exec cardapio_app..."
 KEYS=$(docker exec cardapio_app node -e "$NODE_SCRIPT" 2>&1)
 RC=$?
-echo "  exit code: $RC"
 
+# Tenta 2: node no host
 if [[ $RC -ne 0 ]] || [[ "$KEYS" != *"PUB="* ]]; then
-  echo "  saída anterior: $KEYS" | head -3
-  echo "  tentativa 2: node no host..."
-  KEYS=$(cd "$PROJETO_DIR" && node -e "$NODE_SCRIPT" 2>&1)
-  RC=$?
-  echo "  exit code: $RC"
-fi
-
-if [[ $RC -ne 0 ]] || [[ "$KEYS" != *"PUB="* ]]; then
-  echo "  tentativa 3: npx --yes web-push..."
-  KEYS=$(npx --yes web-push generate-vapid-keys 2>&1)
-  RC=$?
-  echo "  exit code: $RC"
+  echo "  tentativa 1 falhou (rc=$RC), tentando node no host..."
+  if command -v node >/dev/null 2>&1; then
+    KEYS=$(node -e "$NODE_SCRIPT" 2>&1)
+    RC=$?
+  else
+    echo "  node não está instalado no host"
+  fi
 fi
 
 set -e
 
-PUB=$(echo "$KEYS"  | grep -oP '(PUB=|Public Key:)\s*\K\S+'  | head -1 | tr -d '\r')
-PRIV=$(echo "$KEYS" | grep -oP '(PRIV=|Private Key:)\s*\K\S+' | head -1 | tr -d '\r')
+PUB=$(echo "$KEYS"  | grep -oP '^PUB=\K.*'  | head -1 | tr -d '\r')
+PRIV=$(echo "$KEYS" | grep -oP '^PRIV=\K.*' | head -1 | tr -d '\r')
 
-# Fallback alternativo: linha logo após "Public Key:"
-if [[ -z "$PUB" ]]; then
-  PUB=$(echo "$KEYS"  | grep -A1 "Public Key:"  | tail -1 | tr -d '[:space:]')
-fi
-if [[ -z "$PRIV" ]]; then
-  PRIV=$(echo "$KEYS" | grep -A1 "Private Key:" | tail -1 | tr -d '[:space:]')
-fi
-
-echo ""
 if [[ -z "$PUB" || -z "$PRIV" ]]; then
   echo "✖ falha ao gerar chaves. Output bruto:"
   echo "----------------------------------"
   echo "$KEYS"
   echo "----------------------------------"
-  echo ""
-  echo "Diagnóstico:"
-  echo "  docker ps | grep cardapio_app   # container está rodando?"
-  echo "  which node                      # node existe no host?"
-  echo "  which npx                       # npx existe no host?"
   exit 1
 fi
 echo "  ✓ chaves geradas"
