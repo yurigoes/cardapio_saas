@@ -7,16 +7,24 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Send, Loader2, AlertCircle, Lock, Clock, Mail, ShieldCheck, X, BadgeCheck, MessageCircle } from "lucide-react";
+import { ArrowLeft, Send, Loader2, AlertCircle, Lock, Clock, Mail, ShieldCheck, X, BadgeCheck, MessageCircle, Paperclip, FileText } from "lucide-react";
+import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
+interface Anexo { url: string; nome: string; mime: string; tamanho: number; }
 interface Mensagem {
   id: string;
   autor_id: string | null;
   autor_tipo: "cliente" | "agente" | "sistema";
   autor_nome: string;
   texto: string;
+  anexos: Anexo[];
   interno: boolean;
   criado_em: string;
+}
+
+interface Template {
+  id: string; tipo: "email" | "whatsapp"; nome: string;
+  assunto: string | null; conteudo: string; variaveis: string[];
 }
 
 interface Chamado {
@@ -67,6 +75,65 @@ export default function ChamadoPage() {
   const [waMensagem, setWaMensagem]   = useState("");
   const [waTelefone, setWaTelefone]   = useState("");
   const [enviandoWA, setEnviandoWA]   = useState(false);
+
+  // Templates
+  const [templates, setTemplates] = useState<Template[]>([]);
+
+  // Anexos
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Carrega templates ao montar
+  useEffect(() => {
+    fetch("/api/admin/suporte/templates", { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => { if (d.success) setTemplates(d.data.templates ?? []); })
+      .catch(() => {});
+  }, []);
+
+  // Paste handler global na página: Ctrl+V cola imagem
+  useEffect(() => {
+    const onPaste = async (e: ClipboardEvent) => {
+      if (!e.clipboardData) return;
+      const items = Array.from(e.clipboardData.items);
+      const imgItem = items.find(it => it.type.startsWith("image/"));
+      if (!imgItem) return;
+      e.preventDefault();
+      const file = imgItem.getAsFile();
+      if (!file) return;
+      uploadFile(file);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+    // eslint-disable-next-line
+  }, [params.id]);
+
+  async function uploadFile(file: File) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(`/api/painel/suporte/chamados/${params.id}/anexos`, {
+        method:  "POST",
+        headers: authHeaders(),
+        body:    fd,
+      });
+      const d = await r.json();
+      if (!r.ok || !d.success) throw new Error(d?.error || "Upload falhou");
+      carregar();
+    } catch (e) {
+      await alertar({ titulo: "Erro upload", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
+    } finally { setUploading(false); }
+  }
+
+  function aplicarTemplate(t: Template, alvo: "email" | "whatsapp") {
+    if (alvo === "email") {
+      setEmailAss(t.assunto ?? "");
+      setEmailHtml(t.conteudo);
+    } else {
+      setWaMensagem(t.conteudo);
+    }
+  }
   const [valTipo, setValTipo]         = useState<"admin" | "usuario" | "ambos">("ambos");
   const [solicitandoVal, setSolVal]   = useState(false);
 
@@ -99,11 +166,17 @@ export default function ChamadoPage() {
       setEmailPara(""); setEmailAss(""); setEmailHtml("");
       carregar();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro");
+      await alertar({ titulo: "Erro", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
     } finally { setEnviandoEmail(false); }
   }
 
   async function enviarWhatsApp() {
+    const ok = await confirmar({
+      titulo: "Disparar WhatsApp",
+      mensagem: `Enviar mensagem pra ${waTelefone || "telefone do usuário"}?`,
+      okLabel: "Enviar",
+    });
+    if (!ok) return;
     setEnviandoWA(true);
     try {
       const r = await fetch(`/api/painel/suporte/chamados/${params.id}/whatsapp`, {
@@ -120,7 +193,7 @@ export default function ChamadoPage() {
       setWaMensagem(""); setWaTelefone("");
       carregar();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro");
+      await alertar({ titulo: "Erro", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
     } finally { setEnviandoWA(false); }
   }
 
@@ -137,19 +210,19 @@ export default function ChamadoPage() {
       const fail = (d.data.solicitadas as Array<{ ok: boolean; tipo: string; motivo?: string }>)
         .filter(x => !x.ok);
       if (fail.length > 0) {
-        alert("Algumas falharam:\n" + fail.map(f => `- ${f.tipo}: ${f.motivo}`).join("\n"));
+        await alertar({ titulo: "Algumas falharam", mensagem: fail.map(f => `${f.tipo}: ${f.motivo}`).join("\n"), tipo: "alerta" });
       } else {
-        alert("Códigos enviados via WhatsApp ✓");
+        await alertar({ titulo: "Códigos enviados", mensagem: "Códigos enviados via WhatsApp", tipo: "sucesso" });
       }
       setModalVal(false);
       carregar();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro");
+      await alertar({ titulo: "Erro", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
     } finally { setSolVal(false); }
   }
 
   async function confirmarCodigo() {
-    if (codigo.length < 4) { alert("Código deve ter 4-6 dígitos"); return; }
+    if (codigo.length < 4) { await alertar({ titulo: "Código inválido", mensagem: "Deve ter 4-6 dígitos", tipo: "alerta" }); return; }
     try {
       const r = await fetch(`/api/painel/suporte/chamados/${params.id}/validacao`, {
         method:  "PUT",
@@ -161,7 +234,7 @@ export default function ChamadoPage() {
       setCodigo("");
       carregar();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro");
+      await alertar({ titulo: "Erro", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
     }
   }
 
@@ -211,12 +284,16 @@ export default function ChamadoPage() {
       setInterno(false);
       carregar();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro");
+      await alertar({ titulo: "Erro", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
     } finally { setEnviando(false); }
   }
 
   async function alterarStatus(novoStatus: string) {
-    if (!confirm(`Alterar status para "${novoStatus}"?`)) return;
+    const ok = await confirmar({
+      titulo: "Alterar status",
+      mensagem: `Mudar status para "${novoStatus}"?`,
+    });
+    if (!ok) return;
     try {
       const r = await fetch(`/api/painel/suporte/chamados/${params.id}`, {
         method:  "PATCH",
@@ -371,6 +448,26 @@ export default function ChamadoPage() {
                   )}
                 </div>
                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.texto}</p>
+                {Array.isArray(m.anexos) && m.anexos.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    {m.anexos.map((a, ai) => (
+                      a.mime?.startsWith("image/") ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <a key={ai} href={a.url} target="_blank" rel="noopener" className="block">
+                          <img src={a.url} alt={a.nome}
+                            className="max-w-xs rounded-lg border border-white/10 hover:border-white/30 transition cursor-pointer" />
+                        </a>
+                      ) : (
+                        <a key={ai} href={a.url} target="_blank" rel="noopener"
+                          className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-2.5 py-1.5 hover:bg-white/5 text-xs">
+                          <FileText className="h-4 w-4 text-blue-400" />
+                          <span className="truncate flex-1">{a.nome}</span>
+                          <span className="text-[10px] text-slate-500">{Math.round((a.tamanho || 0) / 1024)}KB</span>
+                        </a>
+                      )
+                    ))}
+                  </div>
+                )}
                 <p className="mt-1 text-[10px] opacity-50 flex items-center gap-1">
                   <Clock className="h-2.5 w-2.5" /> {formatHora(m.criado_em)}
                 </p>
@@ -390,11 +487,29 @@ export default function ChamadoPage() {
               <Lock className="h-3 w-3" /> Nota interna (cliente não vê)
             </label>
           )}
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-end">
+            {/* Botão de anexo */}
+            <input ref={fileRef} type="file"
+              accept="image/*,application/pdf,.txt,.zip,.doc,.docx,.xls,.xlsx"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (f) await uploadFile(f);
+                if (fileRef.current) fileRef.current.value = "";
+              }} />
+            <button onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              title="Anexar arquivo (ou cole imagem com Ctrl+V)"
+              className="rounded-lg border border-white/10 bg-slate-950 p-2 text-slate-400 hover:bg-white/5 hover:text-white disabled:opacity-50">
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+            </button>
+
             <textarea
               value={texto} onChange={e => setTexto(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) enviar(); }}
-              placeholder={interno ? "Nota interna (Ctrl+Enter envia)" : "Digite sua mensagem (Ctrl+Enter envia)"}
+              placeholder={interno
+                ? "Nota interna (Ctrl+Enter envia)"
+                : "Digite sua mensagem ou cole imagem (Ctrl+Enter envia)"}
               rows={2}
               className={`flex-1 resize-none rounded-lg border px-3 py-2 text-sm text-white focus:outline-none ${
                 interno ? "border-amber-500/30 bg-amber-500/5" : "border-white/10 bg-slate-950"
@@ -430,6 +545,24 @@ export default function ChamadoPage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
+
+            {/* Dropdown templates email */}
+            {templates.filter(t => t.tipo === "email").length > 0 && (
+              <div className="mb-3">
+                <label className="mb-1 block text-xs font-medium text-slate-400">Aplicar template</label>
+                <select onChange={e => {
+                  const t = templates.find(tp => tp.id === e.target.value);
+                  if (t) aplicarTemplate(t, "email");
+                  e.target.value = "";
+                }}
+                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white">
+                  <option value="">— Nenhum —</option>
+                  {templates.filter(t => t.tipo === "email").map(t => (
+                    <option key={t.id} value={t.id}>{t.nome}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <label className="mb-1 block text-xs font-medium text-slate-400">Para</label>
             <input type="email" value={emailPara} onChange={e => setEmailPara(e.target.value)}
@@ -478,6 +611,24 @@ export default function ChamadoPage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
+
+            {/* Dropdown templates WhatsApp */}
+            {templates.filter(t => t.tipo === "whatsapp").length > 0 && (
+              <div className="mb-3">
+                <label className="mb-1 block text-xs font-medium text-slate-400">Aplicar template</label>
+                <select onChange={e => {
+                  const t = templates.find(tp => tp.id === e.target.value);
+                  if (t) aplicarTemplate(t, "whatsapp");
+                  e.target.value = "";
+                }}
+                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white">
+                  <option value="">— Nenhum —</option>
+                  {templates.filter(t => t.tipo === "whatsapp").map(t => (
+                    <option key={t.id} value={t.id}>{t.nome}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <label className="mb-1 block text-xs font-medium text-slate-400">
               Telefone (vazio = pega do usuário do chamado)

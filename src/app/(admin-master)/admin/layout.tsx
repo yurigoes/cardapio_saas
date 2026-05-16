@@ -47,6 +47,7 @@ const NAV: NavGroup[] = [
   { titulo: "Atendimento", items: [
     { href: "/admin/suporte/chamados",       label: "Chamados",         icon: MessageCircle },
     { href: "/admin/suporte/dashboard",      label: "Dashboard TV",     icon: Tv2 },
+    { href: "/admin/suporte/templates",      label: "Templates",        icon: FileText },
     { href: "/admin/suporte/configuracoes",  label: "Configurações",    icon: Settings },
     { href: "/admin/suporte",                label: "Acessos Ajuda",    icon: LifeBuoy },
     { href: "/admin/permissoes",             label: "Permissões",       icon: Shield },
