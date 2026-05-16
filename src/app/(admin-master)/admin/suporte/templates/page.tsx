@@ -60,6 +60,64 @@ export default function TemplatesPage() {
   const [editor, setEditor] = useState<Partial<Template> | null>(null);
   const [salvando, setSalvando] = useState(false);
 
+  // Preview + teste
+  const [preview, setPreview] = useState(false);
+  const [modalTeste, setModalTeste] = useState(false);
+  const [testeDestino, setTesteDestino] = useState("");
+  const [enviandoTeste, setEnvTeste] = useState(false);
+
+  const conteudoRef = useRef<HTMLTextAreaElement | null>(null);
+  const assuntoRef  = useRef<HTMLInputElement | null>(null);
+
+  function inserirVar(v: string, alvo: "conteudo" | "assunto") {
+    if (!editor) return;
+    const tag = `{${v}}`;
+    const ref = alvo === "conteudo" ? conteudoRef.current : assuntoRef.current;
+    if (ref) {
+      const start = ref.selectionStart ?? 0;
+      const end   = ref.selectionEnd ?? 0;
+      const orig  = (alvo === "conteudo" ? editor.conteudo : editor.assunto) ?? "";
+      const novo  = orig.slice(0, start) + tag + orig.slice(end);
+      setEditor({ ...editor, [alvo]: novo });
+      setTimeout(() => { ref.focus(); ref.setSelectionRange(start + tag.length, start + tag.length); }, 0);
+    } else {
+      const orig = (alvo === "conteudo" ? editor.conteudo : editor.assunto) ?? "";
+      setEditor({ ...editor, [alvo]: orig + tag });
+    }
+  }
+
+  function aplicarVarsPreview(s: string): string {
+    let out = s;
+    for (const [k, v] of Object.entries(VARS_PREVIEW)) {
+      out = out.replace(new RegExp(`\\{${k}\\}`, "g"), v);
+    }
+    return out.replace(/\\n/g, "\n");
+  }
+
+  async function testarEnvio() {
+    if (!editor || !testeDestino) return;
+    setEnvTeste(true);
+    try {
+      const r = await fetch("/api/admin/suporte/templates/testar", {
+        method: "POST",
+        headers: { ...authH(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo:     editor.tipo ?? tab,
+          conteudo: editor.conteudo,
+          assunto:  editor.assunto,
+          destino:  testeDestino,
+          vars:     VARS_PREVIEW,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.success) throw new Error(d?.error || "Falha");
+      await alertar({ titulo: "Enviado!", mensagem: `${d.data.tipo} enviado pra ${d.data.para}`, tipo: "sucesso" });
+      setModalTeste(false); setTesteDestino("");
+    } catch (e) {
+      await alertar({ titulo: "Falha", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
+    } finally { setEnvTeste(false); }
+  }
+
   async function carregar() {
     try {
       const r = await fetch("/api/admin/suporte/templates", { headers: authH(), cache: "no-store" });
@@ -207,35 +265,132 @@ export default function TemplatesPage() {
             {(editor.tipo ?? tab) === "email" && (
               <>
                 <label className="mb-1 block text-xs font-medium text-slate-400">Assunto</label>
-                <input value={editor.assunto ?? ""} onChange={e => setEditor({ ...editor, assunto: e.target.value })}
+                <input ref={assuntoRef} value={editor.assunto ?? ""}
+                  onChange={e => setEditor({ ...editor, assunto: e.target.value })}
                   placeholder="Use {variaveis} se quiser"
-                  className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
+                  className="mb-2 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
+                <div className="mb-3 flex flex-wrap gap-1">
+                  {VARIAVEIS_COMUNS.slice(0, 6).map(v => (
+                    <button key={v.v} type="button" onClick={() => inserirVar(v.v, "assunto")}
+                      title={v.desc}
+                      className="text-[10px] rounded bg-slate-800 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300 px-1.5 py-0.5">
+                      {`{${v.v}}`}
+                    </button>
+                  ))}
+                </div>
               </>
             )}
 
             <label className="mb-1 block text-xs font-medium text-slate-400">
               Conteúdo {(editor.tipo ?? tab) === "email" ? "(HTML aceito)" : "(use *negrito* + \\n)"}
             </label>
-            <textarea value={editor.conteudo ?? ""} onChange={e => setEditor({ ...editor, conteudo: e.target.value })}
-              rows={10}
+
+            {/* Variáveis clicáveis */}
+            <div className="mb-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-2">
+              <p className="text-[10px] uppercase tracking-wider text-blue-300 mb-1.5">
+                💡 Clique pra inserir no cursor:
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {VARIAVEIS_COMUNS.map(v => (
+                  <button key={v.v} type="button" onClick={() => inserirVar(v.v, "conteudo")}
+                    title={v.desc}
+                    className="text-[10px] rounded bg-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 px-2 py-0.5">
+                    <code>{`{${v.v}}`}</code>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <textarea ref={conteudoRef} value={editor.conteudo ?? ""}
+              onChange={e => setEditor({ ...editor, conteudo: e.target.value })}
+              rows={preview ? 5 : 10}
               placeholder={(editor.tipo ?? tab) === "email"
                 ? "<p>Olá {cliente}!</p><p>...</p>"
                 : "Olá *{cliente}*!\\n\\nMensagem..."}
               className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm font-mono text-white resize-none" />
 
-            <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 p-2 text-[11px] text-blue-200">
-              💡 Use <code>{"{variavel}"}</code> pra placeholders. Sugestões: {"{cliente} {operador} {assunto} {link} {empresa} {numero} {senha} {email}"}
+            {/* Pré-visualização */}
+            {preview && (editor.conteudo ?? "").length > 0 && (
+              <div className="mb-3 rounded-lg border border-emerald-500/30 bg-slate-950 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-emerald-300 mb-2">
+                  📺 Preview (com valores fake)
+                </p>
+                {(editor.tipo ?? tab) === "email" ? (
+                  <>
+                    <p className="text-xs text-slate-400 mb-2">
+                      <strong>Assunto:</strong> {aplicarVarsPreview(editor.assunto ?? "(sem assunto)")}
+                    </p>
+                    <div className="rounded border border-white/5 bg-white p-3 max-h-60 overflow-auto text-slate-900"
+                      dangerouslySetInnerHTML={{ __html: aplicarVarsPreview(editor.conteudo ?? "") }} />
+                  </>
+                ) : (
+                  <pre className="whitespace-pre-wrap text-sm text-slate-300 max-h-60 overflow-auto bg-slate-900 rounded p-2">
+                    {aplicarVarsPreview(editor.conteudo ?? "")}
+                  </pre>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setPreview(p => !p)}
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20">
+                <Eye className="h-3.5 w-3.5" /> {preview ? "Ocultar preview" : "Pré-visualizar"}
+              </button>
+              <button type="button" onClick={() => setModalTeste(true)}
+                disabled={!editor.conteudo || editor.conteudo.length < 3}
+                className="flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">
+                <Send className="h-3.5 w-3.5" /> Testar envio
+              </button>
+              <div className="flex-1" />
+              <button type="button" onClick={() => setEditor(null)} disabled={salvando}
+                className="rounded-lg border border-white/10 px-4 py-2 text-xs text-slate-300 hover:bg-white/5">
+                Cancelar
+              </button>
+              <button type="button" onClick={salvar} disabled={salvando}
+                className="flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-600 disabled:opacity-50">
+                {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal teste envio */}
+      {modalTeste && editor && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setModalTeste(false); }}>
+          <div className="w-full max-w-md rounded-2xl border border-blue-500/30 bg-slate-900 p-6">
+            <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
+              <Send className="h-5 w-5 text-blue-400" /> Testar envio
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">
+              {(editor.tipo ?? tab) === "email"
+                ? "Email enviado via SMTP master com tag [TESTE]"
+                : "WhatsApp via Master Evolution (configure em /admin/integracoes/evolution)"}
+            </p>
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">
+              {(editor.tipo ?? tab) === "email" ? "E-mail destino" : "Telefone destino (com DDD)"}
+            </label>
+            <input value={testeDestino} onChange={e => setTesteDestino(e.target.value)}
+              placeholder={(editor.tipo ?? tab) === "email" ? "voce@exemplo.com" : "11999999999"}
+              className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
+
+            <div className="mb-4 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2 text-[11px] text-amber-200">
+              📨 Vai usar valores fake nas variáveis (cliente=&quot;Maria Silva&quot;, etc) só pra testar formato.
             </div>
 
             <div className="flex gap-2">
-              <button onClick={() => setEditor(null)} disabled={salvando}
+              <button type="button" onClick={() => setModalTeste(false)} disabled={enviandoTeste}
                 className="flex-1 rounded-lg border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">
                 Cancelar
               </button>
-              <button onClick={salvar} disabled={salvando}
-                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-600 disabled:opacity-50">
-                {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Salvar
+              <button type="button" onClick={testarEnvio}
+                disabled={enviandoTeste || !testeDestino}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-600 disabled:opacity-50">
+                {enviandoTeste ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Enviar
               </button>
             </div>
           </div>

@@ -42,7 +42,8 @@ const NAV: NavGroup[] = [
     { href: "/admin/webhooks",  label: "Webhooks",    icon: Webhook },
   ]},
   { titulo: "Integrações", items: [
-    { href: "/admin/ifood",     label: "iFood (master)", icon: Zap },
+    { href: "/admin/ifood",                 label: "iFood (master)",       icon: Zap },
+    { href: "/admin/integracoes/evolution", label: "WhatsApp (Evolution)", icon: MessageCircle },
   ]},
   { titulo: "Atendimento", items: [
     { href: "/admin/suporte/chamados",       label: "Chamados",         icon: MessageCircle },
