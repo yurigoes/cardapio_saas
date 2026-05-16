@@ -4,8 +4,8 @@
  * /admin/suporte/templates — Biblioteca de templates de email/WhatsApp
  * pra disparo manual nos chamados.
  */
-import { useEffect, useState } from "react";
-import { Mail, MessageCircle, Plus, Trash2, Edit, X, Save, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Mail, MessageCircle, Plus, Trash2, Edit, X, Save, Loader2, Eye, Send } from "lucide-react";
 import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
 interface Template {
@@ -13,6 +13,37 @@ interface Template {
   assunto: string | null; conteudo: string; variaveis: string[];
   created_at: string;
 }
+
+const VARIAVEIS_COMUNS = [
+  { v: "cliente",    desc: "Nome do cliente" },
+  { v: "operador",   desc: "Nome do agente/operador" },
+  { v: "empresa",    desc: "Nome da empresa" },
+  { v: "assunto",    desc: "Assunto do chamado" },
+  { v: "numero",     desc: "Número do chamado" },
+  { v: "link",       desc: "Link pra abrir o chamado" },
+  { v: "email",      desc: "E-mail do destinatário" },
+  { v: "senha",      desc: "Nova senha (reset)" },
+  { v: "tempo",      desc: "Tempo estimado" },
+  { v: "informacoes", desc: "Lista de informações pedidas" },
+  { v: "solucao",    desc: "Descrição da solução aplicada" },
+  { v: "codigo",     desc: "Código de validação 2FA" },
+];
+
+// Valores fake pra preview / teste
+const VARS_PREVIEW: Record<string, string> = {
+  cliente:    "Maria Silva",
+  operador:   "João do Suporte",
+  empresa:    "Restaurante Modelo",
+  assunto:    "Pedido não imprime no caixa",
+  numero:     "1234",
+  link:       "https://app.tthreedigital.com.br/painel/suporte/chamados/abc-123",
+  email:      "maria@restaurante.com.br",
+  senha:      "NovaSenha2026!",
+  tempo:      "1 hora",
+  informacoes: "1. Print da tela de erro\n2. Modelo da impressora\n3. Hora exata",
+  solucao:    "Reconfigurada a impressora Caixa no agente local",
+  codigo:     "123456",
+};
 
 function authH(): HeadersInit {
   if (typeof window === "undefined") return {};
