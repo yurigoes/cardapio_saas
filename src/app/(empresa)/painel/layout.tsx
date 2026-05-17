@@ -21,6 +21,7 @@ import { VersaoFooter } from "@/components/VersaoFooter";
 import { IfoodPendingPopup } from "@/components/IfoodPendingPopup";
 import { AgentGate } from "@/components/AgentGate";
 import { ChatBubble } from "@/components/suporte/ChatBubble";
+import { Crown } from "lucide-react";
 
 interface Empresa {
   nome_fantasia:  string;
@@ -62,6 +63,8 @@ const ALL_NAV = [
   { href: "/painel/auditoria",   label: "Auditoria",   icon: ScrollText,      modulo: null         },
   { href: "/painel/backup",      label: "Backup",      icon: Database,        modulo: null         },
   { href: "/painel/config",      label: "Configurações",icon: Settings,       modulo: null         },
+  { href: "/painel/empresa/cadastro", label: "Dados cadastrais", icon: ScrollText, modulo: null    },
+  { href: "/painel/empresa/contrato", label: "Contrato",     icon: ScrollText,  modulo: null      },
   { href: "/painel/lgpd",        label: "Privacidade", icon: ShieldCheck,     modulo: null         },
   { href: "/painel/suporte",     label: "Meus chamados", icon: MessageCircle, modulo: null         },
   { href: "/painel/ajuda",       label: "Ajuda",       icon: LifeBuoy,        modulo: null,        suporteOnly: true },
@@ -124,6 +127,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
   const { get: getModulo, recarregar: recarregarModulos } = useModulos();
   const [moduloBloqueado, setModuloBloqueado] = useState<ModuloStatus | null>(null);
   const [suporteLiberado, setSuporteLiberado] = useState(false);
+  const [modulosExtras, setModulosExtras] = useState<Record<string, "experimental"|"alacarte"|"gratuito">>({});
 
   // Verifica se empresa tem acesso ao Suporte (master libera por chave)
   useEffect(() => {
@@ -133,6 +137,17 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
     fetch("/api/painel/suporte/status", { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => { if (d.success) setSuporteLiberado(!!d.data.liberado); })
+      .catch(() => {});
+    // Módulos extras (pra coroinha)
+    fetch("/api/painel/empresa/modulos-extras", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.data)) {
+          const map: Record<string, "experimental"|"alacarte"|"gratuito"> = {};
+          for (const e of d.data) map[e.modulo] = e.tipo;
+          setModulosExtras(map);
+        }
+      })
       .catch(() => {});
   }, [empresa]);
 
@@ -246,6 +261,12 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
               );
             }
 
+            const extraTipo = item.modulo ? modulosExtras[item.modulo] : undefined;
+            const coroaTitle = extraTipo === "experimental" ? "👑 Experimental — brinde temporário"
+                              : extraTipo === "gratuito"     ? "👑 Cortesia — brinde permanente"
+                              : extraTipo === "alacarte"     ? "👑 À la carte — módulo extra contratado"
+                              : undefined;
+
             return (
               <Link
                 key={item.href}
@@ -259,7 +280,12 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
                 } : undefined}
               >
                 <Icon className="h-4 w-4 flex-shrink-0" />
-                {item.label}
+                <span className="flex-1 truncate">{item.label}</span>
+                {extraTipo && (
+                  <span title={coroaTitle}>
+                    <Crown className="h-3.5 w-3.5 flex-shrink-0 text-amber-400" />
+                  </span>
+                )}
               </Link>
             );
           })}

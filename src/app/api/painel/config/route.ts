@@ -19,8 +19,13 @@ export async function GET(req: NextRequest) {
   try {
     const empresa = await queryOne<Record<string, unknown>>(
       `SELECT
-         id, nome_fantasia, razao_social, cnpj, slug,
+         id, nome_fantasia, razao_social, razao_social_full, cnpj,
+         inscricao_estadual, inscricao_municipal, regime_tributario, slug,
          whatsapp, telefone, email,
+         endereco_cep, endereco_logradouro, endereco_numero,
+         endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf,
+         gestor_nome, gestor_cpf, gestor_rg, gestor_telefone, gestor_email,
+         cadastro_status, cadastro_motivo_rejeicao,
          cor_primaria, cor_secundaria, tema,
          logo_url, banner_url, descricao,
          horario_abertura, horario_fechamento, dias_funcionamento,
@@ -78,6 +83,12 @@ export async function PATCH(req: NextRequest) {
     "totem_tema", "totem_aceita_dinheiro", "delivery_aceita_fora_zona",
     "evolution_url", "evolution_key", "evolution_eventos",
     "n8n_url", "n8n_token", "n8n_eventos",
+    // Dados cadastrais (form de empresa)
+    "razao_social", "razao_social_full", "cnpj",
+    "inscricao_estadual", "inscricao_municipal", "regime_tributario",
+    "endereco_cep", "endereco_logradouro", "endereco_numero",
+    "endereco_complemento", "endereco_bairro", "endereco_cidade", "endereco_uf",
+    "gestor_nome", "gestor_cpf", "gestor_rg", "gestor_telefone", "gestor_email",
   ];
 
   const updates: Record<string, unknown> = {};

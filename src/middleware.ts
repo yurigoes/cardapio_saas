@@ -74,8 +74,37 @@ function isAuthRoute(pathname: string): boolean {
   return AUTH_ROUTES.some((r) => pathname.startsWith(r));
 }
 
+// Hosts que devem servir o site institucional (não a app)
+// Pode ser sobrescrito via env INSTITUCIONAL_HOSTS="a.com,b.com"
+const INSTITUCIONAL_HOSTS = new Set(
+  (process.env.INSTITUCIONAL_HOSTS || "tthreedigital.com.br,www.tthreedigital.com.br")
+    .split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+);
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // ─────────────────────────────────────────────
+  // Roteamento por host → site institucional
+  // tthreedigital.com.br  → /institucional/*  (público)
+  // app.tthreedigital.com.br → /* (comportamento atual)
+  //
+  // Login fica acessível em ambos os hosts.
+  // APIs públicas (/api/pub/*) também passam normais.
+  // ─────────────────────────────────────────────
+  const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
+  if (INSTITUCIONAL_HOSTS.has(host)
+      && !pathname.startsWith("/institucional")
+      && !pathname.startsWith("/api/")
+      && !pathname.startsWith("/_next")
+      && pathname !== "/login"
+      && pathname !== "/cadastro"
+      && pathname !== "/recuperar-senha"
+      && !pathname.startsWith("/k/")) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/institucional" + (pathname === "/" ? "" : pathname);
+    return NextResponse.rewrite(url);
+  }
 
   // ─────────────────────────────────────────────
   // Headers de segurança (aplicados a todas as respostas)

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Building2, Plus, Search, X, ChevronLeft, ChevronRight,
   ExternalLink, AlertTriangle, CheckCircle, Clock, Ban,
-  Settings, Check, Eye, EyeOff, Copy, RefreshCw, Wifi, WifiOff,
+  Settings, Check, Eye, EyeOff, Copy, RefreshCw, Wifi, WifiOff, Wrench,
 } from "lucide-react";
 import { MODULOS_REGISTRY } from "@/lib/modules/registry";
 import { confirmar, alertar } from "@/components/ui/ConfirmModal";
@@ -735,10 +735,26 @@ export default function EmpresasPage() {
                         <button
                           onClick={() => setEditEmpresa(empresa)}
                           className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-emerald-400 transition"
-                          title="Configurar empresa"
+                          title="Configurar (plano/status/módulos)"
                         >
                           <Settings className="h-4 w-4" />
                         </button>
+
+                        <a
+                          href={`/admin/empresas/${empresa.id}/editar`}
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-blue-400 transition"
+                          title="Edição completa (todos os campos cadastrais)"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </a>
+
+                        <a
+                          href={`/admin/empresas/${empresa.id}/gerenciar`}
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-amber-400 transition"
+                          title="Gerenciar (ações administrativas)"
+                        >
+                          <Wrench className="h-4 w-4" />
+                        </a>
                       </div>
                     </td>
                   </motion.tr>
