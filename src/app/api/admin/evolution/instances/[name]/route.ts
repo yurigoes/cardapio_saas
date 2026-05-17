@@ -9,18 +9,20 @@ import { queryOne } from "@/lib/db/client";
 import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
 import { decryptIfNeeded } from "@/lib/security/encrypt";
 
-async function getCfg() {
+async function getCfg(): Promise<{ url: string; apiKey: string } | { error: string }> {
   const cfg = await queryOne<{ url: string | null; api_key: string | null }>(
     `SELECT url, api_key FROM master_evolution_config WHERE id = 1`
   );
-  if (!cfg?.url || !cfg?.api_key) return null;
+  if (!cfg?.url) return { error: "URL não configurada" };
+  if (!cfg?.api_key) return { error: "API key não configurada" };
+  let url = cfg.url.trim().replace(/\/+$/, "").replace(/\/(manager|api)$/, "");
   let apiKey = cfg.api_key;
   if (apiKey.startsWith("encrypted:")) {
     const dec = decryptIfNeeded(apiKey.slice(10));
-    if (!dec) return null;
+    if (!dec) return { error: "Falha ao decifrar api_key" };
     apiKey = dec;
   }
-  return { url: cfg.url.replace(/\/+$/, ""), apiKey };
+  return { url, apiKey };
 }
 
 export async function GET(
@@ -32,7 +34,7 @@ export async function GET(
   if (auth.payload.role !== "master") return forbidden();
 
   const cfg = await getCfg();
-  if (!cfg) return badRequest("Configure URL + api_key primeiro");
+  if ("error" in cfg) return badRequest(cfg.error);
 
   try {
     const r = await fetch(`${cfg.url}/instance/connect/${params.name}`, {
@@ -55,7 +57,7 @@ export async function DELETE(
   if (auth.payload.role !== "master") return forbidden();
 
   const cfg = await getCfg();
-  if (!cfg) return badRequest("Configure primeiro");
+  if ("error" in cfg) return badRequest(cfg.error);
 
   try {
     // Tenta logout primeiro (encerra sessão WA)
