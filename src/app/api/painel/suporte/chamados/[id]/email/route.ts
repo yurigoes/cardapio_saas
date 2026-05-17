@@ -14,11 +14,15 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { queryOne } from "@/lib/db/client";
 import { ok, forbidden, badRequest, serverError, notFound } from "@/lib/utils/response";
 import { enfileirar } from "@/lib/email/smtp";
+import { wrapEmail } from "@/lib/suporte/email-wrapper";
+import { getSaasBranding } from "@/lib/branding/server";
 
 const schema = z.object({
-  para:    z.string().email().max(120),
-  assunto: z.string().min(3).max(200),
-  html:    z.string().min(10).max(50_000),
+  para:     z.string().email().max(120),
+  assunto:  z.string().min(3).max(200),
+  html:     z.string().min(10).max(50_000),
+  urgencia: z.enum(["normal", "info", "atencao", "urgente"]).optional().default("normal"),
+  titulo:   z.string().max(100).optional(),    // título do header (default: assunto do chamado)
 });
 
 export async function POST(
@@ -66,15 +70,25 @@ export async function POST(
       </p>
     `;
 
-    const htmlCompleto = `
-      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:20px">
-        ${body.html}
-        ${assinatura}
-        <p style="color:#aaa;font-size:10px;margin-top:30px">
-          Ref. chamado #${chamado.id.slice(0, 8)} — ${chamado.assunto}
-        </p>
-      </div>
-    `;
+    // Wrap email no template padrão com cor por urgência
+    const branding = await getSaasBranding();
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.tthreedigital.com.br";
+    const htmlCompleto = wrapEmail(
+      `${body.html}${assinatura}`,
+      body.urgencia,
+      {
+        saas_nome:     branding.nome,
+        saas_logo:     branding.logo_url,
+        saas_site:     branding.site,
+        saas_whatsapp: branding.whatsapp,
+        titulo:        body.titulo ?? chamado.assunto,
+        operador:      operador.nome,
+        cargo:         operador.cargo ?? undefined,
+        email_op:      fromEmail,
+        link:          `${baseUrl}/painel/suporte/chamados/${params.id}`,
+        ano:           new Date().getFullYear(),
+      }
+    );
 
     // Envia via fila SMTP
     let erro: string | null = null;

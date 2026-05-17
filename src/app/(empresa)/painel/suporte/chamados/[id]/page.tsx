@@ -65,13 +65,53 @@ export default function ChamadoPage() {
 
   // Modais
   const [modalEmail, setModalEmail]   = useState(false);
+  const [modalWA, setModalWA]         = useState(false);
   const [emailPara, setEmailPara]     = useState("");
   const [emailAss, setEmailAss]       = useState("");
   const [emailHtml, setEmailHtml]     = useState("");
+  const [emailUrgencia, setEmailUrg]  = useState<"normal" | "info" | "atencao" | "urgente">("normal");
   const [enviandoEmail, setEnviandoEmail] = useState(false);
 
+  // Vars dinâmicas (preencher campos do template antes de enviar)
+  const [contextoVars, setContextoVars] = useState<Record<string, string>>({});
+  const [varsManuais, setVarsManuais]   = useState<Record<string, string>>({});
+  const [templateOrigEmail, setTemplateOrigEmail] = useState<{ assunto: string; conteudo: string } | null>(null);
+  const [templateOrigWA, setTemplateOrigWA]       = useState<string | null>(null);
+
+  // Carrega contexto do chamado quando abre modal
+  useEffect(() => {
+    if (!modalEmail && !modalWA) return;
+    fetch(`/api/painel/suporte/chamados/${params.id}/contexto`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => { if (d.success) setContextoVars(d.data.variaveis ?? {}); })
+      .catch(() => {});
+    // eslint-disable-next-line
+  }, [modalEmail, modalWA]);
+
+  // Renderiza template substituindo {var} com contexto + manuais
+  function renderizar(s: string, extras: Record<string, string> = {}): string {
+    let out = s;
+    const all = { ...contextoVars, ...varsManuais, ...extras };
+    for (const [k, v] of Object.entries(all)) {
+      out = out.replace(new RegExp(`\\{${k}\\}`, "g"), v);
+    }
+    return out.replace(/\\n/g, "\n");
+  }
+
+  // Extrai variáveis usadas num texto
+  function extrairVars(s: string): string[] {
+    const matches = s.match(/\{(\w+)\}/g) || [];
+    return Array.from(new Set(matches.map(m => m.slice(1, -1))));
+  }
+
+  function gerarSenhaAleatoria(): string {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    let out = "";
+    for (let i = 0; i < 12; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  }
+
   const [modalVal, setModalVal]       = useState(false);
-  const [modalWA, setModalWA]         = useState(false);
   const [waMensagem, setWaMensagem]   = useState("");
   const [waTelefone, setWaTelefone]   = useState("");
   const [enviandoWA, setEnviandoWA]   = useState(false);
@@ -130,9 +170,12 @@ export default function ChamadoPage() {
     if (alvo === "email") {
       setEmailAss(t.assunto ?? "");
       setEmailHtml(t.conteudo);
+      setTemplateOrigEmail({ assunto: t.assunto ?? "", conteudo: t.conteudo });
     } else {
       setWaMensagem(t.conteudo);
+      setTemplateOrigWA(t.conteudo);
     }
+    setVarsManuais({}); // reset
   }
   const [valTipo, setValTipo]         = useState<"admin" | "usuario" | "ambos">("ambos");
   const [solicitandoVal, setSolVal]   = useState(false);
@@ -203,15 +246,22 @@ export default function ChamadoPage() {
     if (!emailPara || !emailAss || !emailHtml) return;
     setEnviandoEmail(true);
     try {
+      const assuntoFinal = renderizar(emailAss);
+      const htmlFinal    = renderizar(emailHtml);
       const r = await fetch(`/api/painel/suporte/chamados/${params.id}/email`, {
         method:  "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body:    JSON.stringify({ para: emailPara, assunto: emailAss, html: emailHtml }),
+        body:    JSON.stringify({
+          para: emailPara, assunto: assuntoFinal, html: htmlFinal,
+          urgencia: emailUrgencia,
+        }),
       });
       const d = await r.json();
       if (!r.ok || !d.success) throw new Error(d?.error || "Falha");
       setModalEmail(false);
       setEmailPara(""); setEmailAss(""); setEmailHtml("");
+      setVarsManuais({}); setTemplateOrigEmail(null);
+      await alertar({ titulo: "Email enviado!", mensagem: `Enviado pra ${d.data.para}`, tipo: "sucesso" });
       carregar();
     } catch (e) {
       await alertar({ titulo: "Erro", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
@@ -227,12 +277,13 @@ export default function ChamadoPage() {
     if (!ok) return;
     setEnviandoWA(true);
     try {
+      const mensagemFinal = waMensagem ? renderizar(waMensagem) : undefined;
       const r = await fetch(`/api/painel/suporte/chamados/${params.id}/whatsapp`, {
         method:  "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body:    JSON.stringify({
           telefone: waTelefone || undefined,
-          mensagem: waMensagem || undefined,
+          mensagem: mensagemFinal,
         }),
       });
       const d = await r.json();
@@ -624,14 +675,81 @@ export default function ChamadoPage() {
               placeholder="cliente@exemplo.com"
               className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
 
+            {/* Urgência (muda cor do template) */}
+            <label className="mb-1 block text-xs font-medium text-slate-400">Urgência (muda cor do header)</label>
+            <div className="mb-3 grid grid-cols-4 gap-1">
+              {([
+                { v: "normal" as const,  cor: "#10b981", lbl: "Normal" },
+                { v: "info" as const,    cor: "#3b82f6", lbl: "Info" },
+                { v: "atencao" as const, cor: "#f59e0b", lbl: "Atenção" },
+                { v: "urgente" as const, cor: "#ef4444", lbl: "Urgente" },
+              ]).map(u => (
+                <button key={u.v} onClick={() => setEmailUrg(u.v)}
+                  className={`rounded px-2 py-1.5 text-[11px] font-bold transition border ${
+                    emailUrgencia === u.v ? "text-white" : "text-slate-400 border-white/10 bg-slate-950 hover:bg-white/5"
+                  }`}
+                  style={emailUrgencia === u.v ? { background: u.cor, borderColor: u.cor } : undefined}>
+                  {u.lbl}
+                </button>
+              ))}
+            </div>
+
             <label className="mb-1 block text-xs font-medium text-slate-400">Assunto</label>
             <input value={emailAss} onChange={e => setEmailAss(e.target.value)}
               className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
 
             <label className="mb-1 block text-xs font-medium text-slate-400">Mensagem (HTML aceito)</label>
-            <textarea value={emailHtml} onChange={e => setEmailHtml(e.target.value)} rows={8}
+            <textarea value={emailHtml} onChange={e => setEmailHtml(e.target.value)} rows={6}
               placeholder="<p>Olá!</p>&#10;<p>Segue a resposta...</p>"
               className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white font-mono resize-none" />
+
+            {/* Campos pra preencher (vars do template que não são auto) */}
+            {(() => {
+              const todasVars = extrairVars(`${emailAss}\n${emailHtml}`);
+              const manuais = todasVars.filter(v => !(v in contextoVars));
+              if (manuais.length === 0) return null;
+              return (
+                <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <p className="text-[11px] text-amber-200 mb-2">
+                    ⚠ Preencha os campos do template antes de enviar:
+                  </p>
+                  <div className="space-y-2">
+                    {manuais.map(v => (
+                      <div key={v}>
+                        <label className="text-[10px] uppercase tracking-wider text-amber-300">{`{${v}}`}</label>
+                        <div className="flex gap-1">
+                          <input value={varsManuais[v] ?? ""}
+                            onChange={e => setVarsManuais({ ...varsManuais, [v]: e.target.value })}
+                            placeholder={v === "senha" ? "Senha gerada ou manual" :
+                                         v === "tempo" ? "Ex: 1 hora" :
+                                         v === "solucao" ? "Descreva a solução aplicada" :
+                                         v === "informacoes" ? "Lista do que precisa" : v}
+                            className="flex-1 rounded border border-white/10 bg-slate-950 px-2 py-1.5 text-xs text-white" />
+                          {v === "senha" && (
+                            <button type="button"
+                              onClick={() => setVarsManuais({ ...varsManuais, senha: gerarSenhaAleatoria() })}
+                              className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[10px] text-emerald-300 hover:bg-emerald-500/20 whitespace-nowrap">
+                              🎲 Gerar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Preview do email final */}
+            {emailHtml.length > 10 && (
+              <details className="mb-3">
+                <summary className="cursor-pointer text-[11px] text-slate-400 hover:text-white">
+                  👁 Ver preview do email
+                </summary>
+                <div className="mt-2 rounded border border-white/10 bg-white p-3 text-slate-900 max-h-60 overflow-auto text-sm"
+                  dangerouslySetInnerHTML={{ __html: renderizar(emailHtml) }} />
+              </details>
+            )}
 
             <div className="flex gap-2">
               <button onClick={() => setModalEmail(false)}
@@ -698,6 +816,44 @@ export default function ChamadoPage() {
             <textarea value={waMensagem} onChange={e => setWaMensagem(e.target.value)} rows={5}
               placeholder="Olá! Sobre seu chamado..."
               className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white resize-none" />
+
+            {/* Campos pra preencher (vars do template que não são auto) */}
+            {(() => {
+              const todasVars = extrairVars(waMensagem);
+              const manuais = todasVars.filter(v => !(v in contextoVars));
+              if (manuais.length === 0) return null;
+              return (
+                <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <p className="text-[11px] text-amber-200 mb-2">
+                    ⚠ Preencha os campos do template:
+                  </p>
+                  <div className="space-y-2">
+                    {manuais.map(v => (
+                      <div key={v}>
+                        <label className="text-[10px] uppercase tracking-wider text-amber-300">{`{${v}}`}</label>
+                        <input value={varsManuais[v] ?? ""}
+                          onChange={e => setVarsManuais({ ...varsManuais, [v]: e.target.value })}
+                          placeholder={v === "tempo" ? "Ex: 1 hora, 30 minutos" :
+                                       v === "informacoes" ? "Lista do que precisa" : v}
+                          className="w-full rounded border border-white/10 bg-slate-950 px-2 py-1.5 text-xs text-white" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Preview WhatsApp */}
+            {waMensagem.length > 3 && (
+              <details className="mb-3">
+                <summary className="cursor-pointer text-[11px] text-slate-400 hover:text-white">
+                  👁 Preview da mensagem
+                </summary>
+                <pre className="mt-2 rounded border border-white/10 bg-slate-950 p-3 text-xs text-slate-200 whitespace-pre-wrap font-sans">
+                  {renderizar(waMensagem)}
+                </pre>
+              </details>
+            )}
 
             <div className="flex gap-2">
               <button onClick={() => setModalWA(false)} disabled={enviandoWA}
