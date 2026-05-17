@@ -24,10 +24,47 @@ interface Cfg {
   ultimo_teste_msg: string | null;
 }
 
-interface Instance {
-  instance?: { instanceName?: string; status?: string; profileName?: string };
-  instanceName?: string;
-  status?: string;
+// Evolution API tem 3+ formatos dependendo da versão.
+// Aceita todos via 'unknown' + helpers de extração.
+type Instance = Record<string, unknown>;
+
+function extractName(i: Instance): string {
+  const inst = i.instance as Record<string, unknown> | undefined;
+  return String(
+    inst?.instanceName ??
+    inst?.name ??
+    i.instanceName ??
+    i.name ??
+    i.id ??
+    "(sem nome)"
+  );
+}
+
+function extractStatus(i: Instance): string {
+  const inst = i.instance as Record<string, unknown> | undefined;
+  const s = String(
+    inst?.status ??
+    inst?.state ??
+    inst?.connectionStatus ??
+    i.status ??
+    i.state ??
+    i.connectionStatus ??
+    "?"
+  ).toLowerCase();
+  return s;
+}
+
+function extractProfile(i: Instance): string | null {
+  const inst = i.instance as Record<string, unknown> | undefined;
+  const owner = inst?.owner ?? inst?.ownerJid ?? i.owner ?? i.ownerJid;
+  const profile = inst?.profileName ?? inst?.profilePictureUrl ?? i.profileName;
+  if (profile) return String(profile);
+  if (owner) return String(owner).split("@")[0];
+  return null;
+}
+
+function isConectado(status: string): boolean {
+  return ["open", "connected", "online"].includes(status.toLowerCase());
 }
 
 function authH(): HeadersInit {
@@ -69,8 +106,12 @@ export default function EvolutionMasterPage() {
       const r = await fetch("/api/admin/evolution/instances", { headers: authH(), cache: "no-store" });
       const d = await r.json();
       if (d.success) {
-        const list = Array.isArray(d.data.instances) ? d.data.instances :
-                     d.data.instances?.instances ?? [];
+        const raw = d.data.instances;
+        // Evolution pode devolver array OU { instances: [...] } OU { data: [...] }
+        const list = Array.isArray(raw)        ? raw :
+                     Array.isArray(raw?.instances) ? raw.instances :
+                     Array.isArray(raw?.data)   ? raw.data :
+                     [];
         setInstances(list);
       }
     } catch {/* */}
@@ -133,9 +174,15 @@ export default function EvolutionMasterPage() {
       });
       const d = await r.json();
       if (!r.ok || !d.success) throw new Error(d?.error || "Falha");
-      // Pega QR
-      const qrData = d.data?.qrcode?.base64 || d.data?.instance?.qrcode || d.data?.base64;
-      setQrModal({ name: novaInstName, qr: qrData });
+      // Pega QR da resposta de criação OU busca via connect
+      let qr = extractQr(d);
+      if (!qr) {
+        // Tenta connect pra forçar gerar QR
+        const r2 = await fetch(`/api/admin/evolution/instances/${novaInstName}`, { headers: authH() });
+        const d2 = await r2.json();
+        qr = extractQr(d2);
+      }
+      setQrModal({ name: novaInstName, qr });
       setNovaInstName("");
       carregarInstances();
     } catch (e) {
@@ -143,15 +190,49 @@ export default function EvolutionMasterPage() {
     } finally { setCriando(false); }
   }
 
+  function extractQr(d: unknown): string | null {
+    // Evolution retorna QR em vários formatos:
+    // d.data.base64, d.data.qrcode.base64, d.data.qrcode (string), d.data.code
+    if (!d || typeof d !== "object") return null;
+    const root = (d as { data?: unknown }).data ?? d;
+    if (!root || typeof root !== "object") return null;
+    const r = root as Record<string, unknown>;
+
+    if (typeof r.base64 === "string") return r.base64;
+    if (typeof r.code   === "string" && r.code.startsWith("data:")) return r.code;
+    const qrField = r.qrcode;
+    if (typeof qrField === "string") return qrField;
+    if (qrField && typeof qrField === "object") {
+      const q = qrField as Record<string, unknown>;
+      if (typeof q.base64 === "string") return q.base64;
+      if (typeof q.code   === "string") return q.code;
+    }
+    return null;
+  }
+
   async function abrirQR(name: string) {
     setQrModal({ name, qr: null });
     try {
       const r = await fetch(`/api/admin/evolution/instances/${name}`, { headers: authH() });
       const d = await r.json();
-      const qr = d.data?.base64 || d.data?.qrcode?.base64 || d.data?.qrcode;
-      setQrModal({ name, qr: typeof qr === "string" ? qr : null });
+      if (!r.ok || !d.success) {
+        throw new Error(d?.error || "Não foi possível buscar QR");
+      }
+      const qr = extractQr(d);
+      if (!qr) {
+        await alertar({
+          titulo: "QR não disponível",
+          mensagem: "Evolution não retornou QR code. Instância já pode estar conectada — atualize a lista.",
+          tipo: "alerta",
+        });
+        setQrModal(null);
+        carregarInstances();
+        return;
+      }
+      setQrModal({ name, qr });
     } catch (e) {
-      await alertar({ titulo: "Erro", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
+      setQrModal(null);
+      await alertar({ titulo: "Erro buscando QR", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
     }
   }
 
@@ -273,25 +354,36 @@ export default function EvolutionMasterPage() {
         ) : (
           <div className="space-y-1">
             {instances.map((i, idx) => {
-              const name   = i.instance?.instanceName ?? i.instanceName ?? "?";
-              const status = i.instance?.status ?? i.status ?? "?";
-              const profile = i.instance?.profileName;
-              const conectado = status === "open" || status === "connected";
+              const name    = extractName(i);
+              const status  = extractStatus(i);
+              const profile = extractProfile(i);
+              const conectado = isConectado(status);
+              const statusLabel = status === "?" ? "desconhecido" :
+                                  conectado ? "conectado" :
+                                  status === "connecting" ? "conectando" :
+                                  status === "close" || status === "closed" ? "desconectado" :
+                                  status;
               return (
                 <div key={idx} className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950 p-2.5">
-                  <div className={`h-2 w-2 rounded-full ${conectado ? "bg-emerald-500" : "bg-amber-500"}`} />
+                  <div className={`h-2 w-2 rounded-full flex-shrink-0 ${
+                    conectado ? "bg-emerald-500" :
+                    status === "connecting" ? "bg-blue-500 animate-pulse" :
+                    "bg-amber-500"
+                  }`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white truncate">{name}</p>
-                    <p className="text-[10px] text-slate-500">{status} {profile && `· ${profile}`}</p>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      {statusLabel} {profile && `· ${profile}`}
+                    </p>
                   </div>
                   {!conectado && (
                     <button onClick={() => abrirQR(name)}
-                      className="flex items-center gap-1 rounded border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-[10px] text-blue-300 hover:bg-blue-500/20">
+                      className="flex items-center gap-1 rounded border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-[10px] text-blue-300 hover:bg-blue-500/20 flex-shrink-0">
                       <QrCode className="h-3 w-3" /> QR
                     </button>
                   )}
                   <button onClick={() => deletarInstance(name)}
-                    className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-300 hover:bg-red-500/20">
+                    className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-300 hover:bg-red-500/20 flex-shrink-0">
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
