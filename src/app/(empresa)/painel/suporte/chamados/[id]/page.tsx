@@ -140,6 +140,54 @@ export default function ChamadoPage() {
   const [codigo, setCodigo]           = useState("");
   const [codigoTipo, setCodigoTipo]   = useState<"admin" | "usuario">("usuario");
 
+  // Modal de código (substituído inline pelo modal estilizado)
+  const [modalCodigo, setModalCodigo] = useState<{
+    pendentes: Array<{ tipo: string; expira_em: string }>;
+    expirados: Array<{ tipo: string }>;
+  } | null>(null);
+  const [reenviando, setReenviando]   = useState(false);
+
+  async function abrirModalCodigo() {
+    // Busca pendentes atuais antes de abrir
+    try {
+      const r = await fetch(`/api/painel/suporte/chamados/${params.id}/validacao`, { headers: authHeaders() });
+      const d = await r.json();
+      if (d.success) {
+        setModalCodigo({
+          pendentes: d.data.pendentes_ativas ?? [],
+          expirados: d.data.pendentes_expiradas ?? [],
+        });
+        // Se há pendente, escolhe tipo automaticamente
+        const ativos = d.data.pendentes_ativas ?? [];
+        if (ativos.length > 0) setCodigoTipo(ativos[0].tipo as "admin" | "usuario");
+      }
+    } catch {/* */}
+  }
+
+  async function reenviarCodigos(tipo: "admin" | "usuario" | "ambos") {
+    setReenviando(true);
+    try {
+      const r = await fetch(`/api/painel/suporte/chamados/${params.id}/validacao`, {
+        method:  "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body:    JSON.stringify({ tipo, reenviar: true }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.success) throw new Error(d?.error || "Falha");
+      const falhas = d.data.resumo.filter((x: { status: string }) => x.status === "falha");
+      if (falhas.length > 0) {
+        await alertar({ titulo: "Falhas no reenvio",
+          mensagem: falhas.map((f: { tipo: string; erro: string }) => `${f.tipo}: ${f.erro}`).join("\n"),
+          tipo: "perigo" });
+      } else {
+        await alertar({ titulo: "Reenviado", mensagem: "Códigos enviados via WhatsApp", tipo: "sucesso" });
+      }
+      abrirModalCodigo();
+    } catch (e) {
+      await alertar({ titulo: "Erro", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
+    } finally { setReenviando(false); }
+  }
+
   // Detecta role: master ou suporte = agente
   useEffect(() => {
     fetch("/api/auth/me", { headers: authHeaders() })
@@ -203,18 +251,22 @@ export default function ChamadoPage() {
       const r = await fetch(`/api/painel/suporte/chamados/${params.id}/validacao`, {
         method:  "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body:    JSON.stringify({ tipo: valTipo }),
+        body:    JSON.stringify({ tipo: valTipo, reenviar: false }),
       });
       const d = await r.json();
       if (!r.ok || !d.success) throw new Error(d?.error || "Falha");
-      const fail = (d.data.solicitadas as Array<{ ok: boolean; tipo: string; motivo?: string }>)
-        .filter(x => !x.ok);
+      const resumo = d.data.resumo as Array<{ tipo: string; status: string; erro?: string }>;
+      const fail = resumo.filter(x => x.status === "falha");
       if (fail.length > 0) {
-        await alertar({ titulo: "Algumas falharam", mensagem: fail.map(f => `${f.tipo}: ${f.motivo}`).join("\n"), tipo: "alerta" });
-      } else {
-        await alertar({ titulo: "Códigos enviados", mensagem: "Códigos enviados via WhatsApp", tipo: "sucesso" });
+        await alertar({
+          titulo: "Algumas falharam",
+          mensagem: fail.map(f => `${f.tipo}: ${f.erro ?? "?"}`).join("\n"),
+          tipo: "perigo",
+        });
       }
       setModalVal(false);
+      // Sempre abre modal de código (mostra pendentes ativos OU recém-enviados)
+      abrirModalCodigo();
       carregar();
     } catch (e) {
       await alertar({ titulo: "Erro", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
@@ -232,6 +284,8 @@ export default function ChamadoPage() {
       const d = await r.json();
       if (!r.ok || !d.success) throw new Error(d?.error || "Inválido");
       setCodigo("");
+      setModalCodigo(null);
+      await alertar({ titulo: "Validado ✓", mensagem: "Código confirmado com sucesso", tipo: "sucesso" });
       carregar();
     } catch (e) {
       await alertar({ titulo: "Erro", mensagem: e instanceof Error ? e.message : "Erro", tipo: "perigo" });
@@ -390,7 +444,16 @@ export default function ChamadoPage() {
               className="flex items-center gap-1 rounded border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-green-300 hover:bg-green-500/20">
               <MessageCircle className="h-3 w-3" /> WhatsApp
             </button>
-            <button onClick={() => setModalVal(true)}
+            <button onClick={async () => {
+                // Se já há pendentes ativos: abre modal de código (não modal de solicitar)
+                const r = await fetch(`/api/painel/suporte/chamados/${params.id}/validacao`, { headers: authHeaders() });
+                const d = await r.json();
+                if (d.success && (d.data.pendentes_ativas ?? []).length > 0) {
+                  abrirModalCodigo();
+                } else {
+                  setModalVal(true);
+                }
+              }}
               className="flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300 hover:bg-emerald-500/20">
               <ShieldCheck className="h-3 w-3" /> 2FA
             </button>
@@ -398,22 +461,14 @@ export default function ChamadoPage() {
         </div>
       )}
 
-      {/* Cliente: input de código de validação se houver pendente */}
+      {/* Cliente: barra discreta se há códigos pendentes */}
       {!isMaster && podeEnviar && (
         <div className="border-b border-white/10 bg-amber-500/5 px-6 py-2 flex items-center gap-2 text-xs">
           <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
           <span className="text-slate-400">Recebeu código por WhatsApp?</span>
-          <select value={codigoTipo} onChange={e => setCodigoTipo(e.target.value as "admin" | "usuario")}
-            className="rounded border border-white/10 bg-slate-900 px-2 py-0.5 text-slate-300">
-            <option value="usuario">Eu (4 dígitos)</option>
-            <option value="admin">Admin (6 dígitos)</option>
-          </select>
-          <input value={codigo} onChange={e => setCodigo(e.target.value.replace(/\D/g, ""))}
-            placeholder="000000" maxLength={6}
-            className="w-20 rounded border border-white/10 bg-slate-900 px-2 py-0.5 text-white text-center font-mono" />
-          <button onClick={confirmarCodigo} disabled={codigo.length < 4}
-            className="rounded bg-amber-500 px-2 py-0.5 font-bold text-slate-950 disabled:opacity-50">
-            Validar
+          <button onClick={abrirModalCodigo}
+            className="rounded bg-amber-500 px-3 py-1 font-bold text-slate-950 hover:bg-amber-400">
+            Inserir código
           </button>
         </div>
       )}
@@ -655,6 +710,98 @@ export default function ChamadoPage() {
                 Enviar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: inserir código de validação */}
+      {modalCodigo && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setModalCodigo(null); }}>
+          <div className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-slate-900 p-6">
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-amber-400" /> Validação 2FA
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Cole o código de {modalCodigo.pendentes.length > 0 ? "verificação" : "validação"} recebido por WhatsApp.
+                </p>
+              </div>
+              <button onClick={() => setModalCodigo(null)} className="text-slate-500 hover:text-white" title="Minimizar">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Pendentes válidos */}
+            {modalCodigo.pendentes.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {modalCodigo.pendentes.map(p => {
+                  const expiraEm = new Date(p.expira_em).getTime();
+                  const minutos = Math.max(0, Math.ceil((expiraEm - Date.now()) / 60000));
+                  return (
+                    <div key={p.tipo} className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-xs flex items-center justify-between">
+                      <span className="text-amber-200">
+                        ⏱ {p.tipo === "admin" ? "Admin (6 dígitos)" : "Usuário (4 dígitos)"} — expira em {minutos} min
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Expirados */}
+            {modalCodigo.expirados.length > 0 && (
+              <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-200">
+                ❌ Códigos expirados: {modalCodigo.expirados.map(e => e.tipo).join(", ")}
+                <button onClick={() => reenviarCodigos(modalCodigo.expirados.length > 1 ? "ambos" : modalCodigo.expirados[0].tipo as "admin" | "usuario")}
+                  disabled={reenviando}
+                  className="ml-2 underline hover:text-red-100 disabled:opacity-50">
+                  Reenviar
+                </button>
+              </div>
+            )}
+
+            {modalCodigo.pendentes.length > 0 && (
+              <>
+                <label className="mb-1 block text-xs font-medium text-slate-400">Tipo do código</label>
+                <select value={codigoTipo} onChange={e => setCodigoTipo(e.target.value as "admin" | "usuario")}
+                  className="mb-3 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white">
+                  {modalCodigo.pendentes.map(p => (
+                    <option key={p.tipo} value={p.tipo}>
+                      {p.tipo === "admin" ? "Admin (6 dígitos)" : "Usuário (4 dígitos)"}
+                    </option>
+                  ))}
+                </select>
+
+                <label className="mb-1 block text-xs font-medium text-slate-400">Código</label>
+                <input value={codigo} onChange={e => setCodigo(e.target.value.replace(/\D/g, ""))}
+                  maxLength={6} placeholder="000000" autoFocus
+                  onKeyDown={e => { if (e.key === "Enter" && codigo.length >= 4) confirmarCodigo(); }}
+                  className="mb-4 w-full rounded-lg border border-amber-500/30 bg-slate-950 px-3 py-3 text-center text-2xl font-mono tracking-widest text-white focus:border-amber-500/60 focus:outline-none" />
+
+                <div className="flex gap-2">
+                  <button onClick={() => setModalCodigo(null)}
+                    className="flex-1 rounded-lg border border-white/10 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5">
+                    Minimizar
+                  </button>
+                  <button onClick={() => reenviarCodigos(codigoTipo)} disabled={reenviando}
+                    className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2.5 text-xs text-blue-300 hover:bg-blue-500/20 disabled:opacity-50">
+                    {reenviando ? <Loader2 className="h-4 w-4 animate-spin" /> : "↻"}
+                  </button>
+                  <button onClick={confirmarCodigo} disabled={codigo.length < 4}
+                    className="flex-1 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-400 disabled:opacity-50">
+                    Validar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {modalCodigo.pendentes.length === 0 && modalCodigo.expirados.length === 0 && (
+              <p className="text-sm text-slate-500 text-center py-6">
+                Nenhum código pendente. Peça pro suporte solicitar validação.
+              </p>
+            )}
           </div>
         </div>
       )}

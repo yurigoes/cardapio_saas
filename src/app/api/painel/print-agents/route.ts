@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   if (isAuthError(auth)) return auth;
   if (!ALLOWED.includes(auth.payload.role)) return forbidden();
   const { empresaId } = auth.payload;
-  if (!empresaId) return forbidden();
+  if (!empresaId) return ok({ agents: [] });
 
   try {
     const rows = await query(

@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
   const { empresaId } = auth.payload;
-  if (!empresaId) return forbidden();
+  // Master/suporte sem empresa: retorna vazio (não tem pedidos pra "atender")
+  if (!empresaId) return ok({ pedidos: [] });
 
   try {
     const rows = await query<{

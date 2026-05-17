@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
   const { empresaId } = auth.payload;
-  if (!empresaId) return forbidden("Master deve impersonar uma empresa");
+  if (!empresaId) return ok({ modulos: [] });
 
   try {
     const empresa = await queryOne<EmpresaRow>(
