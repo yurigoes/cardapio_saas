@@ -189,6 +189,11 @@ export async function enfileirar(params: {
     ]
   );
 
+  // Dispara processamento imediato em background (não bloqueia)
+  // Cron continua processando os atrasados a cada 5min.
+  if (job?.id) {
+    processarQueue(5).catch(err => console.warn("[smtp/processarQueue]", err));
+  }
   return { jobId: job?.id ?? null };
 }
 

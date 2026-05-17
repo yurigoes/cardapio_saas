@@ -91,30 +91,45 @@ export async function POST(
       empresa:   ctx.empresa_nome ?? "",
     });
 
-    // Envia via Evolution
-    const evoUrl = ctx.empresa_evo_url || process.env.EVOLUTION_PUBLIC_URL || process.env.EVOLUTION_API_URL;
-    const evoKey = ctx.empresa_evo_key || process.env.EVOLUTION_API_KEY;
-    const slug   = ctx.empresa_slug || "default";
+    // Envia via Master Evolution (suporte é serviço do SaaS, não da empresa)
+    // Importa helper master pra reusar config centralizada
+    const { decryptIfNeeded } = await import("@/lib/security/encrypt");
+    const master = await queryOne<{ url: string | null; api_key: string | null; instance_name: string | null }>(
+      `SELECT url, api_key, instance_name FROM master_evolution_config WHERE id = 1 AND ativo = true`
+    );
 
-    if (!evoUrl || !evoKey) {
-      return serverError("Evolution não configurado (nem por empresa nem global)");
+    if (!master?.url || !master?.api_key || !master?.instance_name) {
+      return serverError("Master Evolution não configurado. Configure em /admin/integracoes/evolution");
     }
 
+    let apiKey = master.api_key;
+    if (apiKey.startsWith("encrypted:")) {
+      const dec = decryptIfNeeded(apiKey.slice(10));
+      if (!dec) return serverError("Falha ao decifrar Master Evolution api_key");
+      apiKey = dec;
+    }
+
+    const evoUrl = master.url.trim().replace(/\/+$/, "").replace(/\/(manager|api)$/, "");
     const number = telefone.replace(/\D/g, "");
     const fullNumber = number.startsWith("55") ? number : `55${number}`;
 
-    const r = await fetch(`${evoUrl.replace(/\/+$/, "")}/message/sendText/${slug}`, {
+    const r = await fetch(`${evoUrl}/message/sendText/${master.instance_name}`, {
       method:  "POST",
-      headers: { "Content-Type": "application/json", "apikey": evoKey },
+      headers: { "Content-Type": "application/json", "apikey": apiKey },
       body:    JSON.stringify({ number: fullNumber, text: texto }),
-      signal:  AbortSignal.timeout(10_000),
+      signal:  AbortSignal.timeout(15_000),
     }).catch((err: Error) => {
-      console.warn("[Suporte/WhatsApp]", err.message);
+      console.warn("[Suporte/WhatsApp] rede:", err.message);
       return null;
     });
 
-    if (!r || !r.ok) {
-      return serverError(`Evolution retornou ${r?.status ?? "sem resposta"}`);
+    if (!r) {
+      return serverError("Sem resposta da Evolution (timeout ou rede)");
+    }
+    if (!r.ok) {
+      const body = (await r.text()).slice(0, 200);
+      console.error("[Suporte/WhatsApp] Evolution HTTP", r.status, body);
+      return serverError(`Evolution HTTP ${r.status}: ${body}`);
     }
 
     // Mensagem 'sistema' no chat
