@@ -476,14 +476,14 @@ export default function PlanosPage() {
                   ) : (
                     <div className="space-y-2">
                       {form.modulos_alacarte.map((m, idx) => {
-                        const opt = MODULOS_REGISTRY[m.id];
+                        const opt = MODULOS_REGISTRY[m.id as keyof typeof MODULOS_REGISTRY];
                         return (
                           <div key={idx} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-2">
                             <select
                               value={m.id}
                               onChange={e => {
                                 const novoId = e.target.value;
-                                const meta = MODULOS_REGISTRY[novoId];
+                                const meta = MODULOS_REGISTRY[novoId as keyof typeof MODULOS_REGISTRY];
                                 setForm(f => ({
                                   ...f,
                                   modulos_alacarte: f.modulos_alacarte.map((x, i) =>

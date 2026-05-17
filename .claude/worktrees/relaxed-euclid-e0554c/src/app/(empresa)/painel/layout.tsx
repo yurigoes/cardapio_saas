@@ -6,38 +6,75 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Bike, DollarSign,
   Package, Users, Settings, LogOut, ChefHat, Bell, Tag, BarChart3,
-  MapPin, CreditCard, Zap, LayoutGrid,
+  MapPin, CreditCard, Zap, LayoutGrid, Tv2, Wallet, Activity, ScrollText,
+  Receipt, Sun, Moon, Database, Key, Printer, ShieldCheck, Mail, Server, LifeBuoy, MessageCircle,
 } from "lucide-react";
+import { applyBrandColors } from "@/lib/theme";
+import { useTheme } from "@/lib/hooks/useTheme";
+import { PwaInstallPrompt } from "@/components/painel/PwaInstallPrompt";
+import { PrintAgentStatus } from "@/components/painel/PrintAgentStatus";
+import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
+import { ModuloLockedModal } from "@/components/painel/ModuloLockedModal";
+import { useModulos, type ModuloStatus } from "@/lib/hooks/useModulos";
+import { Lock } from "lucide-react";
+import { VersaoFooter } from "@/components/VersaoFooter";
+import { IfoodPendingPopup } from "@/components/IfoodPendingPopup";
+import { AgentGate } from "@/components/AgentGate";
+import { ChatBubble } from "@/components/suporte/ChatBubble";
+import { Crown } from "lucide-react";
 
 interface Empresa {
-  nome_fantasia: string;
-  logo_url:      string | null;
+  nome_fantasia:  string;
+  logo_url:       string | null;
   modulos_ativos: string[];
+  cor_primaria:   string | null;
+  cor_secundaria: string | null;
 }
 
 const ALL_NAV = [
   { href: "/hub",                label: "Módulos",     icon: LayoutGrid,      modulo: null         },
   { href: "/painel",             label: "Dashboard",   icon: LayoutDashboard, modulo: null         },
   { href: "/painel/pedidos",     label: "Pedidos",     icon: ShoppingBag,     modulo: null         },
+  { href: "/painel/pdv",         label: "PDV / Balcão", icon: Wallet,         modulo: "balcao"     },
   { href: "/painel/cardapio",    label: "Cardápio",    icon: UtensilsCrossed, modulo: null         },
   { href: "/painel/mesas",       label: "Mesas",       icon: MapPin,          modulo: "mesa"       },
   { href: "/painel/delivery",    label: "Delivery",    icon: Bike,            modulo: "delivery"   },
   { href: "/painel/cozinha",     label: "Cozinha",     icon: ChefHat,         modulo: "cozinha_kds"},
+  { href: "/painel/painel-tv",  label: "Painel TV",   icon: Tv2,             modulo: "cozinha_kds"},
+  { href: "/painel/kiosk",      label: "Painéis kiosk", icon: Tv2,           modulo: null         },
+  { href: "/painel/caixa",       label: "Caixa",       icon: Wallet,          modulo: "financeiro" },
   { href: "/painel/financeiro",  label: "Financeiro",  icon: DollarSign,      modulo: "financeiro" },
+  { href: "/painel/financeiro/mensalidades", label: "Mensalidades", icon: DollarSign, modulo: null },
   { href: "/painel/estoque",     label: "Estoque",     icon: Package,         modulo: "estoque"    },
   { href: "/painel/cupons",      label: "Cupons",      icon: Tag,             modulo: "cupom"      },
   { href: "/painel/clientes",    label: "Clientes",    icon: Users,           modulo: "crm"        },
+  { href: "/painel/vales",       label: "Vales",       icon: Wallet,          modulo: "crm"        },
+  { href: "/painel/mala-direta", label: "Mala direta", icon: Mail,            modulo: "crm"        },
   { href: "/painel/relatorios",  label: "Relatórios",  icon: BarChart3,       modulo: "relatorios_basicos" },
-  { href: "/painel/gateways",    label: "Pagamentos",  icon: CreditCard,      modulo: null         },
+  { href: "/painel/gateways",    label: "Gateways",    icon: CreditCard,      modulo: null         },
+  { href: "/painel/pagamentos",  label: "Cobranças",   icon: Receipt,         modulo: null         },
   { href: "/painel/integracoes", label: "Integrações", icon: Zap,             modulo: null         },
+  { href: "/painel/ifood",       label: "iFood",       icon: Zap,             modulo: "ifood"      },
+  { href: "/painel/api-keys",    label: "API Keys",    icon: Key,             modulo: null         },
+  { href: "/painel/impressoras", label: "Impressoras", icon: Printer,         modulo: null         },
   { href: "/painel/usuarios",    label: "Usuários",    icon: Users,           modulo: null         },
+  { href: "/painel/saude",       label: "Saúde",       icon: Activity,        modulo: null         },
+  { href: "/painel/maquinas",    label: "Máquinas",    icon: Server,          modulo: null         },
+  { href: "/painel/auditoria",   label: "Auditoria",   icon: ScrollText,      modulo: null         },
+  { href: "/painel/backup",      label: "Backup",      icon: Database,        modulo: null         },
   { href: "/painel/config",      label: "Configurações",icon: Settings,       modulo: null         },
+  { href: "/painel/empresa/cadastro", label: "Dados cadastrais", icon: ScrollText, modulo: null    },
+  { href: "/painel/empresa/contrato", label: "Contrato",     icon: ScrollText,  modulo: null      },
+  { href: "/painel/lgpd",        label: "Privacidade", icon: ShieldCheck,     modulo: null         },
+  { href: "/painel/suporte",     label: "Meus chamados", icon: MessageCircle, modulo: null         },
+  { href: "/painel/ajuda",       label: "Ajuda",       icon: LifeBuoy,        modulo: null,        suporteOnly: true },
 ];
 
 export default function EmpresaLayout({ children }: { children: React.ReactNode }) {
   const pathname          = usePathname();
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [loading, setLoading] = useState(true);
+  const theme = useTheme();
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -48,8 +85,31 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
       .then((data) => {
         if (!data.success) { window.location.href = "/login"; return; }
         const role = data.data?.usuario?.role;
-        if (role === "master") { window.location.href = "/admin"; return; }
-        setEmpresa(data.data?.empresa);
+        setUserRoleState(role ?? "");
+        // Master/suporte podem acessar páginas do painel diretamente
+        // (ex: /painel/suporte/chamados pra atender clientes).
+        // Redireciona pro /admin SÓ se entrar na raiz /painel sem path.
+        const path = typeof window !== "undefined" ? window.location.pathname : "";
+        const ehRaizPainel = path === "/painel" || path === "/painel/";
+        if ((role === "master" || role === "suporte") && ehRaizPainel) {
+          window.location.href = "/admin"; return;
+        }
+        // Master/suporte sem empresa: monta empresa fake pra layout não quebrar
+        const empresaData = data.data?.empresa ?? (
+          (role === "master" || role === "suporte")
+            ? { nome_fantasia: role === "master" ? "Master" : "Suporte",
+                logo_url: null, modulos_ativos: [],
+                cor_primaria: null, cor_secundaria: null }
+            : null
+        );
+        setEmpresa(empresaData);
+
+        // Apply brand colors as CSS variables (incl. --color-primary-rgb p/ Tailwind brand)
+        applyBrandColors({
+          primary:   data.data?.empresa?.cor_primaria,
+          secondary: data.data?.empresa?.cor_secundaria,
+        });
+
         setLoading(false);
       })
       .catch(() => (window.location.href = "/login"));
@@ -63,16 +123,143 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
     }).finally(() => { localStorage.clear(); window.location.href = "/login"; });
   }
 
-  const modulos = empresa?.modulos_ativos ?? [];
+  const modulosEmpresa = empresa?.modulos_ativos ?? [];
+  const saasBranding = useSaasBranding();
+  const { get: getModulo, recarregar: recarregarModulos } = useModulos();
+  const [moduloBloqueado, setModuloBloqueado] = useState<ModuloStatus | null>(null);
+  const [suporteLiberado, setSuporteLiberado] = useState(false);
+  const [modulosExtras, setModulosExtras] = useState<Record<string, "experimental"|"alacarte"|"gratuito">>({});
+  const [bloqueioInad, setBloqueioInad] = useState<{ bloqueada: boolean; motivo: string | null; total_vencido: number } | null>(null);
+  const [userRole, setUserRoleState] = useState<string>("");
 
-  const navItems = ALL_NAV.filter(
-    (item) => item.modulo === null || modulos.includes(item.modulo)
-  );
+  // Verifica se empresa tem acesso ao Suporte (master libera por chave)
+  useEffect(() => {
+    if (!empresa) return;
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    fetch("/api/painel/suporte/status", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (d.success) setSuporteLiberado(!!d.data.liberado); })
+      .catch(() => {});
+    // Bloqueio por inadimplência
+    fetch("/api/painel/bloqueio", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (d.success) setBloqueioInad(d.data); })
+      .catch(() => {});
+    // Módulos extras (pra coroinha)
+    fetch("/api/painel/empresa/modulos-extras", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.data)) {
+          const map: Record<string, "experimental"|"alacarte"|"gratuito"> = {};
+          for (const e of d.data) map[e.modulo] = e.tipo;
+          setModulosExtras(map);
+        }
+      })
+      .catch(() => {});
+  }, [empresa]);
+
+  // Mostra TODOS os itens; bloqueia visualmente os que não estão no plano.
+  // Itens com 'suporteOnly' só aparecem se empresa tem acesso liberado.
+  const navItems = ALL_NAV
+    .filter(item => !(item as { suporteOnly?: boolean }).suporteOnly || suporteLiberado)
+    .map(item => {
+      const incluso = item.modulo === null || modulosEmpresa.includes(item.modulo);
+      const moduloStatus = item.modulo ? getModulo(item.modulo) : undefined;
+      const ativo = incluso || (moduloStatus?.ativo ?? false);
+      return { ...item, locked: !ativo, moduloStatus };
+    });
+
+  // Injeta manifest do PWA admin no head (só dentro de /painel)
+  // ATENÇÃO: hook DEVE ficar antes de qualquer early return (regras de hooks)
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const linkId = "pwa-admin-manifest";
+    if (!document.getElementById(linkId)) {
+      const link = document.createElement("link");
+      link.id   = linkId;
+      link.rel  = "manifest";
+      link.href = "/manifest-admin.json";
+      document.head.appendChild(link);
+    }
+    const metaId = "pwa-theme-color";
+    if (!document.getElementById(metaId)) {
+      const meta = document.createElement("meta");
+      meta.id      = metaId;
+      meta.name    = "theme-color";
+      meta.content = "#10b981";
+      document.head.appendChild(meta);
+    }
+    // Service Worker (necessário pra installable)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistration("/sw-admin.js").then(reg => {
+        if (!reg) navigator.serviceWorker.register("/sw-admin.js", { scope: "/painel" }).catch(() => {});
+      });
+    }
+  }, []);
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-2"
+          style={{
+            borderColor:    "var(--color-primary, #10b981)",
+            borderTopColor: "transparent",
+          }}
+        />
+      </div>
+    );
+  }
+
+  // PDV é full-screen — sem sidebar visível
+  const fullScreenRoutes = ["/painel/pdv"];
+  if (fullScreenRoutes.some(r => pathname.startsWith(r))) {
+    return <>{children}<PwaInstallPrompt /></>;
+  }
+
+  // ─── Bloqueio por inadimplência ───────────────────────────────
+  // Rotas SEMPRE acessíveis mesmo bloqueado (pagamento, logout, contrato)
+  const ROTAS_LIVRES_BLOQUEIO = [
+    "/painel/financeiro/mensalidades",
+    "/painel/pagamentos",
+    "/painel/empresa/contrato",
+    "/painel/empresa/cadastro",
+  ];
+  const isRotaLivre = ROTAS_LIVRES_BLOQUEIO.some(r => pathname.startsWith(r));
+
+  if (bloqueioInad?.bloqueada && !isRotaLivre) {
+    const isAdmin = userRole === "master" || userRole === "admin"
+                 || userRole === "financeiro";
+    // Admin: redireciona pra mensalidades pagar
+    if (isAdmin) {
+      if (typeof window !== "undefined") {
+        window.location.href = "/painel/financeiro/mensalidades";
+      }
+      return null;
+    }
+    // Operador comum: tela de bloqueio
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
+        <div className="max-w-md text-center space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
+            <Lock className="h-8 w-8 text-red-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-white">Sistema bloqueado</h1>
+          <p className="text-sm text-slate-400">
+            O sistema está bloqueado por inadimplência. Solicite ao administrador
+            do seu restaurante que efetue o pagamento pendente para liberar o acesso.
+          </p>
+          {bloqueioInad.motivo && (
+            <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+              {bloqueioInad.motivo}
+            </p>
+          )}
+          <button onClick={handleLogout}
+            className="rounded-xl bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700">
+            Sair
+          </button>
+        </div>
       </div>
     );
   }
@@ -84,15 +271,27 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
         {/* Logo da empresa */}
         <div className="flex h-16 items-center gap-3 border-b border-white/5 px-4">
           {empresa?.logo_url ? (
-            <img src={empresa.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover" />
+            // Tem logo: mostra só ela (sem nome ao lado, logo já identifica)
+            <img src={empresa.logo_url} alt={empresa.nome_fantasia}
+              title={empresa.nome_fantasia}
+              className="max-h-12 max-w-full object-contain" />
           ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20">
-              <ChefHat className="h-4 w-4 text-emerald-400" />
-            </div>
+            // Sem logo: ícone genérico + nome
+            <>
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
+                style={{ background: "var(--color-primary-15, rgba(16,185,129,0.12))" }}
+              >
+                <ChefHat
+                  className="h-4 w-4"
+                  style={{ color: "var(--color-primary, #10b981)" }}
+                />
+              </div>
+              <p className="truncate text-sm font-semibold">
+                {empresa?.nome_fantasia || "Empresa"}
+              </p>
+            </>
           )}
-          <p className="truncate text-sm font-semibold">
-            {empresa?.nome_fantasia || "Empresa"}
-          </p>
         </div>
 
         {/* Nav */}
@@ -101,24 +300,60 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
             const Icon   = item.icon;
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
 
+            if (item.locked) {
+              return (
+                <button
+                  key={item.href}
+                  onClick={() => setModuloBloqueado(item.moduloStatus ?? null)}
+                  className="flex items-center gap-2.5 mx-2 mb-0.5 rounded-xl px-3 py-2 text-sm font-medium transition-all w-[calc(100%-1rem)] text-left text-slate-600 hover:bg-amber-500/5 hover:text-amber-300/80"
+                  title="Módulo não incluso — clique para testar 7 dias ou comprar"
+                >
+                  <Icon className="h-4 w-4 flex-shrink-0 opacity-50" />
+                  <span className="flex-1 truncate opacity-60">{item.label}</span>
+                  <Lock className="h-3 w-3 flex-shrink-0 opacity-60" />
+                </button>
+              );
+            }
+
+            const extraTipo = item.modulo ? modulosExtras[item.modulo] : undefined;
+            const coroaTitle = extraTipo === "experimental" ? "👑 Experimental — brinde temporário"
+                              : extraTipo === "gratuito"     ? "👑 Cortesia — brinde permanente"
+                              : extraTipo === "alacarte"     ? "👑 À la carte — módulo extra contratado"
+                              : undefined;
+
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-2.5 mx-2 mb-0.5 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
-                  active
-                    ? "bg-emerald-500/15 text-emerald-400"
-                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+                  active ? "" : "text-slate-400 hover:bg-white/5 hover:text-white"
                 }`}
+                style={active ? {
+                  background: "var(--color-primary-15, rgba(16,185,129,0.12))",
+                  color:      "var(--color-primary, #10b981)",
+                } : undefined}
               >
                 <Icon className="h-4 w-4 flex-shrink-0" />
-                {item.label}
+                <span className="flex-1 truncate">{item.label}</span>
+                {extraTipo && (
+                  <span title={coroaTitle}>
+                    <Crown className="h-3.5 w-3.5 flex-shrink-0 text-amber-400" />
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
 
-        <div className="border-t border-white/5 p-3">
+        <div className="border-t border-white/5 p-3 space-y-1">
+          <button
+            onClick={theme.toggle}
+            title={theme.isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
+            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/5 hover:text-white"
+          >
+            {theme.isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {theme.isDark ? "Tema claro" : "Tema escuro"}
+          </button>
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-red-500/10 hover:text-red-400"
@@ -127,17 +362,52 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
             Sair
           </button>
         </div>
+        <VersaoFooter />
       </aside>
 
       {/* Main */}
       <div className="flex flex-1 flex-col pl-60">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-end border-b border-white/5 bg-slate-950/80 px-6 backdrop-blur">
-          <button className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 hover:border-white/20 transition">
-            <Bell className="h-4 w-4 text-slate-400" />
-          </button>
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/5 bg-slate-950/80 px-6 backdrop-blur">
+          <div className="flex items-center gap-3">
+            {/* Logo do SaaS (dono) */}
+            {saasBranding.logo_url ? (
+              <img src={saasBranding.logo_url} alt={saasBranding.nome}
+                title={saasBranding.nome}
+                className="max-h-10 max-w-[8rem] object-contain" />
+            ) : (
+              <span className="text-xs font-semibold text-emerald-400">{saasBranding.nome}</span>
+            )}
+            {/* Linha vertical separadora */}
+            <span className="h-10 w-px bg-white/10" />
+            {/* Logo da empresa (sem nome ao lado — a logo já identifica) */}
+            {empresa?.logo_url ? (
+              <img src={empresa.logo_url} alt={empresa.nome_fantasia}
+                title={empresa.nome_fantasia}
+                className="max-h-10 max-w-[8rem] object-contain" />
+            ) : (
+              <span className="text-sm font-semibold text-white">
+                {empresa?.nome_fantasia}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <PrintAgentStatus />
+            <button className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 hover:border-white/20 transition">
+              <Bell className="h-4 w-4 text-slate-400" />
+            </button>
+          </div>
         </header>
         <main className="flex-1 p-6">{children}</main>
       </div>
+      <PwaInstallPrompt />
+      <IfoodPendingPopup />{/* monta sempre — endpoint filtra por empresa */}
+      <AgentGate />{/* gate bloqueante se empresa.exige_agente_terminal=true */}
+      <ChatBubble />{/* chat suporte — disponível pra qualquer usuário logado */}
+      <ModuloLockedModal
+        modulo={moduloBloqueado}
+        onClose={() => setModuloBloqueado(null)}
+        onSucesso={recarregarModulos}
+      />
     </div>
   );
 }

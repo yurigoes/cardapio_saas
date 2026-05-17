@@ -51,6 +51,7 @@ const NAV: NavGroup[] = [
     { href: "/admin/suporte/templates",      label: "Templates",        icon: FileText },
     { href: "/admin/suporte/configuracoes",  label: "Configurações",    icon: Settings },
     { href: "/admin/suporte",                label: "Acessos Ajuda",    icon: LifeBuoy },
+    { href: "/admin/contratos",              label: "Contratos",        icon: FileText },
     { href: "/admin/permissoes",             label: "Permissões",       icon: Shield },
   ]},
   { titulo: "Sistema", items: [

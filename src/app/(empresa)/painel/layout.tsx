@@ -85,6 +85,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
       .then((data) => {
         if (!data.success) { window.location.href = "/login"; return; }
         const role = data.data?.usuario?.role;
+        setUserRoleState(role ?? "");
         // Master/suporte podem acessar páginas do painel diretamente
         // (ex: /painel/suporte/chamados pra atender clientes).
         // Redireciona pro /admin SÓ se entrar na raiz /painel sem path.
@@ -128,6 +129,8 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
   const [moduloBloqueado, setModuloBloqueado] = useState<ModuloStatus | null>(null);
   const [suporteLiberado, setSuporteLiberado] = useState(false);
   const [modulosExtras, setModulosExtras] = useState<Record<string, "experimental"|"alacarte"|"gratuito">>({});
+  const [bloqueioInad, setBloqueioInad] = useState<{ bloqueada: boolean; motivo: string | null; total_vencido: number } | null>(null);
+  const [userRole, setUserRoleState] = useState<string>("");
 
   // Verifica se empresa tem acesso ao Suporte (master libera por chave)
   useEffect(() => {
@@ -137,6 +140,11 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
     fetch("/api/painel/suporte/status", { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => { if (d.success) setSuporteLiberado(!!d.data.liberado); })
+      .catch(() => {});
+    // Bloqueio por inadimplência
+    fetch("/api/painel/bloqueio", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (d.success) setBloqueioInad(d.data); })
       .catch(() => {});
     // Módulos extras (pra coroinha)
     fetch("/api/painel/empresa/modulos-extras", { headers: { Authorization: `Bearer ${token}` } })
@@ -208,6 +216,52 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
   const fullScreenRoutes = ["/painel/pdv"];
   if (fullScreenRoutes.some(r => pathname.startsWith(r))) {
     return <>{children}<PwaInstallPrompt /></>;
+  }
+
+  // ─── Bloqueio por inadimplência ───────────────────────────────
+  // Rotas SEMPRE acessíveis mesmo bloqueado (pagamento, logout, contrato)
+  const ROTAS_LIVRES_BLOQUEIO = [
+    "/painel/financeiro/mensalidades",
+    "/painel/pagamentos",
+    "/painel/empresa/contrato",
+    "/painel/empresa/cadastro",
+  ];
+  const isRotaLivre = ROTAS_LIVRES_BLOQUEIO.some(r => pathname.startsWith(r));
+
+  if (bloqueioInad?.bloqueada && !isRotaLivre) {
+    const isAdmin = userRole === "master" || userRole === "admin"
+                 || userRole === "financeiro";
+    // Admin: redireciona pra mensalidades pagar
+    if (isAdmin) {
+      if (typeof window !== "undefined") {
+        window.location.href = "/painel/financeiro/mensalidades";
+      }
+      return null;
+    }
+    // Operador comum: tela de bloqueio
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
+        <div className="max-w-md text-center space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
+            <Lock className="h-8 w-8 text-red-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-white">Sistema bloqueado</h1>
+          <p className="text-sm text-slate-400">
+            O sistema está bloqueado por inadimplência. Solicite ao administrador
+            do seu restaurante que efetue o pagamento pendente para liberar o acesso.
+          </p>
+          {bloqueioInad.motivo && (
+            <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+              {bloqueioInad.motivo}
+            </p>
+          )}
+          <button onClick={handleLogout}
+            className="rounded-xl bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700">
+            Sair
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
