@@ -111,7 +111,7 @@ services:
         - "traefik.enable=true"
         - "traefik.docker.network=yugonet"
         # Rotas principais + subdomínios
-        - "traefik.http.routers.cardapio_saas.rule=Host(`cardapio.yugochat.com.br`) || HostRegexp(`{subdomain:[a-z0-9-]+}.cardapio.yugochat.com.br`)"
+        - "traefik.http.routers.cardapio_saas.rule=Host(`cardapio.yugochat.com.br`,`app.tthreedigital.com.br`,`tthreedigital.com.br`,`www.tthreedigital.com.br`) || HostRegexp(`{subdomain:[a-z0-9-]+}.cardapio.yugochat.com.br`) || HostRegexp(`{subdomain:[a-z0-9-]+}.tthreedigital.com.br`)"
         - "traefik.http.routers.cardapio_saas.entrypoints=websecure"
         - "traefik.http.routers.cardapio_saas.tls=true"
         - "traefik.http.routers.cardapio_saas.tls.certresolver=letsencryptresolver"

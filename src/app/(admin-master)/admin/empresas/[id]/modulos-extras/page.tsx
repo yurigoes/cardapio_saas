@@ -6,7 +6,7 @@
  */
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, Crown, Clock, DollarSign, Gift } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Crown, Clock, DollarSign, Gift, Check, AlertTriangle } from "lucide-react";
 import { alertar, confirmar } from "@/components/ui/ConfirmModal";
 
 interface Extra {
@@ -16,6 +16,9 @@ interface Extra {
   preco: number;
   expira_em: string | null;
   bloqueado: boolean;
+  pago?: boolean;
+  pago_em?: string | null;
+  pago_via?: string | null;
   observacao: string | null;
   created_at: string;
 }
@@ -81,6 +84,23 @@ export default function ExtrasPage() {
         method: "DELETE", headers: auth(),
       });
       carregar();
+    } finally { setBusy(false); }
+  }
+
+  async function marcarPago(e: Extra) {
+    const via = prompt("Forma de pagamento (pix, dinheiro, cartão, boleto):", "pix");
+    if (via === null) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/admin/empresas/${id}/modulos-extras/${e.modulo}`, {
+        method: "PATCH", headers: auth(),
+        body: JSON.stringify({ pago: true, pago_via: via }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error?.message ?? "Falha");
+      carregar();
+    } catch (err) {
+      await alertar({ titulo: "Falha", mensagem: (err as Error).message, tipo: "perigo" });
     } finally { setBusy(false); }
   }
 
@@ -168,14 +188,28 @@ export default function ExtrasPage() {
             <div key={e.id} className={`flex items-center gap-3 rounded-xl border border-${cor}-500/30 bg-${cor}-500/5 p-3`}>
               <Icon className={`h-5 w-5 text-${cor}-400 flex-shrink-0`} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-white">{e.modulo}</p>
+                <p className="text-sm font-bold text-white flex items-center gap-2">
+                  {e.modulo}
+                  {e.tipo === "alacarte" && e.pago && (
+                    <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">PAGO</span>
+                  )}
+                  {e.bloqueado && (
+                    <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-bold text-red-300">BLOQUEADO</span>
+                  )}
+                </p>
                 <p className="text-xs text-slate-400">
                   {e.tipo} {e.tipo === "alacarte" && `· R$ ${Number(e.preco).toFixed(2)}/mês`}
                   {venceEm && ` · vence em ${restaDias}d (${venceEm.toLocaleDateString("pt-BR")})`}
-                  {e.bloqueado && " · 🚫 BLOQUEADO"}
+                  {e.pago_via && ` · via ${e.pago_via}`}
                 </p>
                 {e.observacao && <p className="text-[11px] text-slate-500 italic">{e.observacao}</p>}
               </div>
+              {e.tipo === "alacarte" && !e.pago && (
+                <button onClick={() => marcarPago(e)} disabled={busy}
+                  className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40 flex items-center gap-1">
+                  <Check className="h-3.5 w-3.5" /> Marcar pago
+                </button>
+              )}
               <button onClick={() => revogar(e)}
                 className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20">
                 <Trash2 className="h-4 w-4" />

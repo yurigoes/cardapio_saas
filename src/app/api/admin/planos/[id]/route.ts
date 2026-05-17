@@ -22,6 +22,11 @@ const patchSchema = z.object({
   preco_mensal: z.number().min(0).optional(),
   periodo:   z.enum(["mensal", "anual", "unico"]).optional(),
   modulos:   z.array(z.string()).optional(),
+  modulos_alacarte: z.array(z.object({
+    id:    z.string().min(1).max(50),
+    nome:  z.string().max(80).optional(),
+    preco: z.number().nonnegative(),
+  })).optional(),
   limites:   z.record(z.unknown()).optional(),
   ativo:     z.boolean().optional(),
   destaque:  z.boolean().optional(),
@@ -65,7 +70,7 @@ export async function PATCH(
   const vals: unknown[] = [];
   let i = 1;
   for (const [k, v] of Object.entries(body)) {
-    if (k === "modulos" || k === "limites") {
+    if (k === "modulos" || k === "limites" || k === "modulos_alacarte") {
       sets.push(`${k} = $${i++}::jsonb`);
       vals.push(JSON.stringify(v));
     } else {

@@ -24,6 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   try {
     const rows = await query(
       `SELECT id, modulo, tipo, preco, expira_em, bloqueado,
+              COALESCE(pago, FALSE) AS pago, pago_em, pago_via,
               observacao, created_at, updated_at
          FROM empresa_modulos_extras
         WHERE empresa_id = $1

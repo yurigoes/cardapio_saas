@@ -46,22 +46,36 @@ export async function GET(req: NextRequest) {
       [empresaId]
     ).catch(() => []);
 
+    // Módulos extras liberados pelo master (experimental/à la carte/gratuito)
+    // Bloqueados ou expirados não entram.
+    const extras = await query<{ modulo: string; tipo: string; expira_em: string | null }>(
+      `SELECT modulo, tipo, expira_em FROM empresa_modulos_extras
+        WHERE empresa_id = $1
+          AND bloqueado = FALSE
+          AND (expira_em IS NULL OR expira_em > NOW())`,
+      [empresaId]
+    ).catch(() => []);
+
     const inclusos    = new Set(empresa?.modulos_ativos ?? []);
     const trialsAtivos = new Map(trials.map(t => [t.modulo, t.expira_em]));
     const compradosAtivos = new Map(compras.map(c => [c.modulo, c.ativa_ate]));
+    const extrasAtivos = new Map(extras.map(e => [e.modulo, { tipo: e.tipo, expira_em: e.expira_em }]));
     const jaUsouTrial = new Set(trialsUsadosTodos.map(t => t.modulo));
 
     const lista = MODULOS.map(m => {
       const incluso     = inclusos.has(m.key);
       const trialAtivo  = trialsAtivos.get(m.key);
       const compraAtiva = compradosAtivos.get(m.key);
-      const ativo       = incluso || !!trialAtivo || !!compraAtiva;
+      const extra       = extrasAtivos.get(m.key);
+      const ativo       = incluso || !!trialAtivo || !!compraAtiva || !!extra;
       return {
         ...m,
         ativo,
         incluso,
         trial_ativo:    trialAtivo ?? null,
         comprado_ate:   compraAtiva ?? null,
+        extra_tipo:     extra?.tipo ?? null,
+        extra_expira:   extra?.expira_em ?? null,
         pode_testar:    !ativo && !jaUsouTrial.has(m.key),
         pode_comprar:   !ativo,
       };

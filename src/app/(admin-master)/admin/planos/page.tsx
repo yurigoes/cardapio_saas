@@ -6,6 +6,7 @@ import { Package, Plus, X, Users, ShoppingBag, Check, LayoutGrid, Calendar, Penc
 import { MODULOS_REGISTRY } from "@/lib/modules/registry";
 import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
+interface ModuloAlacarte { id: string; nome?: string; preco: number }
 interface Plano {
   id:             string;
   nome:           string;
@@ -13,6 +14,7 @@ interface Plano {
   preco:          number;
   periodo:        string;
   modulos:        string[];
+  modulos_alacarte?: ModuloAlacarte[];
   limites:        { usuarios: number; produtos: number; mesas: number; pedidos_mes: number };
   ativo:          boolean;
   destaque:       boolean;
@@ -47,7 +49,8 @@ const DEFAULT_FORM = {
     mesas:       20,
     pedidos_mes: 1000,
   },
-  modulos:  [] as string[],
+  modulos:           [] as string[],
+  modulos_alacarte:  [] as ModuloAlacarte[],
   ativo:    true,
   destaque: false,
 };
@@ -85,6 +88,7 @@ export default function PlanosPage() {
       periodo:   (p.periodo as "mensal" | "anual" | "unico") ?? "mensal",
       limites:   { ...DEFAULT_FORM.limites, ...(p.limites ?? {}) },
       modulos:   p.modulos ?? [],
+      modulos_alacarte: p.modulos_alacarte ?? [],
       ativo:     p.ativo,
       destaque:  p.destaque,
     });
@@ -445,6 +449,84 @@ export default function PlanosPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* Módulos à la carte (catálogo de preços extras) */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Módulos à la carte ({form.modulos_alacarte.length})
+                    </p>
+                    <button type="button"
+                      onClick={() => setForm(f => ({
+                        ...f,
+                        modulos_alacarte: [...f.modulos_alacarte, { id: "", nome: "", preco: 0 }],
+                      }))}
+                      className="rounded-lg px-2.5 py-1 text-xs text-emerald-400 hover:bg-emerald-500/10">
+                      + Adicionar módulo extra
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500 -mt-1">
+                    Cobrança avulsa quando master ativa pra empresa fora do plano (preço sugerido aparece no modal).
+                  </p>
+                  {form.modulos_alacarte.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-white/10 p-4 text-center text-xs text-slate-500">
+                      Nenhum módulo à la carte cadastrado.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {form.modulos_alacarte.map((m, idx) => {
+                        const opt = MODULOS_REGISTRY[m.id];
+                        return (
+                          <div key={idx} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-2">
+                            <select
+                              value={m.id}
+                              onChange={e => {
+                                const novoId = e.target.value;
+                                const meta = MODULOS_REGISTRY[novoId];
+                                setForm(f => ({
+                                  ...f,
+                                  modulos_alacarte: f.modulos_alacarte.map((x, i) =>
+                                    i === idx ? { ...x, id: novoId, nome: meta?.nome ?? x.nome } : x
+                                  ),
+                                }));
+                              }}
+                              className="flex-1 rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-xs text-white"
+                            >
+                              <option value="">— módulo —</option>
+                              {Object.values(MODULOS_REGISTRY).map(mod => (
+                                <option key={mod.id} value={mod.id}>{mod.nome}</option>
+                              ))}
+                            </select>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-slate-500">R$</span>
+                              <input
+                                type="number" step="0.01" min={0}
+                                value={m.preco}
+                                onChange={e => setForm(f => ({
+                                  ...f,
+                                  modulos_alacarte: f.modulos_alacarte.map((x, i) =>
+                                    i === idx ? { ...x, preco: Number(e.target.value) } : x
+                                  ),
+                                }))}
+                                className="w-20 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white"
+                              />
+                              <span className="text-[10px] text-slate-500">/mês</span>
+                            </div>
+                            <button type="button"
+                              onClick={() => setForm(f => ({
+                                ...f,
+                                modulos_alacarte: f.modulos_alacarte.filter((_, i) => i !== idx),
+                              }))}
+                              className="rounded-lg p-1.5 text-red-400 hover:bg-red-500/10">
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                            {opt?.premium && <span className="text-amber-400 text-xs">★</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Flags */}

@@ -11,9 +11,10 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Save, Building2, Phone, MapPin, User, ShieldCheck,
-  Palette, Package, Plug, Loader2,
+  Palette, Package, Plug, Loader2, Crown,
 } from "lucide-react";
 import { alertar } from "@/components/ui/ConfirmModal";
+import { LiberarModuloModal } from "@/components/admin/LiberarModuloModal";
 
 interface Empresa {
   id: string;
@@ -37,7 +38,8 @@ interface Empresa {
   plano_nome?: string;
 }
 
-interface Plano { id: string; nome: string; modulos: string[] }
+interface Plano { id: string; nome: string; modulos: string[]; modulos_alacarte?: { id: string; preco: number }[] }
+interface Extra { modulo: string; tipo: string }
 
 const MODULOS_DISPONIVEIS = [
   "balcao","mesa","delivery","kiosk","totem","ifood","whatsapp",
@@ -51,8 +53,10 @@ export default function EditarEmpresaPage() {
   const { id } = useParams<{ id: string }>();
   const [emp, setEmp]   = useState<Empresa | null>(null);
   const [planos, setPlanos] = useState<Plano[]>([]);
+  const [extras, setExtras] = useState<Extra[]>([]);
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [moduloPraLiberar, setModuloPraLiberar] = useState<string | null>(null);
   const [tab, setTab] = useState<
     "identidade" | "contato" | "endereco" | "gestor" | "validacao" | "plano" | "branding" | "slave"
   >("identidade");
@@ -63,12 +67,14 @@ export default function EditarEmpresaPage() {
   });
 
   const carregar = useCallback(async () => {
-    const [e, p] = await Promise.all([
-      fetch(`/api/admin/empresas/${id}`, { headers: auth() }).then(r => r.json()),
-      fetch(`/api/admin/planos`,         { headers: auth() }).then(r => r.json()).catch(() => ({ data: [] })),
+    const [e, p, ex] = await Promise.all([
+      fetch(`/api/admin/empresas/${id}`,                  { headers: auth() }).then(r => r.json()),
+      fetch(`/api/admin/planos`,                          { headers: auth() }).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch(`/api/admin/empresas/${id}/modulos-extras`,   { headers: auth() }).then(r => r.json()).catch(() => ({ data: [] })),
     ]);
-    if (e.success) setEmp(e.data);
-    if (p.success) setPlanos(Array.isArray(p.data) ? p.data : (p.data?.planos ?? []));
+    if (e.success)  setEmp(e.data);
+    if (p.success)  setPlanos(Array.isArray(p.data) ? p.data : (p.data?.planos ?? []));
+    if (ex.success) setExtras(ex.data ?? []);
   }, [id]);
 
   useEffect(() => { carregar(); }, [carregar]);
@@ -121,9 +127,31 @@ export default function EditarEmpresaPage() {
 
   function toggleModulo(m: string) {
     if (!emp) return;
-    const lista = emp.modulos_ativos ?? [];
-    const novo = lista.includes(m) ? lista.filter(x => x !== m) : [...lista, m];
-    set("modulos_ativos", novo);
+    const planoAtual = planos.find(p => p.id === emp.plano_id);
+    const noPlano    = (planoAtual?.modulos ?? []).includes(m);
+    const lista      = emp.modulos_ativos ?? [];
+
+    // Se já está nos ativos → só desativa
+    if (lista.includes(m)) {
+      set("modulos_ativos", lista.filter(x => x !== m));
+      return;
+    }
+
+    // Se está no plano → ativa direto
+    if (noPlano) {
+      set("modulos_ativos", [...lista, m]);
+      return;
+    }
+
+    // Não está no plano → abre modal pra escolher tipo de liberação
+    setModuloPraLiberar(m);
+  }
+
+  function precoSugeridoDoModulo(m: string): number | undefined {
+    const planoAtual = planos.find(p => p.id === emp?.plano_id);
+    const alacarte   = planoAtual?.modulos_alacarte ?? [];
+    const item       = alacarte.find(x => x.id === m);
+    return item?.preco;
   }
 
   if (!emp) return <div className="p-8 text-slate-400">Carregando...</div>;
@@ -385,21 +413,35 @@ export default function EditarEmpresaPage() {
               <p className="mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Módulos ativos</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                 {MODULOS_DISPONIVEIS.map(m => {
-                  const ativo = (emp.modulos_ativos ?? []).includes(m);
+                  const ativo  = (emp.modulos_ativos ?? []).includes(m);
+                  const extra  = extras.find(x => x.modulo === m);
+                  const planoAtual = planos.find(p => p.id === emp.plano_id);
+                  const noPlano = (planoAtual?.modulos ?? []).includes(m);
                   return (
                     <button
                       key={m}
                       onClick={() => toggleModulo(m)}
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-                        ativo ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                      className={`flex items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                        ativo ? (noPlano
+                          ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                          : "border-amber-500/40 bg-amber-500/15 text-amber-300")
                               : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10"
                       }`}
+                      title={
+                        extra ? `Extra: ${extra.tipo}` :
+                        noPlano ? "Incluído no plano" :
+                        "Clique pra liberar como extra"
+                      }
                     >
+                      {extra && <Crown className="h-3 w-3 text-amber-400" />}
                       {m}
                     </button>
                   );
                 })}
               </div>
+              <p className="mt-2 text-[11px] text-slate-500">
+                Verde = do plano · Amarelo+👑 = extra liberado · Clique num cinza pra ofertar como extra
+              </p>
               <a
                 href={`/admin/empresas/${id}/modulos-extras`}
                 className="mt-3 inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 hover:bg-amber-500/20"
@@ -425,6 +467,16 @@ export default function EditarEmpresaPage() {
               <Input value={emp.banner_url ?? ""} onChange={v => set("banner_url", v)} />
             </Field>
           </Grid>
+        )}
+
+        {moduloPraLiberar && (
+          <LiberarModuloModal
+            empresaId={id}
+            modulo={moduloPraLiberar}
+            precoSugerido={precoSugeridoDoModulo(moduloPraLiberar)}
+            onClose={() => setModuloPraLiberar(null)}
+            onSuccess={() => { carregar(); }}
+          />
         )}
 
         {tab === "slave" && (

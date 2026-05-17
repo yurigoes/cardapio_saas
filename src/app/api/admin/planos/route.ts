@@ -14,6 +14,11 @@ const planoSchema = z.object({
   preco:     z.number().min(0),
   periodo:   z.enum(["mensal", "anual", "unico"]).default("mensal"),
   modulos:   z.array(z.string()).default([]),
+  modulos_alacarte: z.array(z.object({
+    id:    z.string().min(1).max(50),
+    nome:  z.string().max(80).optional(),
+    preco: z.number().nonnegative(),
+  })).default([]),
   limites: z.object({
     usuarios:    z.number().int().min(-1).default(5),
     produtos:    z.number().int().min(-1).default(100),
@@ -59,8 +64,8 @@ export async function POST(req: NextRequest) {
   try {
     // Insere preco_mensal = preco (mantém os 2 campos sincronizados)
     const plano = await queryOne<{ id: string }>(
-      `INSERT INTO planos (nome, descricao, preco, preco_mensal, periodo, modulos, limites, ativo, destaque)
-       VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO planos (nome, descricao, preco, preco_mensal, periodo, modulos, modulos_alacarte, limites, ativo, destaque)
+       VALUES ($1, $2, $3, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9)
        RETURNING id`,
       [
         body.nome,
@@ -68,6 +73,7 @@ export async function POST(req: NextRequest) {
         body.preco,
         body.periodo,
         JSON.stringify(body.modulos),
+        JSON.stringify(body.modulos_alacarte),
         JSON.stringify(body.limites),
         body.ativo,
         body.destaque,
