@@ -57,24 +57,65 @@ export async function POST(
 
     switch (acao) {
       case "reset-senha-usuario": {
-        const usuarioId = String(p.usuario_id ?? "");
-        const novaSenha = String(p.nova_senha ?? "");
+        const usuarioId   = String(p.usuario_id ?? "");
+        const novaSenha   = String(p.nova_senha ?? "");
+        const enviarEmail = Boolean(p.enviar_email ?? false);
         if (!usuarioId)             return badRequest("usuario_id obrigatório");
         if (novaSenha.length < 8)   return badRequest("nova_senha precisa de 8+ caracteres");
 
         // Usa pgcrypto direto pra evitar dep de bcryptjs no app
-        const r = await queryOne<{ email: string }>(
+        const r = await queryOne<{ email: string; nome: string }>(
           `UPDATE usuarios
               SET senha_hash       = crypt($1, gen_salt('bf', 12)),
                   ativo            = true,
                   bloqueado_ate    = NULL,
                   tentativas_login = 0
             WHERE id = $2 AND empresa_id = $3
-            RETURNING email`,
+            RETURNING email, nome`,
           [novaSenha, usuarioId, empresaId]
         );
         if (!r) return notFound("Usuário não encontrado nesta empresa");
-        result = { usuario_email: r.email };
+
+        // Envia email com a nova senha se solicitado
+        let email_enviado = false;
+        let email_erro: string | null = null;
+        if (enviarEmail && r.email) {
+          try {
+            const { enfileirar } = await import("@/lib/email/smtp");
+            const { wrapEmail } = await import("@/lib/suporte/email-wrapper");
+            const { getSaasBranding } = await import("@/lib/branding/server");
+            const branding = await getSaasBranding();
+            const baseUrl  = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.tthreedigital.com.br";
+            const html = wrapEmail(
+              `<p>Olá <strong>${r.nome}</strong>,</p>
+               <p>Sua senha de acesso ao painel foi redefinida pelo nosso suporte.</p>
+               <p style="background:#f4f6f8;padding:14px;border-radius:8px;font-family:monospace;font-size:16px;text-align:center;">
+                 <strong>${novaSenha}</strong>
+               </p>
+               <p>Por segurança, recomendamos trocar a senha após o primeiro login.</p>`,
+              "info",
+              {
+                saas_nome:     branding.nome,
+                saas_logo:     branding.logo_url,
+                saas_site:     branding.site,
+                saas_whatsapp: branding.whatsapp,
+                titulo:        "Sua senha foi redefinida",
+                link:          `${baseUrl}/login`,
+                ano:           new Date().getFullYear(),
+              }
+            );
+            await enfileirar({
+              para:    r.email,
+              evento:  "reset-senha-admin",
+              assunto: `Sua nova senha — ${branding.nome}`,
+              html,
+            });
+            email_enviado = true;
+          } catch (e) {
+            email_erro = e instanceof Error ? e.message : String(e);
+          }
+        }
+        result = { usuario_email: r.email, email_enviado, email_erro };
         break;
       }
 

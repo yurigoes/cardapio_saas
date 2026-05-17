@@ -13,6 +13,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   Shield, KeyRound, Users, LogOut, Trash2, AlertTriangle,
   RefreshCw, Activity, Pause, Play, Database, ArrowLeft,
+  Copy, Check as CheckIcon, Mail, Dice5, Pencil, X as XIcon,
 } from "lucide-react";
 import { confirmar, alertar } from "@/components/ui/ConfirmModal";
 
@@ -42,6 +43,16 @@ export default function GerenciarEmpresaPage() {
   const [stats, setStats]       = useState<Stats | null>(null);
   const [busy, setBusy]         = useState<string | null>(null);
   const [msg, setMsg]           = useState<{ ok: boolean; texto: string } | null>(null);
+
+  // Modal reset senha
+  const [resetAlvo, setResetAlvo]       = useState<Usuario | null>(null);
+  const [resetModo, setResetModo]       = useState<"escolher" | "manual" | "resultado">("escolher");
+  const [resetSenha, setResetSenha]     = useState("");
+  const [resetCustom, setResetCustom]   = useState("");
+  const [resetEnviarEmail, setResetEnviarEmail] = useState(true);
+  const [resetEmailStatus, setResetEmailStatus] = useState<"idle" | "ok" | "fail">("idle");
+  const [resetCopiado, setResetCopiado] = useState(false);
+  const [resetBusy, setResetBusy]       = useState(false);
 
   const auth = () => ({
     Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("access_token") : ""}`,
@@ -83,12 +94,77 @@ export default function GerenciarEmpresaPage() {
     } finally { setBusy(null); }
   }
 
-  async function resetarSenha(usuario: Usuario) {
-    const senha = prompt(`Nova senha para ${usuario.email} (mínimo 8 chars):`);
-    if (!senha) return;
-    if (senha.length < 8) { await alertar({ titulo: "Senha muito curta", mensagem: "Mínimo 8 caracteres.", tipo: "alerta" }); return; }
-    await executar("reset-senha-usuario", { usuario_id: usuario.id, nova_senha: senha },
-      `Senha de ${usuario.email} resetada para "${senha}"`);
+  function abrirResetSenha(usuario: Usuario) {
+    setResetAlvo(usuario);
+    setResetModo("escolher");
+    setResetSenha("");
+    setResetCustom("");
+    setResetEnviarEmail(true);
+    setResetEmailStatus("idle");
+    setResetCopiado(false);
+  }
+
+  function fecharResetSenha() {
+    setResetAlvo(null);
+    setResetSenha("");
+    setResetCustom("");
+  }
+
+  function gerarSenhaRandom8(): string {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    let out = "";
+    for (let i = 0; i < 8; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  }
+
+  async function confirmarResetSenha(senhaParaUsar: string) {
+    if (!resetAlvo) return;
+    if (senhaParaUsar.length < 8) {
+      await alertar({ titulo: "Senha muito curta", mensagem: "Mínimo 8 caracteres.", tipo: "alerta" });
+      return;
+    }
+    setResetBusy(true);
+    try {
+      const r = await fetch(`/api/admin/empresas/${id}/acoes`, {
+        method: "POST",
+        headers: auth(),
+        body: JSON.stringify({
+          acao: "reset-senha-usuario",
+          params: {
+            usuario_id:   resetAlvo.id,
+            nova_senha:   senhaParaUsar,
+            enviar_email: resetEnviarEmail,
+          },
+        }),
+      });
+      const d = await r.json();
+      if (!d.success) {
+        setMsg({ ok: false, texto: `✗ ${d.error?.message ?? "Falha"}` });
+        return;
+      }
+      setResetSenha(senhaParaUsar);
+      setResetEmailStatus(
+        resetEnviarEmail
+          ? (d.data?.result?.email_enviado ? "ok" : "fail")
+          : "idle"
+      );
+      setResetModo("resultado");
+      carregar();
+    } catch (err) {
+      setMsg({ ok: false, texto: `✗ ${(err as Error).message}` });
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
+  async function copiarSenha() {
+    try {
+      await navigator.clipboard.writeText(resetSenha);
+      setResetCopiado(true);
+      setTimeout(() => setResetCopiado(false), 2000);
+    } catch {
+      await alertar({ titulo: "Falha ao copiar", mensagem: "Copie manualmente.", tipo: "alerta" });
+    }
   }
 
   async function zerarDados() {
@@ -233,7 +309,7 @@ export default function GerenciarEmpresaPage() {
                   <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-400">BLOQ</span>
                 }
                 <button
-                  onClick={() => resetarSenha(u)}
+                  onClick={() => abrirResetSenha(u)}
                   disabled={busy !== null}
                   className="rounded-lg border border-white/10 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-40"
                 >
@@ -289,6 +365,138 @@ export default function GerenciarEmpresaPage() {
              icon={Trash2}
              onClick={apagarEmpresa} busy={busy === "delete"} />
       </Section>
+
+      {/* Modal reset senha */}
+      {resetAlvo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+              <h3 className="flex items-center gap-2 text-base font-bold text-white">
+                <KeyRound className="h-5 w-5 text-emerald-400" />
+                Resetar senha
+              </h3>
+              <button onClick={fecharResetSenha} className="rounded-lg p-1 text-slate-400 hover:bg-white/5 hover:text-white">
+                <XIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-slate-400">
+                Usuário: <strong className="text-white">{resetAlvo.nome}</strong>
+                <br />
+                <span className="font-mono text-xs">{resetAlvo.email}</span>
+              </p>
+
+              {resetModo === "escolher" && (
+                <>
+                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={resetEnviarEmail}
+                      onChange={(e) => setResetEnviarEmail(e.target.checked)}
+                      className="rounded border-white/20 bg-white/5"
+                    />
+                    <Mail className="h-3.5 w-3.5" />
+                    Enviar nova senha por email
+                  </label>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    <button
+                      disabled={resetBusy}
+                      onClick={() => confirmarResetSenha(gerarSenhaRandom8())}
+                      className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-40"
+                    >
+                      <Dice5 className="h-4 w-4" />
+                      Gerar senha aleatória (8 dígitos)
+                    </button>
+                    <button
+                      disabled={resetBusy}
+                      onClick={() => setResetModo("manual")}
+                      className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-200 hover:bg-white/10 disabled:opacity-40"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Definir senha manualmente
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {resetModo === "manual" && (
+                <>
+                  <input
+                    type="text"
+                    value={resetCustom}
+                    onChange={(e) => setResetCustom(e.target.value)}
+                    placeholder="Digite a nova senha (mínimo 8)"
+                    autoFocus
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white font-mono focus:border-emerald-500/50 focus:outline-none"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    {resetCustom.length}/8 caracteres mínimos
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setResetModo("escolher")}
+                      className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/5"
+                    >
+                      Voltar
+                    </button>
+                    <button
+                      disabled={resetBusy || resetCustom.length < 8}
+                      onClick={() => confirmarResetSenha(resetCustom)}
+                      className="flex-1 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {resetBusy ? "Resetando..." : "Confirmar reset"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {resetModo === "resultado" && (
+                <>
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                    <p className="text-[11px] uppercase tracking-wider text-emerald-300 mb-2 font-bold">
+                      ✓ Nova senha
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 rounded bg-black/30 px-3 py-2 font-mono text-lg text-white tracking-wider">
+                        {resetSenha}
+                      </code>
+                      <button
+                        onClick={copiarSenha}
+                        className="rounded-lg border border-emerald-500/40 bg-emerald-500/20 p-2 text-emerald-300 hover:bg-emerald-500/30"
+                        title="Copiar"
+                      >
+                        {resetCopiado ? <CheckIcon className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {resetEmailStatus === "ok" && (
+                    <p className="flex items-center gap-2 text-xs text-emerald-300">
+                      <Mail className="h-3.5 w-3.5" />
+                      Email enviado para {resetAlvo.email}
+                    </p>
+                  )}
+                  {resetEmailStatus === "fail" && (
+                    <p className="flex items-center gap-2 text-xs text-amber-300">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Senha resetada, mas falha ao enviar email. Compartilhe manualmente.
+                    </p>
+                  )}
+
+                  <button
+                    onClick={fecharResetSenha}
+                    className="w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-400"
+                  >
+                    Concluir
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

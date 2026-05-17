@@ -20,7 +20,8 @@ import {
 import { alertar } from "@/components/ui/ConfirmModal";
 
 const DISMISS_KEY = "wizard_onboarding_dismissed_at";
-const DISMISS_DAYS = 30;
+const DISMISS_DAYS = 30;     // "Pular" explícito
+const DISMISS_DAYS_SOFT = 1; // Fechar via X/backdrop — só some pelo resto do dia
 
 interface OnboardingStatus {
   total: number;
@@ -132,9 +133,15 @@ export function WizardOnboardingModal({ openOverride, onClose }: {
       .catch(() => {});
   }, [openOverride]);
 
-  function fechar(skip = false) {
-    if (skip) {
+  function fechar(skip: boolean | "soft" = false) {
+    // skip=true  → 30 dias (botão "Pular" explícito)
+    // skip="soft"→ 1 dia  (X ou backdrop — evita loop no mesmo dia)
+    // skip=false→ não persiste (uso interno após salvar tudo)
+    if (skip === true) {
       localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    } else if (skip === "soft") {
+      const ts = Date.now() - (DISMISS_DAYS - DISMISS_DAYS_SOFT) * 24 * 60 * 60 * 1000;
+      localStorage.setItem(DISMISS_KEY, String(ts));
     }
     setOpen(false);
     onClose?.();
@@ -293,7 +300,7 @@ export function WizardOnboardingModal({ openOverride, onClose }: {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto"
-         onClick={() => fechar(false)}>
+         onClick={() => fechar("soft")}>
       <div className="w-full max-w-lg rounded-2xl border border-emerald-500/30 bg-slate-900 shadow-2xl my-auto"
            onClick={e => e.stopPropagation()}>
         {/* Header */}
@@ -304,9 +311,9 @@ export function WizardOnboardingModal({ openOverride, onClose }: {
               Configuração rápida
             </h2>
           </div>
-          <button onClick={() => fechar(false)}
+          <button onClick={() => fechar("soft")}
             className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"
-            title="Fechar (volta no próximo login)">
+            title="Fechar (não volta hoje)">
             <X className="h-4 w-4" />
           </button>
         </div>
