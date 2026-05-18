@@ -64,6 +64,23 @@ services:
       driver: "json-file"
       options: { max-size: "5m", max-file: "3" }
 
+  # Cloudflare Tunnel — dá HTTPS público no domínio loja-X.tthreedigital.com.br
+  # SEM precisar de IP fixo, port-forward ou cert SSL local. Tunnel sobe via
+  # token (gerado pelo install.sh ao criar o tunnel na conta CF).
+  # Quem chama loja-X.tthreedigital.com.br vai pra Cloudflare → tunnel → nginx-cache.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: retaguarda_cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: "${TUNNEL_TOKEN}"
+    depends_on: [nginx-cache]
+    networks: [retaguarda]
+    logging:
+      driver: "json-file"
+      options: { max-size: "5m", max-file: "3" }
+
   # Reportador: faz heartbeat pro master a cada 60s informando que esta
   # retaguarda está online (próxima etapa: enviar métricas de cache hit).
   reporter:

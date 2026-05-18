@@ -22,36 +22,63 @@ mutations falham (próxima etapa terá buffer offline).
 
 ## Pré-requisitos no mini-PC
 
-- Linux (Ubuntu 22+ recomendado) **ou** Windows com WSL2
+- Linux limpo (Ubuntu 22+, Debian 12+, Raspberry Pi OS) — **o instalador faz o resto**
 - 2 vCPU, 4 GB RAM, **20 GB SSD** (cache cresce até ~5 GB)
-- IP fixo na LAN (sugestão: `192.168.0.50`)
-- Portas 80 e 443 livres
-- Docker + docker compose v2:
-  ```bash
-  curl -fsSL https://get.docker.com | sh
-  sudo usermod -aG docker $USER && newgrp docker
-  ```
+- Conexão de internet (sem IP fixo, sem port-forward — usa Cloudflare Tunnel)
 
 ---
 
-## Instalação
+## Instalação em 1 comando
+
+Na máquina nova, como root:
 
 ```bash
-# 1. Copia o pacote pra máquina
-git clone https://github.com/yurigoes/cardapio_saas.git /opt/cardapio_saas
-cd /opt/cardapio_saas/retaguarda
-
-# 2. Roda setup (gera .env interativo + sobe containers)
-bash setup.sh
-
-# 3. Anota o HEARTBEAT_SECRET que o setup imprimir
-#    Vai precisar adicionar no master (passo seguinte)
+curl -fsSL https://raw.githubusercontent.com/yurigoes/cardapio_saas/main/retaguarda/install.sh | sudo bash
 ```
 
-No fim do setup você verá algo como:
-```
-Adicione no master (.env da VPS principal):
-  RETAGUARDA_HEARTBEAT_SECRET=abc123...
+Ele faz tudo:
+1. **Instala** Docker + dependências
+2. **Clona** o repo em `/opt/cardapio_saas`
+3. **Pergunta** dados (empresa, master, CF token)
+4. **Cria** Cloudflare Tunnel próprio dessa loja via API
+5. **Configura** DNS CNAME `loja-X.tthreedigital.com.br` → tunnel
+6. **Sobe** containers (nginx-cache + redis + reporter + cloudflared)
+7. **Testa** acesso público via HTTPS
+
+Tempo total: ~3 minutos.
+
+### Pré-requisitos no Cloudflare (1 vez só, antes da 1ª loja)
+
+Em https://dash.cloudflare.com/profile/api-tokens cria um **API Token** com:
+- **Account** → Cloudflare Tunnel → **Edit**
+- **Zone** → DNS → **Edit** (zona `tthreedigital.com.br`)
+
+Anota também:
+- **Account ID** (sidebar do dashboard CF)
+- **Zone ID** da zona principal
+
+O mesmo token serve pra **N lojas** — cada loja vira um tunnel separado.
+
+### Pré-requisitos no master (1 vez só)
+
+```bash
+# Na VPS principal:
+cd /opt/cardapio_saas && git pull
+echo "RETAGUARDA_HEARTBEAT_SECRET=$(openssl rand -hex 24)" >> .env
+
+# Migration
+docker exec -i cardapio_postgres psql -U cardapio -d cardapio_saas \
+  < database/migrations/081_retaguardas.sql
+
+# Rebuild
+docker build -t cardapio-saas:latest .
+docker rm -f cardapio_app
+docker run -d --name cardapio_app --network cardapio_net --network-alias app \
+  -p 127.0.0.1:3000:3000 --restart unless-stopped \
+  --env-file /opt/cardapio_saas/.env cardapio-saas:latest
+
+# Anota o HEARTBEAT_SECRET — você usa em TODAS as instalações de retaguarda
+grep ^RETAGUARDA_HEARTBEAT_SECRET .env
 ```
 
 ## Configuração no master (VPS principal)
@@ -79,45 +106,46 @@ em `https://app.tthreedigital.com.br/admin/retaguardas` (master).
 
 ---
 
-## DNS — como apontar restaurante.tthreedigital.com.br pro mini-PC
+## Cloudflare Tunnel — como funciona com várias lojas
 
-A retaguarda tem domínio público (ex: `loja-shopping.tthreedigital.com.br`)
-mas resolve pro IP local **dentro do Wi-Fi do restaurante**. 3 estratégias:
+**1 Cloudflare account = N tunnels = N lojas.** Cada execução do `install.sh`
+cria um tunnel novo na sua conta, associa ao domínio único da loja e o
+container `cloudflared` conecta-se com aquele token específico.
 
-### Estratégia 1 — DNS interno do roteador (recomendado)
-Mikrotik, OpenWrt, pfSense, Unifi:
-- Adicionar entrada DNS estática:
-  `loja-shopping.tthreedigital.com.br → 192.168.0.50`
-- Reiniciar DHCP dos terminais (ou esperar lease renovar)
-
-### Estratégia 2 — /etc/hosts em cada terminal
-Pro Android (totem):
-- Roteador faz hairpin NAT ou
-- Configura DNS manualmente nas configurações Wi-Fi → IP do mini-PC
-
-### Estratégia 3 — Cloudflare com regra geo-condicional (complexo)
-Não recomendado pra primeira instalação.
-
-**Importante:** sem split-DNS funcionando, os terminais vão pro app principal.
-
----
-
-## SSL / HTTPS
-
-PWAs e Service Workers exigem HTTPS. Duas opções:
-
-### Opção A — Let's Encrypt (recomendado se IP público existir)
-```bash
-docker run -it --rm \
-  -v /opt/cardapio_saas/retaguarda/certs:/etc/letsencrypt \
-  -p 80:80 \
-  certbot/certbot certonly --standalone -d loja-shopping.tthreedigital.com.br
 ```
-Depois descomenta o bloco HTTPS no `nginx/default.conf.template` e reinicia.
+loja1.tthreedigital.com.br ─┐
+loja2.tthreedigital.com.br ─┼─→ Cloudflare edge ─→ tunnel-N ─→ mini-PC da lojaN ─→ nginx → app principal
+loja3.tthreedigital.com.br ─┘
+```
 
-### Opção B — Certificado wildcard copiado do master
-Copia `*.tthreedigital.com.br` cert do servidor principal pra
-`retaguarda/certs/cert.pem` e `key.pem`. Renovação manual a cada 90d.
+**Vantagens:**
+- ✅ SEM IP público no restaurante
+- ✅ SEM port-forwarding no roteador
+- ✅ SEM cert SSL local (Cloudflare termina HTTPS)
+- ✅ Resiliente — Cloudflare tem 300+ POPs, baixíssima latência
+- ✅ Mesma conta CF gerencia todas as lojas
+
+**Limites do plano gratuito do Cloudflare:**
+- Tunnels: **ilimitado**
+- Throughput: ilimitado
+- HTTP requests via Tunnel: **50/dia/grátis** com Zero Trust gratuito (suficiente)
+
+## Latência LAN < 1ms — opcional (DNS split-horizon)
+
+Por padrão tudo passa por Cloudflare (50-80ms). Pra totens dentro da loja
+ganharem latência LAN (~1ms), aponta o subdomínio pro IP local **dentro
+do Wi-Fi da loja**, mantendo o tunnel pra acesso de fora:
+
+### Roteador (Mikrotik/OpenWrt/Unifi/pfSense)
+DNS estático:
+```
+loja-shopping.tthreedigital.com.br → 192.168.0.50
+```
+Totens dentro da loja resolvem pra LAN, fora da loja resolvem pelo CF Tunnel.
+
+### Roteador residencial simples (sem split-DNS)
+Não tem split-DNS? Tudo bem — segue via tunnel, latência 50-80ms,
+ainda assim a maior parte do conteúdo vem do cache local da retaguarda.
 
 ---
 
@@ -194,6 +222,8 @@ docker compose down
 | Imagem não atualiza | Cache TTL 7d (URL antiga) | Re-upload no master gera URL nova (hash) |
 | Não aparece em /admin/retaguardas | Secret diferente ou firewall | Confere log: `docker logs retaguarda_reporter` |
 | 502 Bad Gateway em todas rotas | Master fora do ar OU DNS errado | `curl https://app.tthreedigital.com.br` do mini-PC |
+| Tunnel não conecta | Token inválido OU rede bloqueia outbound 443/7844 | `docker logs retaguarda_cloudflared` |
+| Domínio não responde | Propagação DNS (5-10min após install) | `dig loja-X.tthreedigital.com.br` confere CNAME |
 | POST de pedido falha | Internet caiu | Próxima etapa: buffer offline |
 | HTTPS dá erro de cert | Cert expirado/wildcard errado | Renovar com certbot |
 
