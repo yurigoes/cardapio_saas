@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
     const rows = await query(
       `SELECT m.id, m.empresa_id, e.nome_fantasia AS empresa_nome, e.email,
               m.mes_referencia::text, m.valor::float, m.vencimento::text, m.status,
-              m.pago_em, m.pago_via, m.mp_init_point, p.nome AS plano_nome
+              m.pago_em, m.pago_via, m.mp_init_point, p.nome AS plano_nome,
+              m.nota_fiscal_url, m.nota_fiscal_nome, m.nota_fiscal_em::text
          FROM mensalidades m
          JOIN empresas e ON e.id = m.empresa_id
     LEFT JOIN planos p   ON p.id = m.plano_id

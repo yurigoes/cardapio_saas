@@ -3,10 +3,10 @@
 /**
  * /admin/financeiro/mensalidades — master vê todas mensalidades.
  */
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Receipt, RefreshCw, Loader2, Filter, Send, CheckCircle2, XCircle,
-  ExternalLink, ArrowLeft, Plus, X, FileText,
+  ExternalLink, ArrowLeft, Plus, X, FileText, Upload, Trash2, FileCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { alertar, confirmar } from "@/components/ui/ConfirmModal";
@@ -24,6 +24,9 @@ interface Mensalidade {
   pago_via:       string | null;
   mp_init_point:  string | null;
   plano_nome:     string | null;
+  nota_fiscal_url:  string | null;
+  nota_fiscal_nome: string | null;
+  nota_fiscal_em:   string | null;
 }
 
 interface Totais {
@@ -68,6 +71,54 @@ export default function MensalidadesAdminPage() {
   const [novaAv, setNovaAv]     = useState(false);
   const [verAvulsas, setVerAvulsas] = useState(false);
   const [empresas, setEmpresas] = useState<Array<{ id: string; nome_fantasia: string }>>([]);
+  const [uploadingNf, setUploadingNf] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const fileTargetRef = useRef<{ id: string; tipo: "mensalidade" | "avulsa" } | null>(null);
+
+  function pedirArquivoNf(id: string, tipo: "mensalidade" | "avulsa" = "mensalidade") {
+    fileTargetRef.current = { id, tipo };
+    fileRef.current?.click();
+  }
+
+  async function uploadNf(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !fileTargetRef.current) return;
+    const { id, tipo } = fileTargetRef.current;
+    setUploadingNf(id);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(`/api/admin/mensalidades/${id}/nota-fiscal?tipo=${tipo}`, {
+        method: "POST",
+        headers: { Authorization: (authHeader() as Record<string, string>).Authorization },
+        body: fd,
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error?.message ?? "Falha");
+      await alertar({ titulo: "NF anexada", tipo: "sucesso" });
+      carregar();
+    } catch (err) {
+      await alertar({ titulo: "Falha", mensagem: (err as Error).message, tipo: "perigo" });
+    } finally {
+      setUploadingNf(null);
+      fileTargetRef.current = null;
+    }
+  }
+
+  async function removerNf(id: string, tipo: "mensalidade" | "avulsa" = "mensalidade") {
+    if (!await confirmar({ titulo: "Remover nota fiscal?", perigo: true })) return;
+    setUploadingNf(id);
+    try {
+      await fetch(`/api/admin/mensalidades/${id}/nota-fiscal?tipo=${tipo}`, {
+        method: "DELETE",
+        headers: authHeader(),
+      });
+      carregar();
+    } finally {
+      setUploadingNf(null);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/admin/empresas?per_page=300", { headers: authHeader() })
@@ -133,6 +184,11 @@ export default function MensalidadesAdminPage() {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Input invisível pra upload de NF */}
+      <input ref={fileRef} type="file" className="hidden"
+        accept="application/pdf,image/jpeg,image/png,application/xml,text/xml"
+        onChange={uploadNf} />
+
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-white">
@@ -253,13 +309,47 @@ export default function MensalidadesAdminPage() {
                       <p className="mt-1 text-[10px] text-emerald-400">↗ {fmtData(m.pago_em)}</p>
                     )}
                   </div>
-                  <div className="col-span-3 flex justify-end gap-1">
-                    {m.mp_init_point && (
+                  <div className="col-span-3 flex justify-end gap-1 flex-wrap">
+                    {m.mp_init_point && m.status !== "paga" && (
                       <a href={m.mp_init_point} target="_blank" rel="noopener"
                         title="Ver checkout" className="rounded-lg border border-white/10 p-1.5 text-slate-400 hover:bg-white/5">
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     )}
+
+                    {/* Quando paga: Comprovante + Nota Fiscal */}
+                    {m.status === "paga" && (
+                      <>
+                        <a href={`/api/painel/mensalidades/${m.id}/comprovante`} target="_blank" rel="noopener"
+                          title="Ver comprovante"
+                          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-300 hover:bg-emerald-500/20">
+                          <FileCheck className="h-3.5 w-3.5" />
+                        </a>
+                        {m.nota_fiscal_url ? (
+                          <>
+                            <a href={m.nota_fiscal_url} target="_blank" rel="noopener"
+                              title={`NF: ${m.nota_fiscal_nome ?? "anexada"}`}
+                              className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-1.5 text-blue-300 hover:bg-blue-500/20">
+                              <FileText className="h-3.5 w-3.5" />
+                            </a>
+                            <button onClick={() => removerNf(m.id, "mensalidade")}
+                              disabled={uploadingNf !== null}
+                              title="Remover NF"
+                              className="rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-300 hover:bg-red-500/20 disabled:opacity-30">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={() => pedirArquivoNf(m.id, "mensalidade")}
+                            disabled={uploadingNf !== null}
+                            title="Anexar nota fiscal (PDF/JPG/PNG/XML)"
+                            className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-1.5 text-amber-300 hover:bg-amber-500/20 disabled:opacity-30">
+                            {uploadingNf === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                          </button>
+                        )}
+                      </>
+                    )}
+
                     {m.status !== "paga" && m.status !== "cancelada" && (
                       <>
                         <button onClick={() => acao(m.id, "reenviar_email")}
@@ -382,7 +472,14 @@ function NovaAvulsaModal({ empresas, onClose, onSuccess }: {
 }
 
 function AvulsasList() {
-  const [list, setList] = useState<Array<{ id: string; empresa_nome: string; nome: string; motivo: string|null; valor: string; vencimento: string; status: string; origem: string; pago_via: string|null }>>([]);
+  const [list, setList] = useState<Array<{
+    id: string; empresa_nome: string; nome: string; motivo: string|null;
+    valor: string; vencimento: string; status: string; origem: string;
+    pago_via: string|null; nota_fiscal_url?: string|null; nota_fiscal_nome?: string|null;
+  }>>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const targetRef = useRef<string | null>(null);
 
   const carregar = useCallback(async () => {
     const r = await fetch("/api/admin/cobrancas-avulsas", { headers: authHeader() }).then(r => r.json());
@@ -401,9 +498,38 @@ function AvulsasList() {
     await fetch(`/api/admin/cobrancas-avulsas/${id}`, { method: "DELETE", headers: authHeader() });
     carregar();
   }
+  function pedirNf(id: string) { targetRef.current = id; fileRef.current?.click(); }
+  async function uploadNf(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (!f || !targetRef.current) return;
+    const id = targetRef.current;
+    setBusy(id);
+    try {
+      const fd = new FormData(); fd.append("file", f);
+      const r = await fetch(`/api/admin/mensalidades/${id}/nota-fiscal?tipo=avulsa`, {
+        method: "POST", headers: { Authorization: (authHeader() as Record<string, string>).Authorization }, body: fd,
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error?.message ?? "Falha");
+      carregar();
+    } catch (err) {
+      await alertar({ titulo: "Falha", mensagem: (err as Error).message, tipo: "perigo" });
+    } finally { setBusy(null); targetRef.current = null; }
+  }
+  async function removerNf(id: string) {
+    if (!await confirmar({ titulo: "Remover NF?", perigo: true })) return;
+    setBusy(id);
+    try {
+      await fetch(`/api/admin/mensalidades/${id}/nota-fiscal?tipo=avulsa`, { method: "DELETE", headers: authHeader() });
+      carregar();
+    } finally { setBusy(null); }
+  }
 
   return (
     <div className="rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4">
+      <input ref={fileRef} type="file" className="hidden"
+        accept="application/pdf,image/jpeg,image/png,application/xml,text/xml"
+        onChange={uploadNf} />
       <h3 className="mb-3 text-sm font-bold text-blue-300 uppercase tracking-wider">Cobranças avulsas ({list.length})</h3>
       {list.length === 0 ? (
         <p className="text-center text-sm text-slate-500 py-4">Nenhuma cobrança avulsa</p>
@@ -411,7 +537,7 @@ function AvulsasList() {
         <div className="divide-y divide-white/5">
           {list.map(c => (
             <div key={c.id} className="grid grid-cols-12 gap-2 p-2 text-xs items-center">
-              <div className="col-span-4 min-w-0">
+              <div className="col-span-3 min-w-0">
                 <p className="text-sm font-bold text-white truncate">{c.empresa_nome}</p>
                 <p className="text-[11px] text-slate-400 truncate">{c.nome}</p>
                 {c.motivo && <p className="text-[10px] text-slate-600 truncate">{c.motivo}</p>}
@@ -419,15 +545,45 @@ function AvulsasList() {
               <div className="col-span-2 text-right font-mono text-white">{fmtBRL(c.valor)}</div>
               <div className="col-span-2 text-slate-400">Vence: {fmtData(c.vencimento)}</div>
               <div className="col-span-2 text-center"><StatusPill status={c.status} /></div>
-              <div className="col-span-2 flex justify-end gap-1">
+              <div className="col-span-3 flex justify-end gap-1 flex-wrap">
                 {c.status === "aberta" && (
                   <>
-                    <button onClick={() => marcarPaga(c.id)} className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300 hover:bg-emerald-500/20">
+                    <button onClick={() => marcarPaga(c.id)} title="Marcar paga"
+                      className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300 hover:bg-emerald-500/20">
                       <CheckCircle2 className="h-3 w-3" />
                     </button>
-                    <button onClick={() => cancelar(c.id)} className="rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 text-red-300 hover:bg-red-500/20">
+                    <button onClick={() => cancelar(c.id)} title="Cancelar"
+                      className="rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 text-red-300 hover:bg-red-500/20">
                       <XCircle className="h-3 w-3" />
                     </button>
+                  </>
+                )}
+                {c.status === "paga" && (
+                  <>
+                    <a href={`/api/painel/mensalidades/${c.id}/comprovante?tipo=avulsa`} target="_blank" rel="noopener"
+                      title="Comprovante"
+                      className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-300 hover:bg-emerald-500/20">
+                      <FileCheck className="h-3.5 w-3.5" />
+                    </a>
+                    {c.nota_fiscal_url ? (
+                      <>
+                        <a href={c.nota_fiscal_url} target="_blank" rel="noopener"
+                          title={`NF: ${c.nota_fiscal_nome ?? "anexada"}`}
+                          className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-1.5 text-blue-300 hover:bg-blue-500/20">
+                          <FileText className="h-3.5 w-3.5" />
+                        </a>
+                        <button onClick={() => removerNf(c.id)} disabled={busy !== null} title="Remover NF"
+                          className="rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-300 hover:bg-red-500/20 disabled:opacity-30">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => pedirNf(c.id)} disabled={busy !== null}
+                        title="Anexar NF"
+                        className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-1.5 text-amber-300 hover:bg-amber-500/20 disabled:opacity-30">
+                        {busy === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
                   </>
                 )}
               </div>

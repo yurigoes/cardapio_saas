@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
     const rows = await query(
       `SELECT c.id, c.empresa_id, e.nome_fantasia AS empresa_nome,
               c.origem, c.nome, c.motivo, c.valor, c.vencimento,
-              c.status, c.mp_init_point, c.pago_em, c.pago_via, c.criado_em
+              c.status, c.mp_init_point, c.pago_em, c.pago_via, c.criado_em,
+              c.nota_fiscal_url, c.nota_fiscal_nome
          FROM cobrancas_avulsas c
          LEFT JOIN empresas e ON e.id = c.empresa_id
         WHERE ${where.join(" AND ")}
