@@ -24,12 +24,25 @@ function normalizar(t: string): string {
   return d.length >= 10 ? `55${d}` : d;
 }
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
+  try { return await doIt(req); }
+  catch (err) {
+    console.error("[Cliente/OTP/validar] UNCAUGHT:", err);
+    return serverError(err instanceof Error ? err.message : "Erro inesperado");
+  }
+}
+
+async function doIt(req: NextRequest) {
   let body: z.infer<typeof schema>;
   try { body = schema.parse(await req.json()); }
   catch (err) { return badRequest(err instanceof Error ? err.message : "Body inválido"); }
 
   if (!body.telefone && !body.cpf) return badRequest("Informe telefone ou CPF");
+
+  try { await queryOne(`SELECT 1 FROM cliente_otp LIMIT 1`); }
+  catch { return badRequest("Tabelas OTP não criadas — peça ao admin aplicar migration 075"); }
 
   const empresa = await queryOne<{ id: string }>(
     `SELECT id FROM empresas WHERE slug = $1 AND deleted_at IS NULL`,

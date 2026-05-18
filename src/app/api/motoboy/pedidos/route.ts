@@ -6,8 +6,9 @@
  */
 import { NextRequest } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
-import { query, queryOne } from "@/lib/db/client";
+import { query } from "@/lib/db/client";
 import { ok, forbidden, serverError } from "@/lib/utils/response";
+import { resolveMotoboyId } from "@/lib/delivery/resolveMotoboy";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -17,11 +18,9 @@ export async function GET(req: NextRequest) {
   if (role !== "motoboy") return forbidden("Apenas motoboy");
 
   try {
-    const motoboy = await queryOne<{ id: string }>(
-      `SELECT id FROM motoboys WHERE usuario_id = $1 AND empresa_id = $2`,
-      [sub, empresaId]
-    );
-    if (!motoboy) return forbidden("Motoboy não vinculado");
+    const motoboyId = await resolveMotoboyId(sub, empresaId, role);
+    if (!motoboyId) return forbidden("Motoboy não vinculado");
+    const motoboy = { id: motoboyId };
 
     const pedidos = await query(
       `SELECT p.id, p.numero, p.total, p.status_entrega,

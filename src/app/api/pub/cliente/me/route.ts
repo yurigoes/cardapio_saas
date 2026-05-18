@@ -25,6 +25,18 @@ async function getCliente(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  try { return await doGet(req); }
+  catch (err) {
+    console.error("[Cliente/me] UNCAUGHT:", err);
+    return serverError(err instanceof Error ? err.message : "Erro inesperado");
+  }
+}
+
+async function doGet(req: NextRequest) {
+  // Verifica se migration 075 foi aplicada
+  try { await queryOne(`SELECT 1 FROM cliente_sessoes LIMIT 1`); }
+  catch { return unauthorized("Sistema OTP não inicializado (migration 075 pendente)"); }
+
   const sess = await getCliente(req);
   if (!sess) return unauthorized("Sessão inválida ou expirada");
 

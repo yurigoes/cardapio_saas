@@ -149,7 +149,10 @@ export default function MotoboyPage() {
       });
       const d = await r.json();
       if (d.success) carregar();
-      else await alertar({ titulo: "Falha", mensagem: d.error?.message ?? "", tipo: "perigo" });
+      else {
+        const msg = typeof d.error === "string" ? d.error : (d.error?.message ?? JSON.stringify(d.error));
+        await alertar({ titulo: "Falha ao atualizar status", mensagem: msg, tipo: "perigo" });
+      }
     } finally { setUpdating(null); }
   }
 

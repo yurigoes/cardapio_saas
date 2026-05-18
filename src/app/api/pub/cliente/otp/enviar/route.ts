@@ -28,13 +28,35 @@ function normalizarCpf(c: string): string {
   return c.replace(/\D/g, "");
 }
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
+  // Wrap geral: nenhum erro inesperado deve crashar (502)
+  try {
+    return await handlePost(req);
+  } catch (err) {
+    console.error("[Cliente/OTP/enviar] UNCAUGHT:", err);
+    return serverError(err instanceof Error ? err.message : "Erro inesperado");
+  }
+}
+
+async function handlePost(req: NextRequest) {
   let body: z.infer<typeof schema>;
   try { body = schema.parse(await req.json()); }
   catch (err) { return badRequest(err instanceof Error ? err.message : "Body inválido"); }
 
   if (!body.telefone && !body.cpf) {
     return badRequest("Informe telefone ou CPF");
+  }
+
+  // Verifica se migration 075 foi aplicada (cliente_otp existe?)
+  try {
+    await queryOne(`SELECT 1 FROM cliente_otp LIMIT 1`);
+  } catch {
+    return badRequest(
+      "Funcionalidade de OTP do cliente ainda não está disponível. " +
+      "Admin precisa aplicar a migration 075 no banco."
+    );
   }
 
   // Localiza empresa
@@ -90,37 +112,87 @@ export async function POST(req: NextRequest) {
     [empresa.id, identificador, tipoId, cliente?.id ?? null, codigoHash, ip, ua]
   ).catch(err => console.error("[Cliente/OTP/insert]", err));
 
-  // Envia código por WhatsApp se for telefone E cliente existe E temos Evolution configurado
+  // Envia código por WhatsApp — tenta Evolution da EMPRESA, e se não tiver,
+  // cai pra Master Evolution (mesma usada no suporte/2FA)
+  let envioStatus: "enviado" | "sem_evolution" | "falha" = "sem_evolution";
+  let envioDetalhe = "";
   if (cliente?.id && body.telefone) {
+    const telefoneFmt = cliente.telefone ?? identificador;
+    const number = telefoneFmt.replace(/\D/g, "");
+    const numberE164 = number.startsWith("55") ? number : `55${number}`;
+    const texto = `🔐 Seu código de acesso: *${codigo}*\n\nVálido por 10 minutos.\n\nSe não foi você, ignore.`;
+
+    // Tenta Evolution da empresa primeiro
     try {
       const evoCfg = await queryOne<{ evolution_url: string | null; evolution_key: string | null; slug: string }>(
         `SELECT evolution_url, evolution_key, slug FROM empresas WHERE id = $1`,
         [empresa.id]
       );
       if (evoCfg?.evolution_url && evoCfg.evolution_key) {
-        const telefoneFmt = cliente.telefone ?? identificador;
-        const number = telefoneFmt.replace(/\D/g, "");
-        const numberE164 = number.startsWith("55") || number.length < 12 ? number : `55${number}`;
         const url = `${evoCfg.evolution_url.replace(/\/+$/, "")}/message/sendText/${evoCfg.slug}`;
-        await fetch(url, {
+        const r = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "apikey": evoCfg.evolution_key },
-          body: JSON.stringify({
-            number: numberE164,
-            text: `🔐 Seu código de acesso: *${codigo}*\n\nVálido por 10 minutos.\n\nSe não foi você, ignore.`,
-          }),
+          body: JSON.stringify({ number: numberE164, text: texto }),
           signal: AbortSignal.timeout(8000),
-        }).catch(e => console.warn("[OTP/whatsapp]", e));
+        });
+        if (r.ok) {
+          envioStatus = "enviado";
+          console.info(`[OTP/whatsapp] enviado via empresa.evolution → ${numberE164}`);
+        } else {
+          const t = await r.text().catch(() => "");
+          envioDetalhe = `Empresa.evo HTTP ${r.status}: ${t.slice(0, 100)}`;
+          console.warn(`[OTP/whatsapp] ${envioDetalhe}`);
+        }
       }
     } catch (e) {
-      console.warn("[Cliente/OTP] WhatsApp falhou (não bloqueia):", e);
+      envioDetalhe = `Empresa.evo erro: ${e instanceof Error ? e.message : "?"}`;
+      console.warn(`[OTP/whatsapp]`, envioDetalhe);
+    }
+
+    // Fallback: Master Evolution (config global do SaaS)
+    if (envioStatus !== "enviado") {
+      try {
+        const masterEvo = await queryOne<{ url: string | null; api_key: string | null; instance_name: string | null }>(
+          `SELECT url, api_key, instance_name FROM master_evolution_config WHERE id = 1 AND ativo = TRUE`
+        ).catch(() => null);
+        if (masterEvo?.url && masterEvo.api_key && masterEvo.instance_name) {
+          // api_key pode estar cifrada ou plain — tenta decifrar best-effort
+          let apiKey = masterEvo.api_key;
+          try {
+            const { decryptIfNeeded } = await import("@/lib/security/encrypt");
+            apiKey = decryptIfNeeded(masterEvo.api_key) ?? masterEvo.api_key;
+          } catch {}
+          const url = `${masterEvo.url.replace(/\/+$/, "")}/message/sendText/${masterEvo.instance_name}`;
+          const r = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "apikey": apiKey },
+            body: JSON.stringify({ number: numberE164, text: texto }),
+            signal: AbortSignal.timeout(8000),
+          });
+          if (r.ok) {
+            envioStatus = "enviado";
+            console.info(`[OTP/whatsapp] enviado via Master Evolution → ${numberE164}`);
+          } else {
+            const t = await r.text().catch(() => "");
+            envioDetalhe = `Master.evo HTTP ${r.status}: ${t.slice(0, 100)}`;
+            envioStatus = "falha";
+          }
+        }
+      } catch (e) {
+        envioDetalhe = `Master.evo erro: ${e instanceof Error ? e.message : "?"}`;
+        envioStatus = "falha";
+      }
     }
   }
 
   // Em dev/sandbox, retorna o código pro testes facilitarem
   const devMode = process.env.NODE_ENV !== "production";
+  console.info(`[Cliente/OTP] enviar empresa=${empresa.id} cliente=${cliente?.id ?? "—"} envio=${envioStatus}${envioDetalhe ? " · " + envioDetalhe : ""}`);
   return ok({
     enviado: true,
+    envio:   envioStatus,                 // útil pro debug
+    detalhe: envioDetalhe || undefined,
     mensagem: "Se o cadastro existir, um código foi enviado pelo WhatsApp.",
     ...(devMode && cliente ? { _dev_codigo: codigo } : {}),
   });

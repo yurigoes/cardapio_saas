@@ -49,13 +49,11 @@ export async function POST(
     let extraWhere = "";
     const vals: unknown[] = [params.id, empresaId];
     if (isMotoboy) {
-      // motoboys.usuario_id = sub
-      const motoboy = await queryOne<{ id: string }>(
-        `SELECT id FROM motoboys WHERE usuario_id = $1 AND empresa_id = $2`,
-        [sub, empresaId]
-      );
-      if (!motoboy) return forbidden("Motoboy não vinculado");
-      vals.push(motoboy.id);
+      // motoboys.usuario_id = sub — usa helper que auto-vincula se faltar
+      const { resolveMotoboyId } = await import("@/lib/delivery/resolveMotoboy");
+      const motoboyId = await resolveMotoboyId(sub, empresaId, role);
+      if (!motoboyId) return forbidden("Motoboy não vinculado");
+      vals.push(motoboyId);
       extraWhere = ` AND motoboy_id = $3`;
     }
 
@@ -79,7 +77,23 @@ export async function POST(
       [...vals, body.status]
     );
 
-    if (!updated) return notFound();
+    if (!updated) {
+      // Diagnóstico: o pedido existe? motoboy bate?
+      const diag = await queryOne<{ status_entrega: string | null; motoboy_id: string | null }>(
+        `SELECT status_entrega, motoboy_id::text FROM pedidos
+          WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL`,
+        [params.id, empresaId]
+      );
+      if (!diag) return notFound("Pedido não encontrado");
+      if (isMotoboy && diag.motoboy_id !== vals[2]) {
+        return forbidden(`Este pedido está atribuído a outro motoboy${diag.motoboy_id ? "" : " (ou ainda sem atribuição)"}.`);
+      }
+      if (diag.status_entrega === body.status) {
+        // Idempotente: já está no status pedido
+        return ok({ id: params.id, status_entrega: body.status, jaEstava: true });
+      }
+      return badRequest(`Não foi possível atualizar status (atual=${diag.status_entrega ?? "—"})`);
+    }
 
     await auditLog({
       acao:       "pedido:status-entrega",

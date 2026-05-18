@@ -44,11 +44,30 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const motoboy = await queryOne<{ id: string }>(
+    let motoboy = await queryOne<{ id: string }>(
       `SELECT id FROM motoboys WHERE usuario_id = $1 AND empresa_id = $2`,
       [sub, empresaId]
     );
-    if (!motoboy) return forbidden("Motoboy não vinculado a este usuário");
+
+    // Auto-vincula: usuário tem role=motoboy mas não tem entrada em motoboys.
+    // Cria automaticamente usando nome do usuario_id.
+    if (!motoboy && role === "motoboy") {
+      const usr = await queryOne<{ nome: string; telefone: string | null }>(
+        `SELECT nome, telefone FROM usuarios WHERE id = $1 AND empresa_id = $2`,
+        [sub, empresaId]
+      );
+      if (usr) {
+        motoboy = await queryOne<{ id: string }>(
+          `INSERT INTO motoboys (empresa_id, nome, telefone, status, ativo, usuario_id)
+           VALUES ($1, $2, $3, 'disponivel', TRUE, $4)
+           RETURNING id`,
+          [empresaId, usr.nome, usr.telefone, sub]
+        );
+        console.info(`[Motoboy/Localizacao] auto-vinculou motoboy ${motoboy?.id} pra usuario=${sub}`);
+      }
+    }
+
+    if (!motoboy) return forbidden("Motoboy não vinculado a este usuário. Peça ao admin pra vincular em /painel/usuarios.");
 
     await transaction(async (client) => {
       await client.query(
