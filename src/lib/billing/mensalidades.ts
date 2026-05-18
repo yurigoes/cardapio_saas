@@ -86,6 +86,96 @@ export async function gerarMensalidadeMes(
 }
 
 /**
+ * Gera UMA mensalidade pra uma REDE inteira (matriz cobrada por todas filiais),
+ * com desconto progressivo opcional.
+ *
+ * Cálculo:
+ *  - valor = plano.preco_mensal * (1 + (N-1) * (1 - desconto_pct/100))
+ *  - ex: plano R$100, 3 filiais, desconto 30%:
+ *        valor = 100 + 2 * 70 = 240 (1ª filial paga 100%, demais 70%)
+ *
+ * Mensalidade é registrada com:
+ *  - empresa_id = matriz_id
+ *  - rede_id = redeId
+ *
+ * Idempotente: ON CONFLICT (empresa_id, mes_referencia) DO NOTHING.
+ */
+export async function gerarMensalidadeRede(
+  redeId: string,
+  mesReferencia: Date,
+): Promise<{ id: string; criada: boolean; mensagem?: string; valor?: number; qtd_filiais?: number }> {
+  // 1. Carrega rede + plano + matriz
+  const rede = await queryOne<{
+    id: string; nome: string; plano_id: string | null;
+    desconto_pct: string | null; matriz_id: string | null;
+  }>(
+    `SELECT r.id, r.nome,
+            r.plano_id,
+            COALESCE(r.desconto_progressivo_pct, 0)::text AS desconto_pct,
+            (SELECT m.id FROM empresas m
+              WHERE m.rede_id = r.id AND m.is_matriz = TRUE AND m.deleted_at IS NULL
+              LIMIT 1) AS matriz_id
+       FROM redes r
+      WHERE r.id = $1 AND r.deleted_at IS NULL`,
+    [redeId]
+  );
+  if (!rede) return { id: "", criada: false, mensagem: "rede não encontrada" };
+  if (!rede.plano_id) return { id: "", criada: false, mensagem: "rede sem plano associado" };
+  if (!rede.matriz_id) return { id: "", criada: false, mensagem: "rede sem matriz definida" };
+
+  const plano = await queryOne<{ id: string; nome: string; preco_mensal: string }>(
+    `SELECT id, nome, preco_mensal FROM planos WHERE id = $1 AND ativo = true`,
+    [rede.plano_id]
+  );
+  if (!plano) return { id: "", criada: false, mensagem: "plano da rede inativo" };
+
+  const precoUnitario = Number(plano.preco_mensal);
+  if (precoUnitario <= 0) return { id: "", criada: false, mensagem: "plano sem preço" };
+
+  // 2. Conta filiais ATIVAS na rede
+  const r = await queryOne<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM empresas
+      WHERE rede_id = $1 AND deleted_at IS NULL
+        AND status IN ('ativo','ativa','teste')`,
+    [redeId]
+  );
+  const qtdFiliais = Number(r?.n ?? "0");
+  if (qtdFiliais === 0) return { id: "", criada: false, mensagem: "rede sem filiais ativas" };
+
+  // 3. Calcula valor com desconto progressivo
+  const descontoPct = Number(rede.desconto_pct ?? "0");
+  const fatorDesc   = (100 - descontoPct) / 100;
+  const valor = precoUnitario + (qtdFiliais - 1) * precoUnitario * fatorDesc;
+
+  const cfg = await getBillingDefaults();
+  const mesRef = new Date(mesReferencia.getFullYear(), mesReferencia.getMonth(), 1);
+  const venc   = new Date(mesReferencia.getFullYear(), mesReferencia.getMonth(), cfg.vencimento_dia);
+
+  // 4. INSERT na MATRIZ + rede_id
+  const result = await queryOne<{ id: string }>(
+    `INSERT INTO mensalidades
+       (empresa_id, rede_id, plano_id, mes_referencia, valor, vencimento, status,
+        observacoes)
+     VALUES ($1, $2, $3, $4, $5, $6, 'aberta', $7)
+     ON CONFLICT (empresa_id, mes_referencia) DO NOTHING
+     RETURNING id`,
+    [rede.matriz_id, redeId, plano.id, mesRef.toISOString().slice(0, 10),
+     Number(valor.toFixed(2)), venc.toISOString().slice(0, 10),
+     `Rede ${rede.nome}: ${qtdFiliais} filiais (1ª: ${precoUnitario.toFixed(2)} + ${qtdFiliais-1}x ${(precoUnitario*fatorDesc).toFixed(2)})`]
+  );
+
+  if (result) {
+    return { id: result.id, criada: true, valor: Number(valor.toFixed(2)), qtd_filiais: qtdFiliais };
+  }
+
+  const existing = await queryOne<{ id: string }>(
+    `SELECT id FROM mensalidades WHERE empresa_id = $1 AND mes_referencia = $2`,
+    [rede.matriz_id, mesRef.toISOString().slice(0, 10)]
+  );
+  return { id: existing?.id ?? "", criada: false, valor: Number(valor.toFixed(2)), qtd_filiais: qtdFiliais };
+}
+
+/**
  * Cria preferência MP Checkout Pro pra mensalidade específica.
  * Salva mp_preference_id + mp_init_point na linha.
  */

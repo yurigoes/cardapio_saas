@@ -8,7 +8,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/client";
-import { gerarMensalidadeMes, enviarEmailFatura } from "@/lib/billing/mensalidades";
+import { gerarMensalidadeMes, gerarMensalidadeRede, enviarEmailFatura } from "@/lib/billing/mensalidades";
 
 export async function POST(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -18,27 +18,51 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const empresas = await query<{
-      id: string; nome_fantasia: string; email: string | null; plano_id: string | null;
-    }>(
-      `SELECT id, nome_fantasia, email, plano_id
-         FROM empresas
-        WHERE status IN ('ativa', 'teste')
-          AND deleted_at IS NULL
+    // 1. Gera mensalidades por REDE (uma fatura unificada na matriz)
+    const redes = await query<{ id: string; nome: string }>(
+      `SELECT id, nome FROM redes
+        WHERE deleted_at IS NULL
           AND plano_id IS NOT NULL`
-    );
+    ).catch(() => []);
 
     const hoje = new Date();
     const mesRef = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
 
+    let redes_geradas = 0, redes_existentes = 0, redes_erros = 0;
     let geradas = 0, ja_existentes = 0, sem_plano = 0, erros = 0, emails_enviados = 0;
+
+    // ── Mensalidades por rede ──
+    for (const r of redes) {
+      const result = await gerarMensalidadeRede(r.id, mesRef);
+      if (result.id) {
+        if (result.criada) redes_geradas++;
+        else redes_existentes++;
+      } else {
+        redes_erros++;
+        console.warn(`[Cron/Rede] rede ${r.nome}: ${result.mensagem}`);
+      }
+    }
+
+    // 2. Gera mensalidades pra empresas STANDALONE (sem rede_id)
+    //    e pra filiais de redes SEM plano configurado (fallback individual)
+    const empresas = await query<{
+      id: string; nome_fantasia: string; email: string | null; plano_id: string | null;
+    }>(
+      `SELECT e.id, e.nome_fantasia, e.email, e.plano_id
+         FROM empresas e
+         LEFT JOIN redes r ON r.id = e.rede_id AND r.deleted_at IS NULL
+        WHERE e.status IN ('ativo', 'ativa', 'teste')
+          AND e.deleted_at IS NULL
+          AND e.plano_id IS NOT NULL
+          -- Pula filiais de redes COM plano (já cobertas acima)
+          AND (e.rede_id IS NULL OR r.plano_id IS NULL)`
+    );
 
     for (const emp of empresas) {
       const r = await gerarMensalidadeMes(emp, mesRef);
       if (r.id) {
         if (r.criada) {
           geradas++;
-          // Envia fatura por email best-effort
           if (emp.email) {
             const e = await enviarEmailFatura(r.id);
             if (e.ok) emails_enviados++;
@@ -52,8 +76,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.info(`[Cron/GerarMensalidades] ${geradas} geradas, ${ja_existentes} já existentes, ${sem_plano} sem plano, ${erros} erros, ${emails_enviados} emails`);
-    return NextResponse.json({ ok: true, geradas, ja_existentes, sem_plano, erros, emails_enviados });
+    console.info(
+      `[Cron/GerarMensalidades] Redes: ${redes_geradas} geradas, ${redes_existentes} existentes, ${redes_erros} erros · ` +
+      `Empresas standalone: ${geradas} geradas, ${ja_existentes} existentes, ${sem_plano} sem plano, ${erros} erros, ${emails_enviados} emails`
+    );
+    return NextResponse.json({
+      ok: true,
+      redes: { geradas: redes_geradas, ja_existentes: redes_existentes, erros: redes_erros },
+      empresas: { geradas, ja_existentes, sem_plano, erros, emails_enviados },
+    });
   } catch (err) {
     console.error("[Cron/GerarMensalidades]", err);
     return NextResponse.json({ ok: false }, { status: 500 });
