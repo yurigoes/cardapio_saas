@@ -94,6 +94,26 @@ ok "Repo em $INSTALL_DIR"
 
 cd "$INSTALL_DIR/retaguarda"
 
+# ── 3.5) Se INSTALL_TOKEN setado, pulla config do master ────────────────────
+if [ -n "${INSTALL_TOKEN:-}" ]; then
+  : "${MASTER_URL:?MASTER_URL precisa estar setado quando INSTALL_TOKEN é usado}"
+  log "Resolvendo INSTALL_TOKEN no master $MASTER_URL"
+  CONFIG=$(curl -fsSL "$MASTER_URL/api/retaguarda/install-config?token=$INSTALL_TOKEN") || {
+    err "Falha ao consultar token (expirou, foi consumido ou inválido)"
+    exit 1
+  }
+  if ! echo "$CONFIG" | jq -e '.ok' >/dev/null; then
+    err "Token rejeitado pelo master:"
+    echo "$CONFIG" | jq .
+    exit 1
+  fi
+  EMPRESA_SLUG=$(echo "$CONFIG" | jq -r '.empresa_slug')
+  SUBDOMAIN=$(echo "$CONFIG"    | jq -r '.subdomain')
+  BASE_DOMAIN=$(echo "$CONFIG"  | jq -r '.base_domain')
+  HEARTBEAT_SECRET=$(echo "$CONFIG" | jq -r '.heartbeat_secret')
+  ok "Config recebida do token: $EMPRESA_SLUG → $SUBDOMAIN.$BASE_DOMAIN"
+fi
+
 # ── 4) Coleta dados (interativo OU via env) ─────────────────────────────────
 echo
 log "Configuração da retaguarda"

@@ -7,7 +7,8 @@
  * último heartbeat, IP e domínio. Permite forçar refresh.
  */
 import { useEffect, useState } from "react";
-import { Server, RefreshCw, CircleCheck, CircleAlert, CircleX, Globe } from "lucide-react";
+import Link from "next/link";
+import { Server, RefreshCw, CircleCheck, CircleAlert, CircleX, Globe, Plus, Copy, X } from "lucide-react";
 
 interface Retaguarda {
   id:                string;
@@ -41,6 +42,7 @@ export default function RetaguardasPage() {
   const [data,    setData]    = useState<Retaguarda[]>([]);
   const [loading, setLoading] = useState(true);
   const [err,     setErr]     = useState("");
+  const [modalNova, setModalNova] = useState(false);
 
   async function load() {
     setLoading(true); setErr("");
@@ -75,14 +77,25 @@ export default function RetaguardasPage() {
             Mini-PCs nas lojas servindo cache local e reduzindo carga do master.
           </p>
         </div>
-        <button
-          onClick={load}
-          className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10 transition"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          Atualizar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setModalNova(true)}
+            className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white hover:brightness-110 transition"
+          >
+            <Plus className="h-4 w-4" />
+            Nova retaguarda
+          </button>
+          <button
+            onClick={load}
+            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10 transition"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Atualizar
+          </button>
+        </div>
       </header>
+
+      {modalNova && <NovaRetaguardaModal onClose={() => setModalNova(false)} />}
 
       {/* Métricas */}
       <div className="grid grid-cols-3 gap-3">
@@ -137,8 +150,10 @@ export default function RetaguardasPage() {
             </thead>
             <tbody>
               {data.map(r => (
-                <tr key={r.id} className="border-b border-white/5 hover:bg-white/5">
-                  <td className="px-4 py-3 text-white font-medium">{r.empresa_slug}</td>
+                <tr key={r.id} className="border-b border-white/5 hover:bg-white/5 cursor-pointer" onClick={() => window.location.href = `/admin/retaguardas/${r.id}`}>
+                  <td className="px-4 py-3 text-white font-medium">
+                    <Link href={`/admin/retaguardas/${r.id}`} className="hover:text-brand transition">{r.empresa_slug}</Link>
+                  </td>
                   <td className="px-4 py-3 text-slate-300">
                     {r.dominio ? (
                       <span className="flex items-center gap-1.5">
@@ -185,6 +200,139 @@ export default function RetaguardasPage() {
         <strong className="text-red-400"> offline</strong> &gt; 180s.
         Atualiza automaticamente a cada 30s.
       </footer>
+    </div>
+  );
+}
+
+// ─── Modal de criação ────────────────────────────────────────────────────────
+interface NovaResp {
+  token: string;
+  expires_at: string;
+  empresa_slug: string;
+  retaguarda_domain: string;
+  master_url: string;
+  install_command_alt: string;
+}
+
+function NovaRetaguardaModal({ onClose }: { onClose: () => void }) {
+  const [slug, setSlug]       = useState("");
+  const [sub, setSub]         = useState("");
+  const [domain, setDomain]   = useState("tthreedigital.com.br");
+  const [resp, setResp]       = useState<NovaResp | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr]         = useState("");
+  const [copied, setCopied]   = useState(false);
+
+  async function gerar() {
+    if (!slug) { setErr("Informe slug da empresa"); return; }
+    setLoading(true); setErr("");
+    try {
+      const r = await fetch("/api/admin/retaguardas/install-token", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body:    JSON.stringify({
+          empresa_slug: slug,
+          subdomain:    sub || undefined,
+          base_domain:  domain,
+        }),
+      });
+      const d = await r.json();
+      if (!d.success) { setErr(d.error || "Erro"); return; }
+      setResp(d.data);
+    } catch { setErr("Erro de conexão"); }
+    finally { setLoading(false); }
+  }
+
+  function copy(s: string) {
+    navigator.clipboard.writeText(s).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-slate-900 p-6">
+        <header className="flex items-center justify-between mb-5">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+            <Plus className="h-5 w-5 text-brand" />
+            Nova retaguarda
+          </h2>
+          <button onClick={onClose} className="rounded-lg p-1 hover:bg-white/10">
+            <X className="h-5 w-5 text-slate-400" />
+          </button>
+        </header>
+
+        {!resp ? (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-400">
+              Gera um token de uso único (válido 24h). Cola o comando curl gerado no terminal do mini-PC novo — o script faz tudo automaticamente: instala Docker, cria Cloudflare Tunnel, sobe containers.
+            </p>
+
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">Slug da empresa <span className="text-red-400">*</span></label>
+              <input value={slug} onChange={e => setSlug(e.target.value)} placeholder="ex: top-cozinha-oriental"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-brand/40 focus:outline-none" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Subdomínio</label>
+                <input value={sub} onChange={e => setSub(e.target.value)} placeholder="auto: loja-{slug}"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-brand/40 focus:outline-none" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Domínio base</label>
+                <input value={domain} onChange={e => setDomain(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-brand/40 focus:outline-none" />
+              </div>
+            </div>
+
+            {err && <p className="text-sm text-red-400">{err}</p>}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={onClose} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300 hover:bg-white/5">Cancelar</button>
+              <button onClick={gerar} disabled={loading || !slug} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50">
+                {loading ? "Gerando..." : "Gerar token + comando"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/5 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">✓ Token gerado</p>
+              <p className="mt-1 text-sm text-white">{resp.retaguarda_domain}</p>
+              <p className="text-[10px] text-slate-400">Expira em {new Date(resp.expires_at).toLocaleString("pt-BR")}</p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">Comando pra rodar no mini-PC novo (como root):</label>
+              <pre className="rounded-lg border border-white/10 bg-black/40 p-3 text-[11px] text-emerald-300 overflow-x-auto whitespace-pre-wrap break-all">
+{resp.install_command_alt}
+              </pre>
+              <button
+                onClick={() => copy(resp.install_command_alt)}
+                className="mt-2 flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {copied ? "Copiado!" : "Copiar comando"}
+              </button>
+            </div>
+
+            <div className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-3 text-xs text-amber-200">
+              <p className="font-semibold mb-1">⚠ Você ainda precisa:</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>CF API Token, Account ID, Zone ID (do dashboard Cloudflare)</li>
+                <li>Esses dados o script pede no terminal — uma vez por instalação</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button onClick={onClose} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:brightness-110">Fechar</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

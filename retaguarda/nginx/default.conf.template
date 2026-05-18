@@ -114,9 +114,14 @@ server {
 
   # ── 2) CARDÁPIO PÚBLICO — cache curto, 5 min ──────────────────────────────
   # O endpoint já tem cache Redis no master; aqui cacheamos no edge da retaguarda.
-  # Combinado, o master quase nunca é tocado pra leitura de cardápio.
+  # Cache key é EXPLÍCITA e previsível pra que o purger consiga invalidar
+  # arquivos individuais (md5(key) = nome do arquivo). Schema:
+  #   v1:/api/pub/cardapio/{slug}
+  # Quando master mutar cardápio, ele chama POST /__purge com {slug} e
+  # purger remove esse arquivo do disco.
   location ~ ^/api/pub/cardapio/[^/]+$ {
     proxy_cache             html_cache;
+    proxy_cache_key         "v1:$request_uri";
     proxy_cache_valid       200 5m;
     proxy_cache_valid       404 30s;
     proxy_cache_use_stale   error timeout updating http_500 http_502 http_503;
@@ -188,6 +193,26 @@ server {
     allow 192.168.0.0/16;
     deny  all;
     proxy_pass http://worker:3001;
+  }
+
+  # PURGE — master chama pra invalidar cache (após mutation em produto/etc).
+  # Auth via header X-Purge-Secret (mesmo que HEARTBEAT_SECRET).
+  # Aceito de qualquer origem porque chega via Cloudflare Tunnel
+  # (não tem como vir direto). Auth do header impede abuso.
+  location /__purge {
+    proxy_pass http://purger:3002;
+    proxy_set_header X-Purge-Secret $http_x_purge_secret;
+    client_max_body_size 1k;
+  }
+
+  # Métricas locais (uso pra debug). Só LAN.
+  location /__stats {
+    allow 127.0.0.1;
+    allow 10.0.0.0/8;
+    allow 172.16.0.0/12;
+    allow 192.168.0.0/16;
+    deny  all;
+    proxy_pass http://purger:3002/__stats;
   }
 
   # ── 5) Demais mutations + leituras autenticadas — pass-through ──────────

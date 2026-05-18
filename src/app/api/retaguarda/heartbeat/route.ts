@@ -2,15 +2,20 @@
  * POST /api/retaguarda/heartbeat
  *
  * Endpoint chamado pela retaguarda a cada 60s.
- * Atualiza/cria registro em `retaguardas` + grava IP público.
+ * Atualiza/cria registro em `retaguardas` + grava IP público + métricas.
  *
  * Auth: header x-retaguarda-secret == env RETAGUARDA_HEARTBEAT_SECRET.
+ * Rate-limit: 5/min por IP (anti-flood se vazar secret).
+ *
  * Body: { empresa_slug, retaguarda_id, versao?, metricas? }
+ *   metricas é JSONB e o reporter atual envia { coletado_em, queue{...},
+ *   cache{html_mb, media_mb, total_mb, ...} } — guardamos como veio.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { queryOne } from "@/lib/db/client";
 import { getClientIp } from "@/lib/auth/middleware";
+import { checkRateLimitByRequest, RETAGUARDA_HEARTBEAT_RATE_LIMIT } from "@/lib/security/rate-limit";
 
 const schema = z.object({
   empresa_slug:  z.string().min(1),
@@ -20,11 +25,25 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  // Rate-limit primeiro (anti-flood)
+  const rl = await checkRateLimitByRequest(req, RETAGUARDA_HEARTBEAT_RATE_LIMIT);
+  if (!rl.success) {
+    return NextResponse.json(
+      { ok: false, error: "rate limited" },
+      { status: 429, headers: { "Retry-After": "60" } }
+    );
+  }
+
   const secret = process.env.RETAGUARDA_HEARTBEAT_SECRET;
   if (!secret) {
+    // Loga uma vez por instância (evita flood)
+    if (!_loggedMissingSecret) {
+      console.warn("⚠ [retaguarda/heartbeat] RETAGUARDA_HEARTBEAT_SECRET não configurado — endpoint inutilizável. Defina no .env do master.");
+      _loggedMissingSecret = true;
+    }
     return NextResponse.json(
-      { ok: false, error: "RETAGUARDA_HEARTBEAT_SECRET não configurado" },
-      { status: 500 }
+      { ok: false, error: "RETAGUARDA_HEARTBEAT_SECRET não configurado no master" },
+      { status: 503 }
     );
   }
   if (req.headers.get("x-retaguarda-secret") !== secret) {
@@ -77,3 +96,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 }
+
+let _loggedMissingSecret = false;

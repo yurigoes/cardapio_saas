@@ -1,0 +1,8 @@
+{
+  "name": "retaguarda-reporter",
+  "version": "1.0.0",
+  "description": "Coleta métricas de worker + purger e manda heartbeat rico pro master.",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": { "start": "node index.mjs" }
+}

@@ -59,6 +59,14 @@ export const SENSIBLE_RATE_LIMIT: RateLimitConfig = {
   keyPrefix: "rl:sensible",
 };
 
+// Heartbeat da retaguarda: reporter envia 1/min, então 5/min é folgado.
+// Se vazar secret e atacar, ainda assim trava o flood na tabela.
+export const RETAGUARDA_HEARTBEAT_RATE_LIMIT: RateLimitConfig = {
+  windowMs:  60_000,
+  max:       parseInt(process.env.RATE_LIMIT_HEARTBEAT || "5"),
+  keyPrefix: "rl:hb",
+};
+
 function getClientIp(req: NextRequest): string {
   return (
     req.headers.get("x-real-ip") ||

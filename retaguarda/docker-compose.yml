@@ -1,18 +1,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# RETAGUARDA do Cardápio SaaS
+# RETAGUARDA do Cardápio SaaS — stack completo no mini-PC da loja
 #
-# Rodar no mini-PC do restaurante. Faz proxy/cache da VPS principal pra que
-# totens, PDVs e painéis locais não batam direto no app.tthreedigital.com.br.
-#
-# Componentes:
-#   - nginx-cache:  reverse proxy com cache (cardápio + imagens + estáticos)
-#   - redis:        buffer offline + idempotency keys (próxima etapa)
-#
-# Como subir:
-#   1. Copiar .env.example pra .env e preencher
-#   2. docker compose up -d
-#   3. Apontar DNS interno do restaurante (subdomínio.tthreedigital.com.br
-#      ou IP direto) pra esta máquina, porta 80/443.
+#   nginx-cache  proxy + cache 3 zonas (html/media/static)
+#   redis        buffer offline + idempotency
+#   worker       enfileira POSTs quando master cai + drainer
+#   purger       invalida cache HTML quando master pede
+#   cloudflared  HTTPS público via Cloudflare Tunnel (sem IP fixo)
+#   reporter     heartbeat 60s + métricas pro master
+#   watchtower   auto-update das imagens (opcional)
 # ─────────────────────────────────────────────────────────────────────────────
 version: "3.9"
 
@@ -31,14 +26,10 @@ services:
       - cache_static:/var/cache/nginx/static
       - ./certs:/etc/nginx/certs:ro
     environment:
-      # Upstream (VPS principal)
       MASTER_URL:        "${MASTER_URL}"
       MASTER_HOST:       "${MASTER_HOST}"
-      # Domínio público que os totens/PDVs vão chamar (ex: loja1.tthreedigital.com.br)
       RETAGUARDA_DOMAIN: "${RETAGUARDA_DOMAIN}"
-      # Empresa atendida (pra logs e métricas)
       EMPRESA_SLUG:      "${EMPRESA_SLUG}"
-      # Tamanho dos caches (default ~5 GB total)
       CACHE_MAX_HTML:    "${CACHE_MAX_HTML:-200m}"
       CACHE_MAX_MEDIA:   "${CACHE_MAX_MEDIA:-5g}"
       CACHE_MAX_STATIC:  "${CACHE_MAX_STATIC:-500m}"
@@ -64,9 +55,6 @@ services:
       driver: "json-file"
       options: { max-size: "5m", max-file: "3" }
 
-  # Worker offline — enfileira POSTs quando master cai e drena quando volta.
-  # nginx encaminha pra cá só quando o upstream retorna 5xx/timeout.
-  # Mais detalhes: retaguarda/worker/index.mjs
   worker:
     build: ./worker
     container_name: retaguarda_worker
@@ -84,10 +72,24 @@ services:
       driver: "json-file"
       options: { max-size: "10m", max-file: "5" }
 
-  # Cloudflare Tunnel — dá HTTPS público no domínio loja-X.tthreedigital.com.br
-  # SEM precisar de IP fixo, port-forward ou cert SSL local. Tunnel sobe via
-  # token (gerado pelo install.sh ao criar o tunnel na conta CF).
-  # Quem chama loja-X.tthreedigital.com.br vai pra Cloudflare → tunnel → nginx-cache.
+  # Purger — recebe POST /__purge do master pra invalidar cache HTML.
+  # Acesso só pela rede interna (nginx faz proxy). Auth: X-Purge-Secret =
+  # HEARTBEAT_SECRET (mesmo trust boundary).
+  purger:
+    build: ./purger
+    container_name: retaguarda_purger
+    restart: unless-stopped
+    environment:
+      PURGE_SECRET: "${HEARTBEAT_SECRET}"
+    volumes:
+      - cache_html:/cache/html
+      - cache_media:/cache/media:ro
+      - cache_static:/cache/static:ro
+    networks: [retaguarda]
+    logging:
+      driver: "json-file"
+      options: { max-size: "5m", max-file: "3" }
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: retaguarda_cloudflared
@@ -97,34 +99,53 @@ services:
       TUNNEL_TOKEN: "${TUNNEL_TOKEN}"
     depends_on: [nginx-cache]
     networks: [retaguarda]
+    # cloudflared imagem distroless não tem wget/curl pra healthcheck.
+    # Confiamos no restart policy + monitoramento externo via /admin/retaguardas
+    # (master detecta tunnel down se heartbeats pararem).
     logging:
       driver: "json-file"
       options: { max-size: "5m", max-file: "3" }
 
-  # Reportador: faz heartbeat pro master a cada 60s informando que esta
-  # retaguarda está online (próxima etapa: enviar métricas de cache hit).
+  # Reporter — Node script que coleta métricas (worker + purger) e manda
+  # heartbeat rico pro master a cada 60s. Substitui o reporter curl.
   reporter:
-    image: curlimages/curl:8.10.1
+    build: ./reporter
     container_name: retaguarda_reporter
     restart: unless-stopped
-    depends_on: [nginx-cache]
     environment:
-      MASTER_URL:    "${MASTER_URL}"
-      EMPRESA_SLUG:  "${EMPRESA_SLUG}"
-      RETAGUARDA_ID: "${RETAGUARDA_ID}"
+      MASTER_URL:       "${MASTER_URL}"
+      EMPRESA_SLUG:     "${EMPRESA_SLUG}"
+      RETAGUARDA_ID:    "${RETAGUARDA_ID}"
       HEARTBEAT_SECRET: "${HEARTBEAT_SECRET}"
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        while true; do
-          curl -fsS -X POST "$$MASTER_URL/api/retaguarda/heartbeat" \
-            -H "Content-Type: application/json" \
-            -H "x-retaguarda-secret: $$HEARTBEAT_SECRET" \
-            -d "{\"empresa_slug\":\"$$EMPRESA_SLUG\",\"retaguarda_id\":\"$$RETAGUARDA_ID\"}" \
-            > /dev/null 2>&1 || echo "[reporter] master indisponível"
-          sleep 60
-        done
+      WORKER_URL:       "http://worker:3001"
+      PURGER_URL:       "http://purger:3002"
+      INTERVAL_SEC:     "60"
+    depends_on: [worker, purger]
     networks: [retaguarda]
+    logging:
+      driver: "json-file"
+      options: { max-size: "5m", max-file: "3" }
+
+  # Auto-update das imagens. Olha o Docker Hub a cada 12h e atualiza
+  # qualquer container que tenha image: nome:tag (não puxa de build).
+  # Opcional — comente o bloco se preferir update manual.
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: retaguarda_watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_CLEANUP:           "true"
+      WATCHTOWER_INCLUDE_RESTARTING: "true"
+      WATCHTOWER_POLL_INTERVAL:     "43200"  # 12h
+      # Sem LABEL_ENABLE: atualiza todos os containers cujas imagens existem
+      # no registry (nginx, redis, cloudflared, watchtower). Containers
+      # com 'build:' (worker/purger/reporter) são pulados automaticamente.
+    networks: [retaguarda]
+    logging:
+      driver: "json-file"
+      options: { max-size: "5m", max-file: "3" }
 
 volumes:
   cache_html:
