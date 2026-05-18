@@ -1316,26 +1316,31 @@ interface DrinksModalProps {
 
 function DrinksModal({ bebidas, idioma, onAdd, onSkip }: DrinksModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-end bg-slate-950/92 backdrop-blur-xl">
+    // NOTA: NÃO usar backdrop-blur aqui. Em GPUs Android certas (Mali/Adreno
+    // antigos), backdrop-filter sobre <video> autoplay causa corrupção visual
+    // nas crianças (cards aparecem com pixels glitchados). Solução: overlay
+    // 100% opaco sem filter.
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-end bg-slate-950">
       <div className="w-full max-w-lg rounded-t-3xl bg-slate-900 p-6 pb-8 shadow-2xl border-t border-white/10">
         <div className="mb-1 text-center">
           <h2 className="text-xl font-bold text-white">{t(idioma, "bebidas_titulo")}</h2>
           <p className="mt-1 text-sm text-slate-400">{t(idioma, "bebidas_sub")}</p>
         </div>
 
-        <div className="mt-4 flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-          {bebidas.map(b => (
+        {/* Grid 3-col com no máx 6 sugestões. Evitamos overflow-x-auto/snap
+            que disparava artefato de composição em GPUs Android antigas. */}
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          {bebidas.slice(0, 6).map(b => (
             <button
               key={b.id}
               onClick={() => { onAdd(b); onSkip(); }}
-              className="flex-shrink-0 w-36 rounded-2xl bg-slate-800 border border-white/5 overflow-hidden text-left hover:border-white/20 transition"
-              style={{ borderColor: undefined }}
+              className="rounded-2xl bg-slate-800 border border-white/5 overflow-hidden text-left hover:border-white/20 transition"
             >
-              <div className="h-24 relative">
+              <div className="h-24 relative bg-slate-900">
                 <ProductImage src={b.imagem_url} alt={b.nome} />
                 {b.pontos_fidelidade != null && b.pontos_fidelidade > 0 && (
                   <span
-                    className="absolute top-1 right-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white shadow-lg"
+                    className="absolute top-1 right-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white shadow"
                     style={{ background: "var(--color-primary, #10b981)" }}
                   >
                     +{b.pontos_fidelidade} pts
@@ -1343,7 +1348,7 @@ function DrinksModal({ bebidas, idioma, onAdd, onSkip }: DrinksModalProps) {
                 )}
               </div>
               <div className="p-2.5">
-                <p className="text-xs font-semibold text-white line-clamp-2">{b.nome}</p>
+                <p className="text-xs font-semibold text-white line-clamp-2 min-h-[2.4em]">{b.nome}</p>
                 <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-primary, #10b981)" }}>
                   {formatBRL(b.preco)}
                 </p>
@@ -2980,7 +2985,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
       {/* Idle: ainda está aí? */}
       {showIdleWarning && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950"
           onClick={continuarSessao}
         >
           <div
