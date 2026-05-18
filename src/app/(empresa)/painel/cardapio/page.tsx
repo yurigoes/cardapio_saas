@@ -237,13 +237,14 @@ export default function CardapioPage() {
     }
 
     try {
+      const imagemUrlNorm = normalizeImageUrl(formProd.imagem_url);
       const body = {
         ...formProd,
         preco:             Number(formProd.preco),
         preco_custo:       formProd.preco_custo       ? Number(formProd.preco_custo)       : undefined,
         tempo_preparo:     formProd.tempo_preparo     ? Number(formProd.tempo_preparo)     : undefined,
         pontos_fidelidade: formProd.pontos_fidelidade ? Number(formProd.pontos_fidelidade) : 0,
-        imagem_url:        formProd.imagem_url        || undefined,
+        imagem_url:        imagemUrlNorm              || undefined,
         categoria_id:      formProd.categoria_id      || undefined,
         descricao:         formProd.descricao         || undefined,
         variacoes:         formProd.variacoes,
@@ -292,6 +293,22 @@ export default function CardapioPage() {
     fetchProdutos(page);
   }
 
+  /**
+   * Normaliza URL de imagem: corta duplicação acidental
+   * ("/api/pub/media/.../foo.webp/api/pub/media/.../foo.webp" → uma só)
+   */
+  function normalizeImageUrl(u: string): string {
+    if (!u) return "";
+    // Se contém "/api/pub/media/" mais de uma vez, fica só com a 1ª ocorrência
+    const marker = "/api/pub/media/";
+    const i1 = u.indexOf(marker);
+    if (i1 >= 0) {
+      const i2 = u.indexOf(marker, i1 + marker.length);
+      if (i2 > 0) return u.slice(0, i2);
+    }
+    return u;
+  }
+
   async function handleImageUpload(file: File) {
     setUploadingImg(true);
     try {
@@ -301,7 +318,7 @@ export default function CardapioPage() {
       const res  = await fetch("/api/upload", { method: "POST", headers: authHeader(), body: fd });
       const data = await res.json();
       if (data.success && data.data?.url) {
-        setFormProd(f => ({ ...f, imagem_url: data.data.url }));
+        setFormProd(f => ({ ...f, imagem_url: normalizeImageUrl(data.data.url) }));
       } else {
         setError(data.error ?? "Falha no upload da imagem");
       }

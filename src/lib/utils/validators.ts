@@ -6,6 +6,19 @@ import { z } from "zod";
 
 export const uuidSchema = z.string().uuid("ID inválido");
 
+/**
+ * Aceita URL absoluta (http(s)://...) OU caminho interno começando com "/"
+ * (ex: "/api/pub/media/cardapio/empresa/.../foto.webp" servido pelo proxy).
+ */
+export const urlOrPathSchema = z.string().refine(
+  (v) => {
+    if (!v) return false;
+    if (v.startsWith("/")) return true;
+    try { new URL(v); return true; } catch { return false; }
+  },
+  { message: "URL inválida (use https://... ou /caminho/relativo)" }
+);
+
 export const emailSchema = z
   .string()
   .email("E-mail inválido")
@@ -118,7 +131,7 @@ export const produtoCreateSchema = z.object({
   disponivel:        z.boolean().optional().default(true),
   destaque:          z.boolean().optional().default(false),
   tempo_preparo:     z.number().int().min(1).max(999).optional(),
-  imagem_url:        z.string().url().optional(),
+  imagem_url:        urlOrPathSchema.optional(),
   tipo:              z.enum(["produto","combo","bebida","sobremesa","porcao"]).default("produto"),
   pontos_fidelidade: z.number().int().min(0).max(99999).optional().default(0),
   variacoes:         variacoesSchema.optional(),
