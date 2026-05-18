@@ -189,11 +189,13 @@ async function handlePost(req: NextRequest) {
   // Em dev/sandbox, retorna o código pro testes facilitarem
   const devMode = process.env.NODE_ENV !== "production";
   console.info(`[Cliente/OTP] enviar empresa=${empresa.id} cliente=${cliente?.id ?? "—"} envio=${envioStatus}${envioDetalhe ? " · " + envioDetalhe : ""}`);
-  return ok({
+  const res = ok({
     enviado: true,
     envio:   envioStatus,                 // útil pro debug
     detalhe: envioDetalhe || undefined,
     mensagem: "Se o cadastro existir, um código foi enviado pelo WhatsApp.",
     ...(devMode && cliente ? { _dev_codigo: codigo } : {}),
   });
+  res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  return res;
 }

@@ -88,7 +88,8 @@ function ClientePainel() {
     try {
       const r = await fetch("/api/pub/cliente/otp/enviar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" },
         body: JSON.stringify({
           empresa_slug: slug,
           ...(usarCpf ? { cpf } : { telefone }),
@@ -97,9 +98,16 @@ function ClientePainel() {
       const d = await r.json();
       if (!d.success) { setErro(d.error ?? "Falha"); return; }
       setStage("codigo");
-      // Em dev mostra o código
+
+      // Mostra status do envio + dev code
+      const status = d.data?.envio;
+      const detalhe = d.data?.detalhe;
       if (d.data?._dev_codigo) {
         setErro(`[DEV] Código: ${d.data._dev_codigo}`);
+      } else if (status === "sem_evolution") {
+        setErro("⚠ WhatsApp não configurado. Peça ao restaurante configurar Evolution API ou Master Evolution.");
+      } else if (status === "falha") {
+        setErro(`⚠ Falha ao enviar: ${detalhe ?? "verifique config Evolution"}`);
       }
     } catch (e) { setErro((e as Error).message); }
     finally { setBusy(false); }
@@ -110,7 +118,8 @@ function ClientePainel() {
     try {
       const r = await fetch("/api/pub/cliente/otp/validar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" },
         body: JSON.stringify({
           empresa_slug: slug, codigo,
           ...(usarCpf ? { cpf } : { telefone }),
