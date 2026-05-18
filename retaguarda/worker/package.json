@@ -1,0 +1,13 @@
+{
+  "name": "retaguarda-worker",
+  "version": "1.0.0",
+  "description": "Buffer offline de POSTs pra retaguarda. Quando master cai, enfileira; quando volta, drena.",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "ioredis": "^5.4.1"
+  }
+}

@@ -64,6 +64,26 @@ services:
       driver: "json-file"
       options: { max-size: "5m", max-file: "3" }
 
+  # Worker offline — enfileira POSTs quando master cai e drena quando volta.
+  # nginx encaminha pra cá só quando o upstream retorna 5xx/timeout.
+  # Mais detalhes: retaguarda/worker/index.mjs
+  worker:
+    build: ./worker
+    container_name: retaguarda_worker
+    restart: unless-stopped
+    environment:
+      MASTER_URL: "${MASTER_URL}"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DRAIN_INTERVAL_MS: "5000"
+      MAX_ATTEMPTS: "20"
+      REQUEST_TIMEOUT: "15000"
+    depends_on: [redis]
+    networks: [retaguarda]
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "5" }
+
   # Cloudflare Tunnel — dá HTTPS público no domínio loja-X.tthreedigital.com.br
   # SEM precisar de IP fixo, port-forward ou cert SSL local. Tunnel sobe via
   # token (gerado pelo install.sh ao criar o tunnel na conta CF).

@@ -15,6 +15,7 @@ import { queryOne } from "@/lib/db/client";
 import { ok, badRequest, notFound, serverError } from "@/lib/utils/response";
 import { EMPRESA_OPERACIONAL_SQL } from "@/lib/billing/empresa-acesso";
 import { clientesScope, valuesInsertCliente } from "@/lib/rede/clientes";
+import { idempotencyEnter } from "@/lib/idempotency";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -82,6 +83,10 @@ export async function POST(req: NextRequest) {
   const slug = req.nextUrl.searchParams.get("slug");
   if (!slug) return badRequest("slug é obrigatório");
 
+  // Idempotency: cadastro duplicado vira no-op se mesma key chegar duas vezes
+  const idem = await idempotencyEnter(req, "cliente");
+  if (idem.cached) return idem.cached;
+
   let body: z.infer<typeof cadastroSchema>;
   try {
     const r = cadastroSchema.safeParse(await req.json());
@@ -122,14 +127,16 @@ export async function POST(req: NextRequest) {
         vals
       );
       if (existente) {
-        return ok({
+        const respExist = {
           id:       existente.id,
           nome:     existente.nome,
           telefone: existente.telefone,
           cpf:      existente.cpf,
           pontos:   Number(existente.pontos ?? 0),
           ja_existia: true,
-        });
+        };
+        await idem.save({ success: true, data: respExist }, 200);
+        return ok(respExist);
       }
     }
 
@@ -149,14 +156,16 @@ export async function POST(req: NextRequest) {
       ]
     );
 
-    return ok({
+    const respNew = {
       id:       novo?.id,
       nome:     body.nome,
       telefone: body.telefone ?? null,
       cpf:      body.cpf      ?? null,
       pontos:   0,
       ja_existia: false,
-    });
+    };
+    await idem.save({ success: true, data: respNew }, 200);
+    return ok(respNew);
   } catch (err) {
     console.error("[pub/cliente/POST]", err);
     // Provavelmente conflito UNIQUE (telefone/cpf duplicado) — tenta retornar o existente

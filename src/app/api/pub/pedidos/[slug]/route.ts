@@ -13,6 +13,7 @@ import { checkRateLimitByRequest, PUB_PEDIDO_RATE_LIMIT } from "@/lib/security/r
 import { recordPedido } from "@/lib/observability/metrics";
 import { EMPRESA_OPERACIONAL_SQL } from "@/lib/billing/empresa-acesso";
 import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
+import { idempotencyEnter } from "@/lib/idempotency";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 import { creditarCashbackPedido, debitarCashbackPedido } from "@/lib/cashback/movimento";
 import { notificarEvolution } from "@/lib/notify/evolution";
@@ -105,6 +106,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { slug: string } }
 ) {
+  // Idempotency — se cliente (totem ou retaguarda worker) já mandou esta
+  // chave e o pedido foi processado, devolvemos a MESMA resposta sem criar
+  // pedido duplicado. Garante segurança no retry do buffer offline.
+  const idem = await idempotencyEnter(req, "pedido");
+  if (idem.cached) return idem.cached;
+
   // Rate limit por IP — anti-DoS no cardápio público
   const rl = await checkRateLimitByRequest(req, PUB_PEDIDO_RATE_LIMIT);
   if (!rl.success) return tooManyRequests(rl);
@@ -536,7 +543,7 @@ export async function POST(
       }
     }
 
-    return ok({
+    const respPayload = {
       id:           pedido.id,
       numero:       pedido.numero,
       tracking_token: "trackingToken" in pedido ? pedido.trackingToken : null,
@@ -545,7 +552,10 @@ export async function POST(
       cashback_debitado:  "cashbackDebitado"  in pedido ? pedido.cashbackDebitado  : 0,
       acumulado:    "acumulado" in pedido ? pedido.acumulado : false,
       itens_adicionados: "itens_adicionados" in pedido ? pedido.itens_adicionados : undefined,
-    });
+    };
+    // Grava resposta no cache de idempotency pra retries seguros do worker offline
+    await idem.save({ success: true, data: respPayload }, 200);
+    return ok(respPayload);
   } catch (err) {
     console.error("[Pub/Pedidos/POST]", err);
     return serverError();

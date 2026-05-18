@@ -152,15 +152,51 @@ server {
     proxy_pass              ${MASTER_URL};
   }
 
-  # ── 4) MUTATIONS (POST/PUT/PATCH/DELETE) — sempre passa direto ───────────
-  # Não há cache em mutations. Se internet cair, retorna 504 e o cliente
-  # decide (próxima etapa: buffer offline com retry via Redis).
+  # ── 4) MUTATIONS de PEDIDO — buffer offline se master cair ──────────────
+  # POST de criação de pedido + cadastro de cliente são CRÍTICOS pra
+  # operação do restaurante. Se master estiver inalcançável (timeout/5xx),
+  # nginx cai pro worker local que enfileira e responde 202 Accepted.
+  # Drainer no worker tenta replay com Idempotency-Key (master deduplica).
+  location ~ ^/api/pub/(pedidos|cliente)(/.*)?$ {
+    proxy_pass              ${MASTER_URL};
+    proxy_cache             off;
+    client_max_body_size    20m;
+
+    proxy_intercept_errors  on;
+    proxy_next_upstream     error timeout http_502 http_503 http_504;
+    error_page              502 503 504 = @offline_queue;
+  }
+
+  location @offline_queue {
+    internal;
+    # Repassa o request original pro worker, com método/path em headers
+    proxy_pass               http://worker:3001/__queue;
+    proxy_method             POST;
+    proxy_set_header         X-Original-Path    $request_uri;
+    proxy_set_header         X-Original-Method  $request_method;
+    proxy_set_header         Content-Type       $http_content_type;
+    proxy_set_header         Idempotency-Key    $http_idempotency_key;
+    proxy_pass_request_body  on;
+    client_max_body_size     20m;
+  }
+
+  # Endpoints de gerência da fila (status + flush manual). Só local.
+  location /__queue {
+    allow 127.0.0.1;
+    allow 10.0.0.0/8;
+    allow 172.16.0.0/12;
+    allow 192.168.0.0/16;
+    deny  all;
+    proxy_pass http://worker:3001;
+  }
+
+  # ── 5) Demais mutations + leituras autenticadas — pass-through ──────────
+  # /api/painel/*, /api/admin/*, etc. Não tem buffer offline (operador
+  # vê o erro 5xx e tenta de novo) — só pedido tem essa rede de proteção.
   location /api/ {
     proxy_pass              ${MASTER_URL};
     proxy_cache             off;
-    # POSTs grandes (upload de imagem etc)
     client_max_body_size    20m;
-    # Repassa todos verbos
   }
 
   # ── 5) Server-Sent Events / WebSockets (KDS, notifications) ─────────────
