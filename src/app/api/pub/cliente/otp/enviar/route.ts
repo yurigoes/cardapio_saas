@@ -112,100 +112,31 @@ async function handlePost(req: NextRequest) {
     [empresa.id, identificador, tipoId, cliente?.id ?? null, codigoHash, ip, ua]
   ).catch(err => console.error("[Cliente/OTP/insert]", err));
 
-  // Envia código por WhatsApp — funciona tanto pra login via telefone quanto
-  // via CPF (usa cliente.telefone do banco).
+  // Envia código por WhatsApp via helper que usa MESMA lógica do
+  // lib/notify/evolution.ts (que funciona pros outros eventos).
   let envioStatus: "enviado" | "sem_evolution" | "falha" | "sem_telefone" = "sem_telefone";
   let envioDetalhe = "";
 
-  // Resolve telefone destinatário (do body OU do cliente cadastrado)
   const telefoneDestino = body.telefone ?? cliente?.telefone ?? null;
 
   if (cliente?.id && telefoneDestino) {
-    const number = telefoneDestino.replace(/\D/g, "");
-    const numberE164 = number.startsWith("55") ? number : `55${number}`;
     const texto = `🔐 Seu código de acesso: *${codigo}*\n\nVálido por 10 minutos.\n\nSe não foi você, ignore.`;
-
-    // Mesma lógica de notificarEvolution: empresa OU env (.env)
-    const evoCfg = await queryOne<{ evolution_url: string | null; evolution_key: string | null; slug: string }>(
-      `SELECT evolution_url, evolution_key, slug FROM empresas WHERE id = $1`,
-      [empresa.id]
-    ).catch(() => null);
-
-    const evoUrl = evoCfg?.evolution_url || process.env.EVOLUTION_PUBLIC_URL || process.env.EVOLUTION_API_URL || null;
-    const evoKey = evoCfg?.evolution_key || process.env.EVOLUTION_API_KEY || null;
-    const instance = evoCfg?.slug || null;
-
-    type Provider = { label: string; url: string; apiKey: string };
-    const providers: Provider[] = [];
-
-    if (evoUrl && evoKey && instance) {
-      providers.push({
-        label: evoCfg?.evolution_key ? "empresa.evo" : "env.evo",
-        url:   `${evoUrl.replace(/\/+$/, "")}/message/sendText/${instance}`,
-        apiKey: evoKey,
-      });
-    }
-
-    // Master Evolution — usa SLUG da empresa como instance
-    const masterEvo = await queryOne<{ url: string | null; api_key: string | null }>(
-      `SELECT url, api_key FROM master_evolution_config WHERE id = 1 AND ativo = TRUE`
-    ).catch(() => null);
-    if (masterEvo?.url && masterEvo.api_key && instance) {
-      // api_key armazenada como "encrypted:<cifra>" (via encryptField em ifood/client.ts)
-      // OU como plain text (legado). Tenta as 2 formas.
-      let decrypted: string | null = null;
-      try {
-        const { decrypt, decryptIfNeeded } = await import("@/lib/security/encrypt");
-        if (masterEvo.api_key.startsWith("encrypted:")) {
-          try { decrypted = decrypt(masterEvo.api_key.slice(10)); }
-          catch (e) { console.warn("[OTP] decrypt encrypted: prefix falhou", e); }
-        } else {
-          decrypted = decryptIfNeeded(masterEvo.api_key);
-        }
-      } catch {}
-
-      const baseUrl = `${masterEvo.url.replace(/\/+$/, "")}/message/sendText/${instance}`;
-      const candidates = [
-        { ak: decrypted,         label: "master.evo(dec)" },
-        { ak: masterEvo.api_key, label: "master.evo(raw)" },
-      ].filter((c): c is { ak: string; label: string } => !!c.ak);
-
-      for (const { ak, label } of candidates) {
-        if (!providers.some(p => p.url === baseUrl && p.apiKey === ak)) {
-          providers.push({ label, url: baseUrl, apiKey: ak });
-        }
+    try {
+      const { enviarTextoEvolution } = await import("@/lib/notify/evolution-send");
+      const r = await enviarTextoEvolution(empresa.id, telefoneDestino, texto);
+      if (r.enviado) {
+        envioStatus  = "enviado";
+        envioDetalhe = r.detalhe ?? "";
+      } else if (r.detalhe?.includes("Sem URL/key")) {
+        envioStatus  = "sem_evolution";
+        envioDetalhe = r.detalhe;
+      } else {
+        envioStatus  = "falha";
+        envioDetalhe = r.detalhe ?? `Status ${r.status ?? "?"}`;
       }
-    }
-
-    if (providers.length === 0) {
-      envioStatus = "sem_evolution";
-    } else {
-      // Tenta cada provider em ordem
-      for (const p of providers) {
-        try {
-          const r = await fetch(p.url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "apikey": p.apiKey },
-            body: JSON.stringify({ number: numberE164, text: texto }),
-            signal: AbortSignal.timeout(8000),
-          });
-          if (r.ok) {
-            envioStatus = "enviado";
-            envioDetalhe = `via ${p.label}`;
-            console.info(`[OTP/whatsapp] enviado via ${p.label} → ${numberE164}`);
-            break;
-          } else {
-            const t = await r.text().catch(() => "");
-            envioDetalhe = `${p.label} HTTP ${r.status}: ${t.slice(0, 100)}`;
-            envioStatus = "falha";
-            console.warn(`[OTP/whatsapp] ${envioDetalhe}`);
-          }
-        } catch (e) {
-          envioDetalhe = `${p.label} erro: ${e instanceof Error ? e.message : "?"}`;
-          envioStatus = "falha";
-          console.warn(`[OTP/whatsapp]`, envioDetalhe);
-        }
-      }
+    } catch (e) {
+      envioStatus = "falha";
+      envioDetalhe = e instanceof Error ? e.message : "Erro inesperado";
     }
   }
 
