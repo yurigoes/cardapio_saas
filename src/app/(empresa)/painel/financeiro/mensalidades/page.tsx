@@ -225,14 +225,16 @@ function MensalidadesContent() {
 
       {/* Card assinatura */}
       <section className={`rounded-2xl border p-5 ${
-        assinatura?.status === "ativa"
-          ? "border-emerald-500/30 bg-emerald-500/5"
-          : "border-blue-500/30 bg-blue-500/5"
+        assinatura?.status === "ativa"     ? "border-emerald-500/30 bg-emerald-500/5" :
+        assinatura?.status === "pendente"  ? "border-amber-500/30 bg-amber-500/5"     :
+                                              "border-blue-500/30 bg-blue-500/5"
       }`}>
         {assinatura ? (
           <div className="flex items-start gap-3 flex-wrap">
             <Repeat className={`h-6 w-6 flex-shrink-0 mt-0.5 ${
-              assinatura.status === "ativa" ? "text-emerald-400" : "text-blue-400"
+              assinatura.status === "ativa"    ? "text-emerald-400" :
+              assinatura.status === "pendente" ? "text-amber-400"   :
+                                                  "text-blue-400"
             }`} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -242,18 +244,36 @@ function MensalidadesContent() {
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-300">
-                {fmtBRL(assinatura.valor_mensal)}/mês · Mercado Pago
+                <strong className="text-white">{fmtBRL(assinatura.valor_mensal)}</strong>/mês via Mercado Pago
                 {assinatura.proxima_cobranca && (
                   <span> · Próxima cobrança: <strong>{fmtData(assinatura.proxima_cobranca)}</strong></span>
                 )}
               </p>
-              {assinatura.status === "pendente" && assinatura.mp_init_point && (
-                <p className="mt-2 text-xs text-amber-300">
-                  ⚠ Aguardando cadastro de cartão.{" "}
-                  <a href={assinatura.mp_init_point} target="_blank" rel="noopener" className="underline">
-                    Cadastrar agora
-                  </a>
-                </p>
+
+              {assinatura.status === "pendente" && (
+                <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                  <p className="text-sm text-amber-200 font-medium">
+                    ⏳ Aguardando você cadastrar o cartão no Mercado Pago
+                  </p>
+                  <p className="mt-1 text-xs text-amber-200/80">
+                    Clique abaixo pra finalizar a ativação. Após cadastrar o cartão,
+                    o MP cobra <strong>{fmtBRL(assinatura.valor_mensal)}</strong> automaticamente todo mês.
+                  </p>
+                  {assinatura.mp_init_point ? (
+                    <a
+                      href={assinatura.mp_init_point}
+                      target="_blank" rel="noopener"
+                      className="mt-3 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-400">
+                      <CreditCard className="h-4 w-4" />
+                      Cadastrar cartão agora
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  ) : (
+                    <p className="mt-2 text-xs text-red-300">
+                      ⚠ Link MP não foi gerado — cancele e tente ativar de novo.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
             {(assinatura.status === "ativa" || assinatura.status === "pendente") && (

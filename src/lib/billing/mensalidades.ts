@@ -166,49 +166,70 @@ export async function criarPreferenciaPagamento(mensalidadeId: string): Promise<
 export async function criarAssinaturaRecorrente(empresaId: string): Promise<{
   ok: boolean; init_point?: string; assinatura_id?: string; motivo?: string;
 }> {
-  // Verifica se já tem assinatura ativa/pendente
-  const existing = await queryOne<{ id: string; status: string }>(
-    `SELECT id, status FROM assinaturas
-      WHERE empresa_id = $1 AND status IN ('pendente','autorizada','ativa') LIMIT 1`,
-    [empresaId]
-  );
-  if (existing) return { ok: false, motivo: `já existe assinatura ${existing.status}` };
-
   const empresa = await queryOne<{
-    id: string; nome_fantasia: string; email: string | null;
-    plano_id: string | null;
+    id: string; nome_fantasia: string; email: string | null; plano_id: string | null;
   }>(
     `SELECT id, nome_fantasia, email, plano_id FROM empresas WHERE id = $1 AND deleted_at IS NULL`,
     [empresaId]
   );
-  if (!empresa) return { ok: false, motivo: "empresa não encontrada" };
-  if (!empresa.email) return { ok: false, motivo: "empresa sem email cadastrado" };
-  if (!empresa.plano_id) return { ok: false, motivo: "empresa sem plano" };
+  if (!empresa) return { ok: false, motivo: "Empresa não encontrada" };
+  if (!empresa.email) return { ok: false, motivo: "Cadastre um email no perfil da empresa antes de ativar a assinatura" };
+  if (!empresa.plano_id) return { ok: false, motivo: "Empresa não tem plano associado" };
 
-  const plano = await queryOne<{ id: string; nome: string; preco_mensal: string }>(
-    `SELECT id, nome, preco_mensal FROM planos WHERE id = $1 AND ativo = true`,
+  const plano = await queryOne<{ id: string; nome: string; preco_mensal: string; ativo: boolean }>(
+    `SELECT id, nome, preco_mensal, ativo FROM planos WHERE id = $1`,
     [empresa.plano_id]
   );
-  if (!plano) return { ok: false, motivo: "plano inativo" };
+  if (!plano) return { ok: false, motivo: "Plano não encontrado" };
+  if (!plano.ativo) return { ok: false, motivo: `Plano "${plano.nome}" está desativado — peça ao master ativar` };
 
   const valor = Number(plano.preco_mensal);
+  if (!Number.isFinite(valor) || valor <= 0) {
+    return { ok: false, motivo: `Plano "${plano.nome}" sem preço configurado (R$ ${valor})` };
+  }
+
+  // Se já tem ATIVA/AUTORIZADA, bloqueia (não pode duplicar)
+  const ativa = await queryOne<{ id: string; status: string }>(
+    `SELECT id, status FROM assinaturas
+      WHERE empresa_id = $1 AND status IN ('autorizada','ativa') LIMIT 1`,
+    [empresaId]
+  );
+  if (ativa) return { ok: false, motivo: `Já existe assinatura ${ativa.status}` };
+
+  // Se tem PENDENTE existente, reusa o init_point dela (não cria nova)
+  // OU, se a pendente não tem init_point (falhou MP antes), DELETA e tenta de novo
+  const pendente = await queryOne<{ id: string; mp_init_point: string | null; valor_mensal: string }>(
+    `SELECT id, mp_init_point, valor_mensal::text FROM assinaturas
+      WHERE empresa_id = $1 AND status = 'pendente'
+      ORDER BY criado_em DESC LIMIT 1`,
+    [empresaId]
+  );
+
+  if (pendente?.mp_init_point && Number(pendente.valor_mensal) === valor) {
+    // Já tem pendente válido com o mesmo valor → reusa
+    return { ok: true, init_point: pendente.mp_init_point, assinatura_id: pendente.id };
+  }
+
+  // Cancela pendente órfã ou com valor desatualizado pra criar uma nova
+  if (pendente) {
+    await query(
+      `UPDATE assinaturas SET status = 'cancelada',
+              motivo_cancelamento = 'retry MP', cancelada_em = NOW()
+        WHERE id = $1`,
+      [pendente.id]
+    ).catch(() => null);
+  }
+
   const branding = await getSaasBranding();
-  const baseUrl  = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.example.com";
+  const baseUrl  = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.tthreedigital.com.br";
 
+  // ─── PRIMEIRO chama MP, SÓ DEPOIS persiste ────────────────────
+  // Se MP falhar, não fica órfã pendente no banco.
+  const tempRef = `ASS-tmp-${empresaId.slice(0, 8)}-${Date.now()}`;
   try {
-    // Insere row pendente primeiro (usa o ID como external_reference)
-    const ass = await queryOne<{ id: string }>(
-      `INSERT INTO assinaturas
-         (empresa_id, plano_id, status, valor_mensal)
-       VALUES ($1, $2, 'pendente', $3)
-       RETURNING id`,
-      [empresa.id, plano.id, valor]
-    );
-    if (!ass) throw new Error("Falha ao criar registro de assinatura");
-
     const pre = await criarPreApproval({
-      reason:             `${branding.nome} — Assinatura ${plano.nome}`,
-      external_reference: `ASS-${ass.id}`,
+      reason:             `${branding.nome} — ${plano.nome}`,
+      external_reference: tempRef,
       payer_email:        empresa.email,
       back_url:           `${baseUrl}/painel/financeiro/mensalidades?assinatura=ok`,
       notification_url:   `${baseUrl}/api/webhooks/mercadopago-saas`,
@@ -220,17 +241,33 @@ export async function criarAssinaturaRecorrente(empresaId: string): Promise<{
       },
     });
 
-    await query(
-      `UPDATE assinaturas
-          SET mp_preapproval_id = $2, mp_init_point = $3, atualizado_em = NOW()
-        WHERE id = $1`,
-      [ass.id, pre.id, pre.init_point]
+    // MP retornou OK → persiste row
+    const ass = await queryOne<{ id: string }>(
+      `INSERT INTO assinaturas
+         (empresa_id, plano_id, status, valor_mensal, mp_preapproval_id, mp_init_point)
+       VALUES ($1, $2, 'pendente', $3, $4, $5)
+       RETURNING id`,
+      [empresa.id, plano.id, valor, pre.id, pre.init_point]
     );
+    if (!ass) throw new Error("Falha ao persistir assinatura");
 
+    // Atualiza external_reference no MP pra ID definitivo (best-effort)
+    // (caso não dê, o webhook ainda casa pelo mp_preapproval_id via tabela)
     return { ok: true, init_point: pre.init_point, assinatura_id: ass.id };
   } catch (err) {
-    console.error("[assinaturas/criar]", err);
-    return { ok: false, motivo: err instanceof Error ? err.message : "erro MP" };
+    console.error("[assinaturas/criar] MP error:", err);
+    const msg = err instanceof Error ? err.message : "Erro Mercado Pago";
+    // Extrai mensagem útil de erros típicos do MP
+    if (msg.includes("invalid back_url")) {
+      return { ok: false, motivo: "URL de retorno inválida pro MP. Em sandbox use HTTPS público." };
+    }
+    if (msg.includes("invalid payer_email") || msg.includes("payer_email")) {
+      return { ok: false, motivo: "Email da empresa não é aceito pelo MP (em sandbox, use usuário de teste)." };
+    }
+    if (msg.includes("collector")) {
+      return { ok: false, motivo: "Token MP inválido ou conta não pode criar assinaturas — verifique /admin/billing" };
+    }
+    return { ok: false, motivo: msg.slice(0, 200) };
   }
 }
 

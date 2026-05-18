@@ -45,10 +45,24 @@ export async function POST(req: NextRequest) {
       if (ref.startsWith("MENS-")) {
         await processarPagamentoMensalidade(ref.slice(5), pag);
       } else if (ref.startsWith("ASS-")) {
-        // Pagamento autorizado pela assinatura recorrente
-        await processarPagamentoAssinatura(ref.slice(4), pag);
+        // Pagamento da assinatura — pode ser "ASS-<uuid>" (legado) ou "ASS-tmp-..."
+        // Tentamos resolver pelo mp_preapproval_id se disponível
+        const slug = ref.slice(4);
+        let assinaturaId: string | null = null;
+        if (/^[0-9a-f]{8}-[0-9a-f-]+/.test(slug)) {
+          assinaturaId = slug;
+        } else {
+          // Resolve via tabela usando preapproval_id do payment
+          const preId = (pag as { preapproval_id?: string }).preapproval_id;
+          if (preId) {
+            const row = await queryOne<{ id: string }>(
+              `SELECT id FROM assinaturas WHERE mp_preapproval_id = $1`, [preId]
+            ).catch(() => null);
+            assinaturaId = row?.id ?? null;
+          }
+        }
+        if (assinaturaId) await processarPagamentoAssinatura(assinaturaId, pag);
       } else if (ref.startsWith("COBR-")) {
-        // Cobrança avulsa
         await processarPagamentoAvulsa(ref.slice(5), pag);
       } else {
         return NextResponse.json({ ok: true, ignored: true, motivo: "external_ref desconhecido", ref });
@@ -60,11 +74,26 @@ export async function POST(req: NextRequest) {
     if (tipo.includes("subscription_preapproval") || tipo.includes("preapproval")) {
       const pre = await buscarPreApproval(String(recursoId));
       const ref = pre.external_reference ?? "";
-      if (!ref.startsWith("ASS-")) {
-        return NextResponse.json({ ok: true, ignored: true, motivo: "preapproval ref inválido", ref });
+
+      // Resolve assinatura por external_reference (legado ASS-<uuid>)
+      // OU pelo mp_preapproval_id (novo formato ASS-tmp-...)
+      let assinaturaId: string | null = null;
+      if (ref.startsWith("ASS-")) {
+        const slug = ref.slice(4);
+        if (/^[0-9a-f]{8}-[0-9a-f-]+/.test(slug)) assinaturaId = slug;
       }
-      await processarStatusAssinatura(ref.slice(4), pre);
-      return NextResponse.json({ ok: true, processado: "preapproval", ref });
+      if (!assinaturaId) {
+        const row = await queryOne<{ id: string }>(
+          `SELECT id FROM assinaturas WHERE mp_preapproval_id = $1`,
+          [String(recursoId)]
+        ).catch(() => null);
+        assinaturaId = row?.id ?? null;
+      }
+      if (!assinaturaId) {
+        return NextResponse.json({ ok: true, ignored: true, motivo: "assinatura não encontrada", ref });
+      }
+      await processarStatusAssinatura(assinaturaId, pre);
+      return NextResponse.json({ ok: true, processado: "preapproval", ref, assinaturaId });
     }
 
     return NextResponse.json({ ok: true, ignored: true, type: tipo });
