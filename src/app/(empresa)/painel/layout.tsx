@@ -14,6 +14,7 @@ import { applyBrandColors } from "@/lib/theme";
 import { useTheme } from "@/lib/hooks/useTheme";
 import { PwaInstallPrompt } from "@/components/painel/PwaInstallPrompt";
 import { PrintAgentStatus } from "@/components/painel/PrintAgentStatus";
+import { SeletorFilial } from "@/components/painel/SeletorFilial";
 import { useSaasBranding } from "@/lib/hooks/useSaasBranding";
 import { ModuloLockedModal } from "@/components/painel/ModuloLockedModal";
 import { useModulos, type ModuloStatus } from "@/lib/hooks/useModulos";
@@ -442,6 +443,7 @@ export default function EmpresaLayout({ children }: { children: React.ReactNode 
             )}
           </div>
           <div className="flex items-center gap-2">
+            <SeletorFilial />
             <PrintAgentStatus />
             <button className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 hover:border-white/20 transition">
               <Bell className="h-4 w-4 text-slate-400" />

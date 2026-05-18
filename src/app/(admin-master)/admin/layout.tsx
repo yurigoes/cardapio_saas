@@ -21,6 +21,7 @@ const NAV: NavGroup[] = [
   ]},
   { titulo: "Negócio", items: [
     { href: "/admin/empresas",  label: "Empresas",   icon: Building2 },
+    { href: "/admin/redes",     label: "Redes/Filiais", icon: Building2 },
     { href: "/admin/usuarios",  label: "Usuários",   icon: Users },
     { href: "/admin/planos",    label: "Planos",     icon: Package },
     { href: "/admin/financeiro",label: "Financeiro", icon: CreditCard },
