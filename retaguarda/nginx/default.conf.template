@@ -1,0 +1,181 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Nginx config da RETAGUARDA
+#
+# Template usa variáveis de ambiente substituídas pelo entrypoint do Nginx
+# (envsubst). Variáveis disponíveis:
+#   ${MASTER_URL}         — ex: https://app.tthreedigital.com.br
+#   ${MASTER_HOST}        — ex: app.tthreedigital.com.br
+#   ${RETAGUARDA_DOMAIN}  — ex: loja1.tthreedigital.com.br
+#   ${CACHE_MAX_*}        — limites de cada zona
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Cache zones — 3 camadas
+# - html:   cardápio público (TTL 5min), pequeno
+# - media:  imagens/vídeos (TTL 7 dias), maior
+# - static: chunks JS/CSS do Next (TTL 30 dias), médio
+proxy_cache_path /var/cache/nginx/html
+                 levels=1:2
+                 keys_zone=html_cache:10m
+                 max_size=${CACHE_MAX_HTML}
+                 inactive=10m
+                 use_temp_path=off;
+
+proxy_cache_path /var/cache/nginx/media
+                 levels=1:2
+                 keys_zone=media_cache:50m
+                 max_size=${CACHE_MAX_MEDIA}
+                 inactive=30d
+                 use_temp_path=off;
+
+proxy_cache_path /var/cache/nginx/static
+                 levels=1:2
+                 keys_zone=static_cache:20m
+                 max_size=${CACHE_MAX_STATIC}
+                 inactive=60d
+                 use_temp_path=off;
+
+# Headers úteis pra debug
+add_header X-Retaguarda            "${RETAGUARDA_DOMAIN}" always;
+add_header X-Retaguarda-Cache      $upstream_cache_status always;
+add_header X-Retaguarda-Upstream   "${MASTER_HOST}" always;
+
+# Sobe HTTP do master via SNI correto
+proxy_ssl_server_name on;
+proxy_ssl_name        ${MASTER_HOST};
+proxy_set_header      Host           ${MASTER_HOST};
+proxy_set_header      X-Real-IP      $remote_addr;
+proxy_set_header      X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header      X-Forwarded-Proto https;
+proxy_set_header      X-Retaguarda-Origin "${RETAGUARDA_DOMAIN}";
+proxy_http_version    1.1;
+proxy_set_header      Connection "";
+
+# Timeouts conservadores
+proxy_connect_timeout 10s;
+proxy_send_timeout    60s;
+proxy_read_timeout    60s;
+
+# Gzip pras respostas
+gzip            on;
+gzip_types      text/plain text/css text/javascript application/javascript application/json image/svg+xml;
+gzip_min_length 1024;
+gzip_proxied    any;
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Server HTTP — encaminha pra HTTPS se houver cert. Default: serve direto.
+# ─────────────────────────────────────────────────────────────────────────────
+server {
+  listen 80 default_server;
+  listen [::]:80 default_server;
+  server_name _;
+
+  # Healthcheck local (não vai pro master)
+  location = /__retaguarda_health {
+    access_log off;
+    return 200 "retaguarda:${RETAGUARDA_DOMAIN}\n";
+    add_header Content-Type "text/plain";
+  }
+
+  # Página de status simples (HTML)
+  location = /__retaguarda_status {
+    access_log off;
+    return 200 '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Retaguarda OK</title><style>body{font-family:system-ui;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}div{text-align:center}h1{color:#10b981;margin:0}p{opacity:.6;font-size:13px}</style></head><body><div><h1>Retaguarda ativa</h1><p>${RETAGUARDA_DOMAIN}</p><p>upstream: ${MASTER_HOST}</p></div></body></html>';
+    add_header Content-Type "text/html; charset=utf-8";
+  }
+
+  # ── 1) IMAGENS/VÍDEOS — cache pesado, 7 dias ─────────────────────────────
+  # /api/pub/media/* é a rota mais pesada (tráfego). Cachear local elimina
+  # 99% das chamadas ao master por imagem.
+  location ^~ /api/pub/media/ {
+    proxy_cache             media_cache;
+    proxy_cache_valid       200 7d;
+    proxy_cache_valid       404 1m;
+    proxy_cache_use_stale   error timeout updating http_500 http_502 http_503 http_504;
+    proxy_cache_background_update on;
+    proxy_cache_lock        on;
+    proxy_cache_revalidate  on;
+    proxy_ignore_headers    Set-Cookie Cache-Control Expires;
+    add_header              Cache-Control "public, max-age=604800, immutable" always;
+    add_header              X-Retaguarda-Cache $upstream_cache_status always;
+    proxy_pass              ${MASTER_URL};
+  }
+
+  # ── 2) CARDÁPIO PÚBLICO — cache curto, 5 min ──────────────────────────────
+  # O endpoint já tem cache Redis no master; aqui cacheamos no edge da retaguarda.
+  # Combinado, o master quase nunca é tocado pra leitura de cardápio.
+  location ~ ^/api/pub/cardapio/[^/]+$ {
+    proxy_cache             html_cache;
+    proxy_cache_valid       200 5m;
+    proxy_cache_valid       404 30s;
+    proxy_cache_use_stale   error timeout updating http_500 http_502 http_503;
+    proxy_cache_background_update on;
+    proxy_cache_lock        on;
+    proxy_ignore_headers    Cache-Control Expires Set-Cookie;
+    add_header              X-Retaguarda-Cache $upstream_cache_status always;
+    proxy_pass              ${MASTER_URL};
+  }
+
+  # Taxa de entrega e outros sub-paths de cardápio: SEM cache (dinâmico)
+  location ~ ^/api/pub/cardapio/[^/]+/.+ {
+    proxy_pass ${MASTER_URL};
+  }
+
+  # ── 3) ASSETS DO NEXT — cache longo, 30 dias ─────────────────────────────
+  location ^~ /_next/static/ {
+    proxy_cache             static_cache;
+    proxy_cache_valid       200 30d;
+    proxy_cache_use_stale   error timeout updating http_500 http_502 http_503;
+    proxy_cache_revalidate  on;
+    add_header              Cache-Control "public, max-age=2592000, immutable" always;
+    add_header              X-Retaguarda-Cache $upstream_cache_status always;
+    proxy_pass              ${MASTER_URL};
+  }
+
+  # Imagens estáticas em /public/* (logo, ícones, etc)
+  location ~* \.(png|jpg|jpeg|webp|svg|ico|woff2?|ttf|otf)$ {
+    proxy_cache             static_cache;
+    proxy_cache_valid       200 7d;
+    proxy_cache_valid       404 1m;
+    add_header              X-Retaguarda-Cache $upstream_cache_status always;
+    proxy_pass              ${MASTER_URL};
+  }
+
+  # ── 4) MUTATIONS (POST/PUT/PATCH/DELETE) — sempre passa direto ───────────
+  # Não há cache em mutations. Se internet cair, retorna 504 e o cliente
+  # decide (próxima etapa: buffer offline com retry via Redis).
+  location /api/ {
+    proxy_pass              ${MASTER_URL};
+    proxy_cache             off;
+    # POSTs grandes (upload de imagem etc)
+    client_max_body_size    20m;
+    # Repassa todos verbos
+  }
+
+  # ── 5) Server-Sent Events / WebSockets (KDS, notifications) ─────────────
+  # Pass-through sem buffer (streaming)
+  location /api/painel/sse {
+    proxy_pass              ${MASTER_URL};
+    proxy_cache             off;
+    proxy_buffering         off;
+    proxy_read_timeout      24h;
+    proxy_set_header        Connection "";
+    chunked_transfer_encoding on;
+  }
+
+  # ── 6) HTML (totem, painel) — passa direto ───────────────────────────────
+  # Não cacheamos HTML por causa de cookies de auth, JWT em localStorage,
+  # cor primária dinâmica, etc. Só ganha velocidade pela latência reduzida.
+  location / {
+    proxy_pass              ${MASTER_URL};
+    proxy_cache             off;
+    # Páginas grandes (totem)
+    proxy_buffer_size       16k;
+    proxy_buffers           8 16k;
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Server HTTPS — habilita se houver cert em /etc/nginx/certs/{cert.pem,key.pem}
+# Pra gerar com letsencrypt, ver retaguarda/README.md
+# ─────────────────────────────────────────────────────────────────────────────
+# (configuração HTTPS comentada por padrão; ativar via certbot e descomentar)

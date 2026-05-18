@@ -31,8 +31,9 @@ const NAV: NavGroup[] = [
     { href: "/admin/metricas",  label: "Métricas",   icon: TrendingUp },
   ]},
   { titulo: "Servidor", items: [
-    { href: "/admin/vps",      label: "VPS",          icon: Server },
-    { href: "/admin/maquinas", label: "Máquinas",     icon: Server },
+    { href: "/admin/vps",         label: "VPS",          icon: Server },
+    { href: "/admin/maquinas",    label: "Máquinas",     icon: Server },
+    { href: "/admin/retaguardas", label: "Retaguardas",  icon: Server },
     { href: "/admin/erros",    label: "Erros",        icon: AlertTriangle },
     { href: "/admin/auditoria", label: "Auditoria",   icon: ScrollText },
     { href: "/admin/observability", label: "Observability", icon: Bug },

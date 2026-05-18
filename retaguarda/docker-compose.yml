@@ -1,0 +1,100 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# RETAGUARDA do Cardápio SaaS
+#
+# Rodar no mini-PC do restaurante. Faz proxy/cache da VPS principal pra que
+# totens, PDVs e painéis locais não batam direto no app.tthreedigital.com.br.
+#
+# Componentes:
+#   - nginx-cache:  reverse proxy com cache (cardápio + imagens + estáticos)
+#   - redis:        buffer offline + idempotency keys (próxima etapa)
+#
+# Como subir:
+#   1. Copiar .env.example pra .env e preencher
+#   2. docker compose up -d
+#   3. Apontar DNS interno do restaurante (subdomínio.tthreedigital.com.br
+#      ou IP direto) pra esta máquina, porta 80/443.
+# ─────────────────────────────────────────────────────────────────────────────
+version: "3.9"
+
+services:
+  nginx-cache:
+    image: nginx:1.27-alpine
+    container_name: retaguarda_nginx
+    restart: unless-stopped
+    ports:
+      - "${LISTEN_HTTP:-80}:80"
+      - "${LISTEN_HTTPS:-443}:443"
+    volumes:
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - cache_html:/var/cache/nginx/html
+      - cache_media:/var/cache/nginx/media
+      - cache_static:/var/cache/nginx/static
+      - ./certs:/etc/nginx/certs:ro
+    environment:
+      # Upstream (VPS principal)
+      MASTER_URL:        "${MASTER_URL}"
+      MASTER_HOST:       "${MASTER_HOST}"
+      # Domínio público que os totens/PDVs vão chamar (ex: loja1.tthreedigital.com.br)
+      RETAGUARDA_DOMAIN: "${RETAGUARDA_DOMAIN}"
+      # Empresa atendida (pra logs e métricas)
+      EMPRESA_SLUG:      "${EMPRESA_SLUG}"
+      # Tamanho dos caches (default ~5 GB total)
+      CACHE_MAX_HTML:    "${CACHE_MAX_HTML:-200m}"
+      CACHE_MAX_MEDIA:   "${CACHE_MAX_MEDIA:-5g}"
+      CACHE_MAX_STATIC:  "${CACHE_MAX_STATIC:-500m}"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/__retaguarda_health"]
+      interval: 30s
+      timeout:  5s
+      retries:  3
+    networks: [retaguarda]
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "5" }
+
+  redis:
+    image: redis:7-alpine
+    container_name: retaguarda_redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    networks: [retaguarda]
+    logging:
+      driver: "json-file"
+      options: { max-size: "5m", max-file: "3" }
+
+  # Reportador: faz heartbeat pro master a cada 60s informando que esta
+  # retaguarda está online (próxima etapa: enviar métricas de cache hit).
+  reporter:
+    image: curlimages/curl:8.10.1
+    container_name: retaguarda_reporter
+    restart: unless-stopped
+    depends_on: [nginx-cache]
+    environment:
+      MASTER_URL:    "${MASTER_URL}"
+      EMPRESA_SLUG:  "${EMPRESA_SLUG}"
+      RETAGUARDA_ID: "${RETAGUARDA_ID}"
+      HEARTBEAT_SECRET: "${HEARTBEAT_SECRET}"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          curl -fsS -X POST "$$MASTER_URL/api/retaguarda/heartbeat" \
+            -H "Content-Type: application/json" \
+            -H "x-retaguarda-secret: $$HEARTBEAT_SECRET" \
+            -d "{\"empresa_slug\":\"$$EMPRESA_SLUG\",\"retaguarda_id\":\"$$RETAGUARDA_ID\"}" \
+            > /dev/null 2>&1 || echo "[reporter] master indisponível"
+          sleep 60
+        done
+    networks: [retaguarda]
+
+volumes:
+  cache_html:
+  cache_media:
+  cache_static:
+  redis_data:
+
+networks:
+  retaguarda:
+    driver: bridge
