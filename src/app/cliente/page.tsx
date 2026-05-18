@@ -104,10 +104,14 @@ function ClientePainel() {
       const detalhe = d.data?.detalhe;
       if (d.data?._dev_codigo) {
         setErro(`[DEV] Código: ${d.data._dev_codigo}`);
+      } else if (status === "sem_telefone") {
+        setErro("⚠ Seu cadastro não tem telefone. Procure o restaurante pra cadastrar.");
       } else if (status === "sem_evolution") {
-        setErro("⚠ WhatsApp não configurado. Peça ao restaurante configurar Evolution API ou Master Evolution.");
+        setErro("⚠ WhatsApp não configurado. Peça ao restaurante configurar Evolution API.");
       } else if (status === "falha") {
         setErro(`⚠ Falha ao enviar: ${detalhe ?? "verifique config Evolution"}`);
+      } else if (status === "enviado") {
+        setErro(`✅ Código enviado pelo WhatsApp${detalhe ? " (" + detalhe + ")" : ""}`);
       }
     } catch (e) { setErro((e as Error).message); }
     finally { setBusy(false); }
