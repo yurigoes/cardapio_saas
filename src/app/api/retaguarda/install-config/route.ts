@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryOne } from "@/lib/db/client";
 import { getClientIp } from "@/lib/auth/middleware";
+import { decrypt } from "@/lib/security/encrypt";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,27 @@ export async function GET(req: NextRequest) {
 
     const masterUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.tthreedigital.com.br";
 
+    // Se master tem CF config salva, repassa pra install.sh pular prompts
+    const cf = await queryOne<{ api_token: string; account_id: string; zone_id: string }>(
+      `SELECT api_token, account_id, zone_id
+         FROM master_cloudflare_config
+        WHERE id = 1 AND ativo = TRUE
+          AND api_token IS NOT NULL
+          AND account_id IS NOT NULL
+          AND zone_id IS NOT NULL`
+    ).catch(() => null);
+
+    let cfApiToken: string | null = null;
+    if (cf?.api_token) {
+      try {
+        cfApiToken = cf.api_token.startsWith("encrypted:")
+          ? decrypt(cf.api_token.slice("encrypted:".length))
+          : cf.api_token;
+      } catch (e) {
+        console.warn("[install-config] falha ao decifrar CF token:", (e as Error).message);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       empresa_slug:     row.empresa_slug,
@@ -64,6 +86,10 @@ export async function GET(req: NextRequest) {
       retaguarda_domain: `${row.subdomain}.${row.base_domain}`,
       master_url:       masterUrl,
       heartbeat_secret: secret,  // só vai pra quem tem token válido + IP logado
+      // CF creds — null se master não tem config. install.sh detecta e pula prompts.
+      cf_api_token:  cfApiToken,
+      cf_account_id: cf?.account_id ?? null,
+      cf_zone_id:    cf?.zone_id ?? null,
     });
   } catch (err) {
     console.error("[retaguarda/install-config]", err);

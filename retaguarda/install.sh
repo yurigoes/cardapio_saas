@@ -111,6 +111,16 @@ if [ -n "${INSTALL_TOKEN:-}" ]; then
   SUBDOMAIN=$(echo "$CONFIG"    | jq -r '.subdomain')
   BASE_DOMAIN=$(echo "$CONFIG"  | jq -r '.base_domain')
   HEARTBEAT_SECRET=$(echo "$CONFIG" | jq -r '.heartbeat_secret')
+  # CF creds opcionais — vêm do master se configurado em /admin/cloudflare-setup
+  CF_API_TOKEN_FROM_MASTER=$(echo "$CONFIG"  | jq -r '.cf_api_token // empty')
+  CF_ACCOUNT_ID_FROM_MASTER=$(echo "$CONFIG" | jq -r '.cf_account_id // empty')
+  CF_ZONE_ID_FROM_MASTER=$(echo "$CONFIG"    | jq -r '.cf_zone_id // empty')
+  if [ -n "$CF_API_TOKEN_FROM_MASTER" ]; then
+    export CF_API_TOKEN="$CF_API_TOKEN_FROM_MASTER"
+    export CF_ACCOUNT_ID="$CF_ACCOUNT_ID_FROM_MASTER"
+    export CF_ZONE_ID="$CF_ZONE_ID_FROM_MASTER"
+    ok "Credenciais Cloudflare recebidas do master — não vou perguntar"
+  fi
   ok "Config recebida do token: $EMPRESA_SLUG → $SUBDOMAIN.$BASE_DOMAIN"
 fi
 
