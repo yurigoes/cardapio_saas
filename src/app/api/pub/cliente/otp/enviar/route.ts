@@ -146,20 +146,33 @@ async function handlePost(req: NextRequest) {
       });
     }
 
-    // Master Evolution — usa SLUG da empresa como instance (não a instance do master)
+    // Master Evolution — usa SLUG da empresa como instance
     const masterEvo = await queryOne<{ url: string | null; api_key: string | null }>(
       `SELECT url, api_key FROM master_evolution_config WHERE id = 1 AND ativo = TRUE`
     ).catch(() => null);
     if (masterEvo?.url && masterEvo.api_key && instance) {
+      // api_key armazenada como "encrypted:<cifra>" (via encryptField em ifood/client.ts)
+      // OU como plain text (legado). Tenta as 2 formas.
       let decrypted: string | null = null;
       try {
-        const { decryptIfNeeded } = await import("@/lib/security/encrypt");
-        decrypted = decryptIfNeeded(masterEvo.api_key);
+        const { decrypt, decryptIfNeeded } = await import("@/lib/security/encrypt");
+        if (masterEvo.api_key.startsWith("encrypted:")) {
+          try { decrypted = decrypt(masterEvo.api_key.slice(10)); }
+          catch (e) { console.warn("[OTP] decrypt encrypted: prefix falhou", e); }
+        } else {
+          decrypted = decryptIfNeeded(masterEvo.api_key);
+        }
       } catch {}
+
       const baseUrl = `${masterEvo.url.replace(/\/+$/, "")}/message/sendText/${instance}`;
-      for (const ak of [masterEvo.api_key, decrypted].filter((v): v is string => !!v)) {
+      const candidates = [
+        { ak: decrypted,         label: "master.evo(dec)" },
+        { ak: masterEvo.api_key, label: "master.evo(raw)" },
+      ].filter((c): c is { ak: string; label: string } => !!c.ak);
+
+      for (const { ak, label } of candidates) {
         if (!providers.some(p => p.url === baseUrl && p.apiKey === ak)) {
-          providers.push({ label: `master.evo(${ak === decrypted ? "dec" : "raw"})`, url: baseUrl, apiKey: ak });
+          providers.push({ label, url: baseUrl, apiKey: ak });
         }
       }
     }
