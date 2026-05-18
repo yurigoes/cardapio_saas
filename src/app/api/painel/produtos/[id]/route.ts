@@ -5,6 +5,20 @@ import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { produtoUpdateSchema, parseBodyOrThrow } from "@/lib/utils/validators";
 import { z } from "zod";
+import { cardapioScope } from "@/lib/rede/cardapio";
+
+/**
+ * Helper: WHERE pra UPDATE/DELETE que respeita scope.
+ * Em rede sincronizada, qualquer filial pode editar produto compartilhado
+ * (filtra por rede_id). Standalone: filtra por empresa_id.
+ */
+async function whereOwnership(empresaId: string, paramStart: number) {
+  const scope = await cardapioScope(empresaId);
+  if (scope.sincronizado && scope.rede_id) {
+    return { clause: `rede_id = $${paramStart}`, value: scope.rede_id };
+  }
+  return { clause: `empresa_id = $${paramStart}`, value: scope.empresa_id };
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -46,11 +60,12 @@ export async function PATCH(
     const values   = entries.map(([, v]) => v);
 
     sets.push(`updated_at = NOW()`);
-    values.push(params.id, empresaId);
+    const own = await whereOwnership(empresaId, values.length + 2);
+    values.push(params.id, own.value);
 
     const produto = await queryOne(
       `UPDATE produtos SET ${sets.join(", ")}
-       WHERE id = $${values.length - 1} AND empresa_id = $${values.length} AND deleted_at IS NULL
+       WHERE id = $${values.length - 1} AND ${own.clause} AND deleted_at IS NULL
        RETURNING id`,
       values
     );
@@ -75,11 +90,12 @@ export async function DELETE(
   if (!temPermissao(role, "cardapio:editar")) return forbidden();
 
   try {
+    const own = await whereOwnership(empresaId, 2);
     const produto = await queryOne(
       `UPDATE produtos SET deleted_at = NOW()
-       WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL
+       WHERE id = $1 AND ${own.clause} AND deleted_at IS NULL
        RETURNING id`,
-      [params.id, empresaId]
+      [params.id, own.value]
     );
 
     if (!produto) return notFound("Produto não encontrado");

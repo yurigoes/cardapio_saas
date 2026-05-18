@@ -4,6 +4,15 @@ import { queryOne } from "@/lib/db/client";
 import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { z } from "zod";
+import { cardapioScope } from "@/lib/rede/cardapio";
+
+async function whereOwnership(empresaId: string, paramStart: number) {
+  const scope = await cardapioScope(empresaId);
+  if (scope.sincronizado && scope.rede_id) {
+    return { clause: `rede_id = $${paramStart}`, value: scope.rede_id };
+  }
+  return { clause: `empresa_id = $${paramStart}`, value: scope.empresa_id };
+}
 
 const updateSchema = z.object({
   nome:       z.string().min(2).max(100).trim().optional(),
@@ -45,11 +54,12 @@ export async function PATCH(
     if (body.imagem_url!== undefined) { sets.push(`imagem_url = $${i++}`); values.push(body.imagem_url); }
 
     sets.push(`updated_at = NOW()`);
-    values.push(params.id, empresaId);
+    const own = await whereOwnership(empresaId, i + 1);
+    values.push(params.id, own.value);
 
     const cat = await queryOne(
       `UPDATE categorias SET ${sets.join(", ")}
-       WHERE id = $${i} AND empresa_id = $${i + 1} AND deleted_at IS NULL
+       WHERE id = $${i} AND ${own.clause} AND deleted_at IS NULL
        RETURNING id`,
       values
     );
@@ -74,11 +84,12 @@ export async function DELETE(
   if (!temPermissao(role, "cardapio:editar")) return forbidden();
 
   try {
+    const own = await whereOwnership(empresaId, 2);
     const cat = await queryOne(
       `UPDATE categorias SET deleted_at = NOW()
-       WHERE id = $1 AND empresa_id = $2 AND deleted_at IS NULL
+       WHERE id = $1 AND ${own.clause} AND deleted_at IS NULL
        RETURNING id`,
-      [params.id, empresaId]
+      [params.id, own.value]
     );
 
     if (!cat) return notFound("Categoria não encontrada");

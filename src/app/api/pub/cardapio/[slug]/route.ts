@@ -50,13 +50,19 @@ export async function GET(
         ).catch(() => null))
       : true; // se não exige, sempre "aberto" do ponto de vista do totem
 
+    // Se empresa pertence a rede com cardápio sincronizado, busca por rede_id
+    const { cardapioScope, buildWhereCardapio } = await import("@/lib/rede/cardapio");
+    const scope = await cardapioScope(empresa.id);
+    const catWhere = buildWhereCardapio(scope, "", 1);
+    const prodWhere = buildWhereCardapio(scope, "", 1);
+
     const [categorias, produtos] = await Promise.all([
       query(
         `SELECT id, nome, descricao, imagem_url, ordem
          FROM categorias
-         WHERE empresa_id = $1 AND deleted_at IS NULL AND disponivel = true
+         WHERE ${catWhere.clause} AND deleted_at IS NULL AND disponivel = true
          ORDER BY ordem ASC, nome ASC`,
-        [empresa.id]
+        [catWhere.value]
       ),
       query(
         `SELECT id, categoria_id, nome, descricao, preco, imagem_url,
@@ -64,9 +70,9 @@ export async function GET(
                 COALESCE(pontos_fidelidade, 0)         AS pontos_fidelidade,
                 COALESCE(variacoes, '{"grupos":[]}'::jsonb) AS variacoes
          FROM produtos
-         WHERE empresa_id = $1 AND deleted_at IS NULL AND disponivel = true
+         WHERE ${prodWhere.clause} AND deleted_at IS NULL AND disponivel = true
          ORDER BY nome ASC`,
-        [empresa.id]
+        [prodWhere.value]
       ),
     ]);
 

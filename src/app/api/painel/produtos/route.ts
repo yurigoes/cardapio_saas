@@ -5,6 +5,7 @@ import { temPermissao } from "@/lib/auth/rbac";
 import { ok, created, forbidden, badRequest, serverError, paginatedOk } from "@/lib/utils/response";
 import { produtoCreateSchema, paginacaoSchema, parseBodyOrThrow } from "@/lib/utils/validators";
 import { z } from "zod";
+import { cardapioScope, buildWhereCardapio, valuesInsertCardapio } from "@/lib/rede/cardapio";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -23,9 +24,13 @@ export async function GET(req: NextRequest) {
   const categoriaId = sp.get("categoria_id");
   const offset      = (page - 1) * limit;
 
-  const conditions = ["p.empresa_id = $1", "p.deleted_at IS NULL"];
-  const values: unknown[] = [empresaId];
-  let i = 2;
+  // Resolve scope: empresa standalone OU rede com cardápio sincronizado
+  const scope = await cardapioScope(empresaId);
+  const scopeFilter = buildWhereCardapio(scope, "p", 1);
+
+  const conditions = [scopeFilter.clause, "p.deleted_at IS NULL"];
+  const values: unknown[] = [scopeFilter.value];
+  let i = scopeFilter.paramIndex;
 
   if (q) {
     conditions.push(`(p.nome ILIKE $${i} OR p.descricao ILIKE $${i})`);
@@ -43,7 +48,8 @@ export async function GET(req: NextRequest) {
 
   const [produtos, total] = await Promise.all([
     query(
-      `SELECT p.*, c.nome as categoria_nome
+      `SELECT p.*, c.nome as categoria_nome,
+              (p.rede_id IS NOT NULL) AS compartilhado_na_rede
        FROM produtos p
        LEFT JOIN categorias c ON c.id = p.categoria_id
        WHERE ${where}
@@ -73,15 +79,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Define empresa_id + rede_id baseado no scope (rede ou standalone)
+    const scope = await cardapioScope(empresaId);
+    const { empresa_id, rede_id } = valuesInsertCardapio(scope);
+
     const produto = await queryOne<{ id: string }>(
       `INSERT INTO produtos
-         (empresa_id, categoria_id, nome, descricao, preco, preco_custo,
+         (empresa_id, rede_id, categoria_id, nome, descricao, preco, preco_custo,
           disponivel, destaque, tempo_preparo, imagem_url, tipo, pontos_fidelidade,
           variacoes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING id`,
       [
-        empresaId,
+        empresa_id, rede_id,
         body.categoria_id      ?? null,
         body.nome,
         body.descricao         ?? null,
@@ -97,7 +107,7 @@ export async function POST(req: NextRequest) {
       ]
     );
 
-    return created({ id: produto?.id });
+    return created({ id: produto?.id, compartilhado_na_rede: !!rede_id });
   } catch (err) {
     console.error("[Painel/Produtos/POST]", err);
     return serverError();

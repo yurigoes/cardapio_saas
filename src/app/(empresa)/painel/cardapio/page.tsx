@@ -32,6 +32,7 @@ interface Produto {
   categoria_id:      string | null;
   categoria_nome:    string | null;
   pontos_fidelidade: number | null;
+  compartilhado_na_rede?: boolean;
   variacoes?:        Variacoes | null;
 }
 
@@ -388,9 +389,15 @@ export default function CardapioPage() {
 
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         {prod.destaque && <Star className="h-3 w-3 text-amber-400 flex-shrink-0" />}
                         <p className="font-medium text-white truncate">{prod.nome}</p>
+                        {prod.compartilhado_na_rede && (
+                          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300 uppercase tracking-wider"
+                            title="Compartilhado entre todas as filiais da rede">
+                            🌐 REDE
+                          </span>
+                        )}
                       </div>
                       {prod.categoria_nome && (
                         <p className="text-xs text-slate-500 mt-0.5">{prod.categoria_nome}</p>
