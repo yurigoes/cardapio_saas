@@ -14,6 +14,8 @@ import { Readable } from "stream";
 import { promises as fs } from "fs";
 import path from "path";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
+import { verifyAccessToken } from "@/lib/auth/jwt";
+import { isSessaoValida } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
@@ -65,9 +67,24 @@ async function buildTar(rootDir: string, prefix: string): Promise<Buffer> {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req);
-  if (isAuthError(auth)) return auth;
-  if (!ROLES_PERMITIDOS.includes(auth.payload.role)) {
+  // Browser não consegue mandar Authorization em <a href>, então também
+  // aceitamos ?token=... — usado pelo painel ao gerar o link de download.
+  let role: string | null = null;
+  const tokenQuery = req.nextUrl.searchParams.get("token");
+  if (tokenQuery) {
+    try {
+      const payload = await verifyAccessToken(tokenQuery);
+      if (await isSessaoValida(payload.sessionId)) {
+        role = payload.role;
+      }
+    } catch { /* cai pro requireAuth abaixo */ }
+  }
+  if (!role) {
+    const auth = await requireAuth(req);
+    if (isAuthError(auth)) return auth;
+    role = auth.payload.role;
+  }
+  if (!ROLES_PERMITIDOS.includes(role)) {
     return NextResponse.json({ ok: false, error: "Sem permissão" }, { status: 403 });
   }
 

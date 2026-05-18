@@ -221,7 +221,7 @@ export default function ImpressorasPage() {
                 <Download className="h-3.5 w-3.5" /> Como instalar:
               </p>
               <a
-                href="/api/downloads/print-agent"
+                href={`/api/downloads/print-agent?token=${encodeURIComponent(typeof window !== "undefined" ? (localStorage.getItem("access_token") ?? "") : "")}`}
                 className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white hover:brightness-110"
               >
                 <Download className="h-3.5 w-3.5" /> Baixar agente (.tar.gz)
