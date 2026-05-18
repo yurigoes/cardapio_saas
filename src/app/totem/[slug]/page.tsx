@@ -491,7 +491,7 @@ function RegisterModal({ slug, idioma, tipo, valorInicial, empresa, onCreated, o
       if (email)    body.email   = email.trim();
       if (dataNasc) body.data_nascimento = dataNasc;
 
-      const res  = await fetch(`/api/painel/clientes?slug=${slug}`, {
+      const res  = await fetch(`/api/pub/cliente?slug=${slug}`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(body),
