@@ -2373,14 +2373,25 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   const cartTotal = cart.reduce((acc, i) => acc + precoUnitarioItem(i) * i.quantidade, 0);
   const cartCount = cart.reduce((acc, i) => acc + i.quantidade, 0);
 
-  // Bebidas available
-  const bebidas = useMemo(() => produtos.filter(p => p.tipo === "bebida"), [produtos]);
+  // Bebidas available — considera tipo='bebida' OU produtos cuja categoria
+  // tenha nome contendo palavras-chave (cerveja/refrigerante/suco/água/drink).
+  // Resiliente a cardápios em que tudo foi cadastrado como tipo='produto'.
+  const BEBIDA_KEYWORDS = /\b(bebida|cerveja|refriger|suco|água|agua|drink|bebid|chopp|vinho)\b/i;
+  const bebidaCatIds = useMemo(() => {
+    return new Set(
+      categorias
+        .filter(c => BEBIDA_KEYWORDS.test(c.nome ?? ""))
+        .map(c => c.id)
+    );
+  }, [categorias]);
+  const isBebida = (p: Produto) => p.tipo === "bebida" || (p.categoria_id != null && bebidaCatIds.has(p.categoria_id));
+  const bebidas  = useMemo(() => produtos.filter(isBebida), [produtos, bebidaCatIds]);
 
   // ── Open cart (with drinks interstitial) ──────────────────────────────────
 
   function handleOpenCart() {
     // Show drinks modal if: not shown yet, no drink in cart, there are bebidas
-    const hasDrinkInCart = cart.some(i => i.produto.tipo === "bebida");
+    const hasDrinkInCart = cart.some(i => isBebida(i.produto));
     if (!drinksShownRef.current && !hasDrinkInCart && bebidas.length > 0) {
       drinksShownRef.current = true;
       setShowDrinksModal(true);
@@ -2538,7 +2549,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     <div
       data-totem
       data-totem-tema={(empresa as { totem_tema?: string })?.totem_tema ?? "escuro"}
-      className={`relative min-h-screen overflow-hidden ${
+      className={`totem-root relative min-h-screen overflow-hidden ${
         (empresa as { totem_tema?: string })?.totem_tema === "claro"
           ? "bg-slate-50 text-slate-900"
           : "bg-slate-950 text-white"

@@ -243,3 +243,15 @@ html[data-theme="light"] .border.bg-slate-900 {
 html[data-theme="light"] ::-webkit-scrollbar-track { background: #f4f4f5; }
 html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 6px; }
 html[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
+
+/* ── Util: esconde scrollbars mantendo scroll funcional (touch friendly) ── */
+.scrollbar-hide          { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* ── Totem: SEMPRE sem scrollbar (touch). Aplica em qualquer elemento
+       scrollável dentro de uma rota /totem/* ──────────────────────────── */
+.totem-root, .totem-root * {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.totem-root *::-webkit-scrollbar { display: none; width: 0; height: 0; }

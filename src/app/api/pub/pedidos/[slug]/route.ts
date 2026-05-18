@@ -512,7 +512,13 @@ export async function POST(
       const formaSincrona = !!body.forma_pagamento && SINCRONAS.has(body.forma_pagamento);
       // Totem = sem mesa, sem delivery, sem retirada (default fica "totem")
       const eTotem = !body.mesa_id && body.tipo_consumo !== "delivery" && body.tipo_consumo !== "retirada";
-      const podeImprimir = formaSincrona || eTotem;
+      // PIX nativo no totem (sem mesa, sem delivery): cliente está fisicamente
+      // na loja vendo o QR — imprime cozinha/caixa imediatamente. Pra delivery
+      // continua aguardando webhook do gateway.
+      const pixNoLocal = body.forma_pagamento === "pix"
+                      && !body.mesa_id
+                      && body.tipo_consumo !== "delivery";
+      const podeImprimir = formaSincrona || eTotem || pixNoLocal;
 
       if (podeImprimir) {
         dispatchCupomCozinha(empresa.id, pedido.id)
