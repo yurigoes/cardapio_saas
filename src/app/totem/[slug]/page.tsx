@@ -1316,8 +1316,8 @@ interface DrinksModalProps {
 
 function DrinksModal({ bebidas, idioma, onAdd, onSkip }: DrinksModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-end bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-t-3xl bg-slate-900 p-6 pb-8">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-end bg-slate-950/92 backdrop-blur-xl">
+      <div className="w-full max-w-lg rounded-t-3xl bg-slate-900 p-6 pb-8 shadow-2xl border-t border-white/10">
         <div className="mb-1 text-center">
           <h2 className="text-xl font-bold text-white">{t(idioma, "bebidas_titulo")}</h2>
           <p className="mt-1 text-sm text-slate-400">{t(idioma, "bebidas_sub")}</p>
@@ -2087,7 +2087,9 @@ function ProductRow({ produto, onOpen }: { produto: Produto; onOpen: (p: Produto
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const IDLE_MS = 3 * 60 * 1000;
+// Idle: 30s sem interagir → modal "ainda está aí?", 10s sem responder → reset
+const IDLE_MS    = 30 * 1000;
+const WARNING_MS = 10 * 1000;
 
 type Fase = "start" | "identificacao" | "tipoConsumo" | "endereco" | "repeat" | "cardapio";
 
@@ -2191,23 +2193,62 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   const [showDrinksModal, setShowDrinksModal] = useState(false);
   const drinksShownRef = useRef(false);
 
-  // Idle timer
-  const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Idle timer + modal de aviso
+  const idleRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warningRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showIdleWarning, setShowIdleWarning] = useState(false);
+  const [idleCountdown,   setIdleCountdown]   = useState(WARNING_MS / 1000);
+
+  function clearIdleTimers() {
+    if (idleRef.current)      clearTimeout(idleRef.current);
+    if (warningRef.current)   clearTimeout(warningRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+  }
+
+  function startWarningCountdown() {
+    setIdleCountdown(WARNING_MS / 1000);
+    setShowIdleWarning(true);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    countdownRef.current = setInterval(() => {
+      setIdleCountdown(c => (c > 0 ? c - 1 : 0));
+    }, 1000);
+    warningRef.current = setTimeout(() => {
+      setShowIdleWarning(false);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      handleFullReset();
+    }, WARNING_MS);
+  }
 
   function resetIdleTimer() {
-    if (idleRef.current) clearTimeout(idleRef.current);
-    if (fase === "cardapio" && !cartOpen && !produtoAberto) {
-      idleRef.current = setTimeout(handleFullReset, IDLE_MS);
+    clearIdleTimers();
+    // Se o aviso está aberto, qualquer interação cancela e mantém sessão
+    if (showIdleWarning) setShowIdleWarning(false);
+    // Só roda timer na fase de cardápio (não no início/identificação)
+    if (fase === "cardapio" && !produtoAberto) {
+      idleRef.current = setTimeout(() => {
+        startWarningCountdown();
+      }, IDLE_MS);
     }
   }
 
+  function continuarSessao() {
+    setShowIdleWarning(false);
+    clearIdleTimers();
+    resetIdleTimer();
+  }
+
   useEffect(() => {
-    if (fase !== "cardapio") return;
+    if (fase !== "cardapio") {
+      clearIdleTimers();
+      setShowIdleWarning(false);
+      return;
+    }
     resetIdleTimer();
     const events = ["touchstart", "click", "keydown"];
     events.forEach(e => window.addEventListener(e, resetIdleTimer, { passive: true }));
     return () => {
-      if (idleRef.current) clearTimeout(idleRef.current);
+      clearIdleTimers();
       events.forEach(e => window.removeEventListener(e, resetIdleTimer));
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2934,6 +2975,44 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           onAdd={(b) => addToCart(b, 1, "")}
           onSkip={() => { setShowDrinksModal(false); setCartOpen(true); }}
         />
+      )}
+
+      {/* Idle: ainda está aí? */}
+      {showIdleWarning && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl"
+          onClick={continuarSessao}
+        >
+          <div
+            className="mx-6 max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-8 text-center shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
+                 style={{ background: "var(--color-primary-15, rgba(16,185,129,0.15))" }}>
+              <span className="text-3xl">👋</span>
+            </div>
+            <h3 className="text-2xl font-bold text-white">Ainda está aí?</h3>
+            <p className="mt-2 text-sm text-slate-400">
+              Detectamos um tempo sem uso. Toque pra continuar — caso contrário, a sessão será reiniciada em
+            </p>
+            <p className="mt-3 text-5xl font-black tabular-nums" style={{ color: "var(--color-primary, #10b981)" }}>
+              {idleCountdown}s
+            </p>
+            <button
+              onClick={continuarSessao}
+              className="mt-6 w-full rounded-2xl py-4 text-base font-bold text-white transition hover:brightness-110"
+              style={{ background: "var(--color-primary, #10b981)" }}
+            >
+              Sim, estou aqui
+            </button>
+            <button
+              onClick={() => { setShowIdleWarning(false); clearIdleTimers(); handleFullReset(); }}
+              className="mt-2 w-full rounded-2xl border border-white/10 py-3 text-sm text-slate-400 hover:bg-white/5 transition"
+            >
+              Reiniciar agora
+            </button>
+          </div>
+        </div>
       )}
 
       {cartOpen && (
