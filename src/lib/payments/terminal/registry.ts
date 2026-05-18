@@ -10,6 +10,7 @@
 import type { BaseDriver } from "./types";
 import { CieloApiDriver }       from "./cielo-api";
 import { CieloTefIntentDriver } from "./cielo-tef-intent";
+import { CieloLioDriver }       from "./cielo-lio";
 
 export interface DriverMeta {
   id:          string;        // chave única (vai pro banco)
@@ -32,6 +33,7 @@ export interface DriverMeta {
 export const DRIVERS: Record<string, BaseDriver> = {
   cielo_api:        CieloApiDriver,
   cielo_tef_intent: CieloTefIntentDriver,
+  cielo_lio:        CieloLioDriver,
 };
 
 export const DRIVER_META: DriverMeta[] = [
@@ -82,6 +84,29 @@ export const DRIVER_META: DriverMeta[] = [
     ],
     metodos_suportados: ["pix", "qrcode", "credito", "debito"],
     docs_url: "https://developercielo.github.io/manual/cielo-ecommerce",
+  },
+  {
+    id:        "cielo_lio",
+    nome:      "Cielo LIO (terminal próprio Cielo)",
+    descricao: "Para quem TEM um terminal Cielo LIO físico. Comando enviado via API REST — não precisa de app no totem. LIO recebe push e pede cartão ao cliente. Suporta crédito, débito e PIX.",
+    banco:     "Cielo",
+    tipo:      "api_online",
+    campos_cred: [
+      { chave: "client_id",     label: "Client ID Cielo LIO",     tipo: "text",     obrigatorio: true,
+        placeholder: "Credencial OAuth (painel Cielo)" },
+      { chave: "client_secret", label: "Client Secret",            tipo: "password", obrigatorio: true },
+      { chave: "merchant_id",   label: "Merchant ID (opcional)",   tipo: "text" },
+      { chave: "lio_serial",    label: "Serial da LIO (opcional)", tipo: "text",
+        placeholder: "Se conta tem várias LIOs, especifica qual" },
+      { chave: "ambiente",      label: "Ambiente",                  tipo: "select",
+        opcoes: [
+          { valor: "producao", label: "Produção" },
+          { valor: "sandbox",  label: "Sandbox" },
+        ],
+      },
+    ],
+    metodos_suportados: ["credito", "debito", "pix"],
+    docs_url: "https://developercielo.github.io/manual/cielo-lio",
   },
   // ── Stubs prontos pra implementar quando precisar ────────────
   // {

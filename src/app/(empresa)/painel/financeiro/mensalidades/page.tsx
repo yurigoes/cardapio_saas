@@ -346,7 +346,7 @@ function MensalidadesContent() {
                     </button>
                   )}
                   {m.status === "paga" && (
-                    <a href={`/api/painel/mensalidades/${m.id}/comprovante`} target="_blank" rel="noopener"
+                    <a href={`/comprovante/${m.id}?tipo=mensalidade`} target="_blank" rel="noopener"
                       className="flex items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-500/20">
                       <CheckCircle2 className="h-3.5 w-3.5" /> Comprovante
                     </a>
@@ -394,7 +394,7 @@ function MensalidadesContent() {
                     </button>
                   )}
                   {c.status === "paga" && (
-                    <a href={`/api/painel/mensalidades/${c.id}/comprovante?tipo=avulsa`} target="_blank" rel="noopener"
+                    <a href={`/comprovante/${c.id}?tipo=avulsa`} target="_blank" rel="noopener"
                       className="flex items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-500/20">
                       <CheckCircle2 className="h-3.5 w-3.5" /> Comprovante
                     </a>

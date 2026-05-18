@@ -320,7 +320,7 @@ export default function MensalidadesAdminPage() {
                     {/* Quando paga: Comprovante + Nota Fiscal */}
                     {m.status === "paga" && (
                       <>
-                        <a href={`/api/painel/mensalidades/${m.id}/comprovante`} target="_blank" rel="noopener"
+                        <a href={`/comprovante/${m.id}?tipo=mensalidade`} target="_blank" rel="noopener"
                           title="Ver comprovante"
                           className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-300 hover:bg-emerald-500/20">
                           <FileCheck className="h-3.5 w-3.5" />
@@ -560,7 +560,7 @@ function AvulsasList() {
                 )}
                 {c.status === "paga" && (
                   <>
-                    <a href={`/api/painel/mensalidades/${c.id}/comprovante?tipo=avulsa`} target="_blank" rel="noopener"
+                    <a href={`/comprovante/${c.id}?tipo=avulsa`} target="_blank" rel="noopener"
                       title="Comprovante"
                       className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-300 hover:bg-emerald-500/20">
                       <FileCheck className="h-3.5 w-3.5" />
