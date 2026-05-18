@@ -8,7 +8,7 @@ import {
   Package, Users, Settings, LogOut, ChefHat, Bell, Tag, BarChart3,
   MapPin, CreditCard, Zap, LayoutGrid, Tv2, Wallet, Activity, ScrollText,
   Receipt, Sun, Moon, Database, Key, Printer, ShieldCheck, Mail, Server, LifeBuoy, MessageCircle,
-  Building2, FileText, Network, Truck,
+  Building2, FileText, Network, Truck, BookOpen, Cpu,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
 import { useTheme } from "@/lib/hooks/useTheme";
@@ -102,8 +102,10 @@ const NAV_GROUPS: NavGroup[] = [
   ]},
 
   { titulo: "Suporte", items: [
-    { href: "/painel/suporte", label: "Meus chamados", icon: MessageCircle, modulo: null },
-    { href: "/painel/ajuda",   label: "Ajuda",         icon: LifeBuoy,      modulo: null, suporteOnly: true },
+    { href: "/painel/suporte",                    label: "Meus chamados",     icon: MessageCircle, modulo: null },
+    { href: "/painel/ajuda",                      label: "Ajuda",             icon: LifeBuoy,      modulo: null, suporteOnly: true },
+    { href: "/painel/ajuda/guia",                 label: "Guia do sistema",   icon: BookOpen,      modulo: null },
+    { href: "/painel/ajuda/especificacoes",       label: "Specs técnicas",    icon: Cpu,           modulo: null },
   ]},
 ];
 
