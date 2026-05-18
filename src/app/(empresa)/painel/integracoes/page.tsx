@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import {
   Zap, Wifi, WifiOff, Clock, RefreshCw, Plus, Trash2,
   CheckCircle, AlertCircle, Loader2, Link2, Key, Eye, EyeOff, Save,
+  CreditCard, ArrowRight,
 } from "lucide-react";
 import { confirmar } from "@/components/ui/ConfirmModal";
 
@@ -1058,7 +1059,29 @@ export default function IntegracoesPage() {
         />
       </section>
 
-      {/* Section 3 & 4: Marketplaces */}
+      {/* Section: Terminais de pagamento */}
+      <section className="space-y-3">
+        <SectionDivider label="Pagamentos" />
+        <a href="/painel/integracoes/terminais"
+          className="block rounded-2xl border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 p-5 transition">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20">
+              <CreditCard className="h-5 w-5 text-emerald-400" />
+            </div>
+            <h3 className="font-bold text-white">Terminais de pagamento</h3>
+            <span className="ml-auto rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-400">DISPONÍVEL</span>
+          </div>
+          <p className="text-sm text-slate-400">
+            Configure maquininhas e PinPads (Cielo TEF, Cielo LIO, Cielo API) pro PDV e Totem.
+            Aceita crédito, débito, voucher e PIX. Pronto pra integrar Stone, PagSeguro e outros.
+          </p>
+          <p className="mt-3 text-xs text-emerald-400 flex items-center gap-1">
+            Configurar terminais <ArrowRight className="h-3 w-3" />
+          </p>
+        </a>
+      </section>
+
+      {/* Section: Marketplaces */}
       <section className="space-y-3">
         <SectionDivider label="Marketplaces" />
         <div className="grid gap-4 md:grid-cols-2">

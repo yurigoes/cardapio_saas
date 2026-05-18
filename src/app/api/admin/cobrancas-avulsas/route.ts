@@ -26,17 +26,26 @@ export async function GET(req: NextRequest) {
     if (empresaId) { where.push(`empresa_id = $${i++}`); vals.push(empresaId); }
     if (status)    { where.push(`status     = $${i++}`); vals.push(status); }
 
-    const rows = await query(
-      `SELECT c.id, c.empresa_id, e.nome_fantasia AS empresa_nome,
-              c.origem, c.nome, c.motivo, c.valor, c.vencimento,
-              c.status, c.mp_init_point, c.pago_em, c.pago_via, c.criado_em,
-              c.nota_fiscal_url, c.nota_fiscal_nome
-         FROM cobrancas_avulsas c
-         LEFT JOIN empresas e ON e.id = c.empresa_id
-        WHERE ${where.join(" AND ")}
-        ORDER BY c.criado_em DESC LIMIT 200`,
-      vals
-    );
+    const buscar = (comNF: boolean) => {
+      const nfCols = comNF
+        ? `, c.nota_fiscal_url, c.nota_fiscal_nome`
+        : `, NULL AS nota_fiscal_url, NULL AS nota_fiscal_nome`;
+      return query(
+        `SELECT c.id, c.empresa_id, e.nome_fantasia AS empresa_nome,
+                c.origem, c.nome, c.motivo, c.valor, c.vencimento,
+                c.status, c.mp_init_point, c.pago_em, c.pago_via, c.criado_em
+                ${nfCols}
+           FROM cobrancas_avulsas c
+           LEFT JOIN empresas e ON e.id = c.empresa_id
+          WHERE ${where.join(" AND ")}
+          ORDER BY c.criado_em DESC LIMIT 200`,
+        vals
+      );
+    };
+    let rows;
+    try { rows = await buscar(true); }
+    catch { rows = await buscar(false); }
+    console.info(`[Admin/CobrAv/GET] retornou ${rows.length}`);
     return ok(rows);
   } catch (err) {
     console.error("[CobrAv/GET]", err);

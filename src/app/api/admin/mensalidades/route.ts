@@ -25,12 +25,16 @@ export async function GET(req: NextRequest) {
   if (status) { params.push(status); where.push(`m.status = $${params.length}`); }
   if (mes)    { params.push(`${mes}-01`); where.push(`m.mes_referencia = $${params.length}::date`); }
 
-  try {
-    const rows = await query(
+  // Query principal — se falhar por coluna NF inexistente, retry sem
+  const buscar = (comNF: boolean) => {
+    const nfCols = comNF
+      ? `, m.nota_fiscal_url, m.nota_fiscal_nome, m.nota_fiscal_em::text`
+      : `, NULL AS nota_fiscal_url, NULL AS nota_fiscal_nome, NULL AS nota_fiscal_em`;
+    return query(
       `SELECT m.id, m.empresa_id, e.nome_fantasia AS empresa_nome, e.email,
               m.mes_referencia::text, m.valor::float, m.vencimento::text, m.status,
-              m.pago_em, m.pago_via, m.mp_init_point, p.nome AS plano_nome,
-              m.nota_fiscal_url, m.nota_fiscal_nome, m.nota_fiscal_em::text
+              m.pago_em, m.pago_via, m.mp_init_point, p.nome AS plano_nome
+              ${nfCols}
          FROM mensalidades m
          JOIN empresas e ON e.id = m.empresa_id
     LEFT JOIN planos p   ON p.id = m.plano_id
@@ -39,28 +43,38 @@ export async function GET(req: NextRequest) {
         LIMIT 500`,
       params
     );
+  };
+
+  try {
+    let rows;
+    try { rows = await buscar(true); }
+    catch (e1) {
+      console.warn("[Admin/Mensalidades/GET] retry sem NF:", e1 instanceof Error ? e1.message : e1);
+      rows = await buscar(false);
+    }
 
     const totais = await queryOne<{
       total_aberto: string; total_paga: string; total_atrasada: string;
       qtd_aberto: string; qtd_paga: string; qtd_atrasada: string;
     }>(
       `SELECT
-         COALESCE(SUM(CASE WHEN status = 'aberta'    THEN valor END), 0)::text AS total_aberto,
-         COALESCE(SUM(CASE WHEN status = 'paga'      THEN valor END), 0)::text AS total_paga,
-         COALESCE(SUM(CASE WHEN status = 'atrasada'  THEN valor END), 0)::text AS total_atrasada,
-         COUNT(*) FILTER (WHERE status = 'aberta')::text   AS qtd_aberto,
-         COUNT(*) FILTER (WHERE status = 'paga')::text     AS qtd_paga,
-         COUNT(*) FILTER (WHERE status = 'atrasada')::text AS qtd_atrasada
+         COALESCE(SUM(CASE WHEN m.status = 'aberta'    THEN m.valor END), 0)::text AS total_aberto,
+         COALESCE(SUM(CASE WHEN m.status = 'paga'      THEN m.valor END), 0)::text AS total_paga,
+         COALESCE(SUM(CASE WHEN m.status = 'atrasada'  THEN m.valor END), 0)::text AS total_atrasada,
+         COUNT(*) FILTER (WHERE m.status = 'aberta')::text   AS qtd_aberto,
+         COUNT(*) FILTER (WHERE m.status = 'paga')::text     AS qtd_paga,
+         COUNT(*) FILTER (WHERE m.status = 'atrasada')::text AS qtd_atrasada
        FROM mensalidades m
        JOIN empresas e ON e.id = m.empresa_id
        WHERE ${where.join(" AND ")}`,
       params
-    );
+    ).catch(() => null);
 
+    console.info(`[Admin/Mensalidades/GET] retornou ${rows.length} rows · filtros: status=${status ?? '-'} mes=${mes ?? '-'}`);
     return ok({ mensalidades: rows, totais });
   } catch (err) {
     console.error("[Admin/Mensalidades/GET]", err);
-    return serverError();
+    return serverError(err instanceof Error ? err.message : undefined);
   }
 }
 
