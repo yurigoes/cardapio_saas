@@ -41,6 +41,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/web-push  ./node_mod
 # Pasta do agente de impressão local — servida via /api/downloads/print-agent
 COPY --from=builder --chown=nextjs:nodejs /app/print-agent  ./print-agent
 
+# Pasta da retaguarda — install.sh servido via /install-retaguarda.sh
+COPY --from=builder --chown=nextjs:nodejs /app/retaguarda   ./retaguarda
+
 USER nextjs
 
 EXPOSE 3000

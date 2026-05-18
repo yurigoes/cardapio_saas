@@ -1,22 +1,46 @@
 # Retaguarda — Cardápio SaaS
 
-Reverse-proxy + cache local pra reduzir carga no servidor principal. Cada
-restaurante grande roda 1 instância num mini-PC na própria loja. Totens,
-PDVs e painéis chamam essa retaguarda no IP local; ela cacheia o que
-pode (cardápio, imagens) e proxia o resto pro master.
+Mini-PC dentro da loja que faz reverse-proxy + cache local + buffer offline.
+Totens, PDVs e painéis chamam essa retaguarda; ela serve o que pode local
+(cardápio cacheado, imagens, estáticos), proxia o resto pro master, e
+guarda pedidos numa fila se a internet cair.
 
 ```
 [ totens / PDVs / painéis ]
         ↓ LAN (1ms)
-   RETAGUARDA (este pacote)
-   nginx-cache + redis
-        ↓ HTTPS internet
+   ┌──────────────── RETAGUARDA ─────────────────┐
+   │ nginx-cache  proxy + cache 3 zonas          │
+   │ redis        buffer offline + idempotency   │
+   │ worker       fila de POSTs offline + drain  │
+   │ purger       invalida cache quando master pede│
+   │ reporter     manda métricas pro master      │
+   │ cloudflared  HTTPS público via tunnel       │
+   │ watchtower   auto-update das imagens        │
+   └─────────────────────────────────────────────┘
+        ↓ HTTPS internet (Cloudflare Tunnel)
    VPS PRINCIPAL (app.tthreedigital.com.br)
 ```
 
-**O master continua sendo a fonte de verdade.** A retaguarda só acelera
-leitura e diminui banda. Nenhum dado é gravado local — se internet cair,
-mutations falham (próxima etapa terá buffer offline).
+**Princípios:**
+- ✅ Master é a fonte de verdade. Retaguarda só acelera e dá resiliência.
+- ✅ Internet cai → pedidos enfileiram localmente, drainam quando volta
+- ✅ Mudança de cardápio no painel → invalidação <1s nas retaguardas online
+- ✅ Sem IP fixo, sem port-forward, sem cert SSL local — tudo via tunnel
+- ✅ Auto-update das imagens via Watchtower
+
+---
+
+## Componentes em detalhe
+
+| Container | Função | Build |
+|---|---|---|
+| `retaguarda_nginx` | proxy reverso + cache 3 zonas (html 5min, mídia 7d, estáticos 30d). Healthcheck via `/__retaguarda_health` | nginx:1.27-alpine |
+| `retaguarda_redis` | buffer offline (LIST), idempotency (HASH). LRU 256MB. | redis:7-alpine |
+| `retaguarda_worker` | Node :3001 — recebe POSTs que falharam no master, enfileira no Redis, drainer replaya com `Idempotency-Key` (master deduplica) | build local |
+| `retaguarda_purger` | Node :3002 — recebe `POST /__purge {slug}` do master, computa md5 da chave de cache e deleta o arquivo. Também expõe `/__stats` (uso disco) | build local |
+| `retaguarda_reporter` | Node — a cada 60s coleta status do worker + purger e POSTa `heartbeat` no master com métricas ricas | build local |
+| `retaguarda_cloudflared` | tunnel pra Cloudflare → HTTPS público em `loja-X.tthreedigital.com.br` | cloudflare/cloudflared |
+| `retaguarda_watchtower` | poll 12h, atualiza imagens com tag (containers `build:` são pulados auto) | containrrr/watchtower |
 
 ---
 
@@ -30,8 +54,20 @@ mutations falham (próxima etapa terá buffer offline).
 
 ## Instalação em 1 comando
 
-Na máquina nova, como root:
+**Modo recomendado** — gere o comando no master:
 
+1. Vá em `https://app.tthreedigital.com.br/admin/retaguardas`
+2. Clique **"+ Nova retaguarda"**, escolha o slug da empresa
+3. Copie o comando curl gerado (já com token + master URL + slug)
+4. Cola no mini-PC novo (como root) — pronto
+
+Exemplo:
+```bash
+curl -fsSL https://app.tthreedigital.com.br/install-retaguarda.sh | \
+  sudo INSTALL_TOKEN=abc123... MASTER_URL=https://app.tthreedigital.com.br bash
+```
+
+**Modo manual** (sem wizard, vai pedir tudo interativamente):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/yurigoes/cardapio_saas/main/retaguarda/install.sh | sudo bash
 ```
@@ -229,11 +265,41 @@ docker compose down
 
 ---
 
-## Próximas etapas (roadmap)
+## Status do roadmap
 
-- [ ] Buffer offline de POSTs com Redis (pedidos não perdidos se internet cair)
-- [ ] Invalidação automática de cache via webhook do master
-- [ ] Mirror do MinIO local (imagens 100% offline)
-- [ ] Métricas de cache hit reportadas no heartbeat
-- [ ] Auto-update via Watchtower
-- [ ] Modo "slave full" com Postgres local pra restaurantes 100% offline-first
+- [x] Pacote nginx + redis (Etapa 1)
+- [x] Cloudflare Tunnel auto-provisionado via API (1 tunnel por loja)
+- [x] Auto-instalador 1-line com Docker + cloudflared + containers
+- [x] Heartbeat + status visível em `/admin/retaguardas` no master
+- [x] **Buffer offline de POSTs** (worker enfileira pedido/cliente, drena com Idempotency-Key)
+- [x] **Invalidação remota via purger** (master notifica retaguarda em <1s ao mudar produto)
+- [x] **Métricas ricas no heartbeat** (queue stats + cache disk usage por zona)
+- [x] **Wizard de install via master** (token de uso único, sem precisar copiar/colar secret)
+- [x] **Página detalhada `/admin/retaguardas/[id]`** com ações de purge remoto
+- [x] **Cron `/api/cron/cleanup-retaguardas`** marca inativas após 24h
+- [x] **Auto-update via Watchtower** (poll 12h)
+- [x] **Rate limit no heartbeat** (anti-flood se secret vazar)
+- [ ] Mirror MinIO local seletivo (imagens 100% offline) — opcional
+- [ ] Modo "slave full" com Postgres local — só pra lojas com internet péssima
+
+## Endpoints úteis na retaguarda
+
+| Rota | Acesso | Função |
+|---|---|---|
+| `/__retaguarda_health` | público | healthcheck simples |
+| `/__retaguarda_status` | público | página HTML status |
+| `/__retaguarda_info` | público (CORS *) | JSON com domínio, master_host |
+| `/__queue/status` | só LAN | métricas do buffer offline |
+| `/__queue/flush` | só LAN | força drain manual |
+| `/__stats` | só LAN | uso de disco por zona de cache |
+| `/__purge` | tunnel (auth via header) | invalida cache (chamado pelo master) |
+
+## Acesso interno (LAN)
+
+Totens podem usar IP direto sem cert SSL nem DNS — paths são todos relativos:
+```
+http://192.168.0.50/totem/{slug}
+```
+Pra ganhar PWA + cert SSL real, configure split-DNS no roteador apontando
+`loja-X.tthreedigital.com.br` → IP local do mini-PC (Mikrotik, OpenWrt, etc).
+Fora da loja resolve via Cloudflare Tunnel automaticamente.

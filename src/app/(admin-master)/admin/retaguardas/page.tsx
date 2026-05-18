@@ -211,7 +211,8 @@ interface NovaResp {
   empresa_slug: string;
   retaguarda_domain: string;
   master_url: string;
-  install_command_alt: string;
+  install_command: string;
+  install_command_github: string;
 }
 
 function NovaRetaguardaModal({ onClose }: { onClose: () => void }) {
@@ -308,15 +309,19 @@ function NovaRetaguardaModal({ onClose }: { onClose: () => void }) {
             <div>
               <label className="mb-1 block text-xs text-slate-400">Comando pra rodar no mini-PC novo (como root):</label>
               <pre className="rounded-lg border border-white/10 bg-black/40 p-3 text-[11px] text-emerald-300 overflow-x-auto whitespace-pre-wrap break-all">
-{resp.install_command_alt}
+{resp.install_command}
               </pre>
               <button
-                onClick={() => copy(resp.install_command_alt)}
+                onClick={() => copy(resp.install_command)}
                 className="mt-2 flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5"
               >
                 <Copy className="h-3.5 w-3.5" />
                 {copied ? "Copiado!" : "Copiar comando"}
               </button>
+              <details className="mt-2 text-[11px] text-slate-500">
+                <summary className="cursor-pointer hover:text-slate-300">Alternativa via GitHub (se master estiver fora)</summary>
+                <pre className="mt-2 rounded-lg border border-white/10 bg-black/40 p-3 text-emerald-300 overflow-x-auto whitespace-pre-wrap break-all">{resp.install_command_github}</pre>
+              </details>
             </div>
 
             <div className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-3 text-xs text-amber-200">

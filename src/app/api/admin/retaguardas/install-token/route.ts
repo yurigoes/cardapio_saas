@@ -48,10 +48,11 @@ export async function POST(req: NextRequest) {
     );
 
     const masterUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.tthreedigital.com.br";
-    // Comando curl que o operador vai colar no mini-PC.
-    // install.sh suporta INSTALL_TOKEN via env: ao receber, faz pull da config.
+    // Comando curl que o operador cola no mini-PC. Script é servido
+    // direto pelo master via /install-retaguarda.sh (que lê o arquivo
+    // do disco do container ou cai pro fallback GitHub).
     const install_command = `curl -fsSL ${masterUrl}/install-retaguarda.sh | sudo INSTALL_TOKEN=${token} MASTER_URL=${masterUrl} bash`;
-    const install_command_alt = `INSTALL_TOKEN=${token} MASTER_URL=${masterUrl} curl -fsSL https://raw.githubusercontent.com/yurigoes/cardapio_saas/main/retaguarda/install.sh | sudo -E bash`;
+    const install_command_github = `INSTALL_TOKEN=${token} MASTER_URL=${masterUrl} curl -fsSL https://raw.githubusercontent.com/yurigoes/cardapio_saas/main/retaguarda/install.sh | sudo -E bash`;
 
     return ok({
       token,
@@ -59,8 +60,8 @@ export async function POST(req: NextRequest) {
       empresa_slug:     body.empresa_slug,
       retaguarda_domain: `${sub}.${body.base_domain}`,
       master_url:       masterUrl,
-      install_command_alt,  // recomendado (usa GitHub raw)
-      install_command,      // se você publicar shortlink
+      install_command,        // recomendado (servido pelo master)
+      install_command_github, // alternativa via GitHub raw
     });
   } catch (err) {
     console.error("[admin/retaguardas/install-token]", err);
