@@ -76,6 +76,18 @@ server {
     add_header Content-Type "text/plain";
   }
 
+  # JSON com info da retaguarda. Útil pra:
+  # - Painel admin descobrir IP atual sem depender de heartbeat
+  # - Totem fazer fetch e detectar que está na LAN da retaguarda certa
+  # - Scripts de monitoramento
+  # Permite CORS pra que qualquer página (mesmo no master) possa consultar.
+  location = /__retaguarda_info {
+    access_log off;
+    add_header Access-Control-Allow-Origin "*" always;
+    add_header Content-Type "application/json; charset=utf-8" always;
+    return 200 '{"ok":true,"retaguarda_domain":"${RETAGUARDA_DOMAIN}","master_host":"${MASTER_HOST}","cache_zones":["html","media","static"]}';
+  }
+
   # Página de status simples (HTML)
   location = /__retaguarda_status {
     access_log off;

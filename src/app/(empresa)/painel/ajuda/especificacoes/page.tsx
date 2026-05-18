@@ -301,6 +301,72 @@ const SPECS: Spec[] = [
   },
   // ─────────────────────────────────────────────────────────────────────
   {
+    id: "cache",
+    titulo: "Cache (Redis no master + edge na retaguarda)",
+    icone: Layers,
+    itens: [
+      { chave: "Camada 1 — Redis (master)", valor: "Cardápio público cacheado em Redis com TTL 5min. Chave: cardapio:pub:{slug}." },
+      { chave: "Invalidação automática", valor: "Mutations em produto/categoria/disponibilidade chamam invalidarCardapioPorEmpresa(empresaId) que resolve todos slugs da rede e deleta as chaves Redis." },
+      { chave: "Camada 2 — Nginx disk (retaguarda)", valor: "Quando há retaguarda local, ela cacheia em disco: imagens 7d, cardápio 5min, estáticos 30d." },
+      { chave: "Fallback gracioso", valor: "Se Redis cair, master serve direto do PG (sem erro). Header X-Retaguarda-Cache (HIT/MISS/BYPASS) mostra origem da resposta." },
+      { chave: "Cache hit esperado", valor: "Master Redis: ~95% das leituras de cardápio. Retaguarda Nginx: ~98% das imagens, ~80% das leituras de cardápio (TTL curto)." },
+    ],
+  },
+  // ─────────────────────────────────────────────────────────────────────
+  {
+    id: "retaguarda",
+    titulo: "Retaguarda (proxy local na loja)",
+    icone: Network,
+    itens: [
+      { chave: "Conceito",   valor: "Mini-PC na loja do cliente roda Nginx + Redis local. Totens/PDVs batem nele em vez de irem direto ao master. Reduz acessos simultâneos no servidor central." },
+      { chave: "Hardware mínimo", valor: "2 vCPU, 4 GB RAM, 20 GB SSD. Raspberry Pi 4 ou Mini PC Intel NUC." },
+      { chave: "Stack",      valor: "Docker Compose: nginx:1.27-alpine (cache 3 zonas) + redis:7-alpine + cloudflared + reporter (curlimages/curl)" },
+      { chave: "Conectividade", valor: "Cloudflare Tunnel — SEM IP fixo, SEM port-forward, SEM cert SSL local. CF termina HTTPS na borda." },
+      { chave: "Multi-loja", valor: "1 conta CF = N tunnels = N lojas. Cada install.sh cria um tunnel próprio (retaguarda-{slug}) e CNAME único." },
+      { chave: "Provisão CF API", valor: "install.sh chama POST /accounts/{id}/cfd_tunnel pra criar tunnel + PUT /cfd_tunnel/{id}/configurations pra rota + POST/PUT /zones/{id}/dns_records pra CNAME. Idempotente — reusa tunnel se já existir." },
+      { chave: "Heartbeat",  valor: "Reporter manda POST a cada 60s pra /api/retaguarda/heartbeat com x-retaguarda-secret. UPSERT em retaguardas com IP público." },
+      { chave: "Status",     valor: "/admin/retaguardas mostra online (<90s) / instável (90-180s) / offline (>180s). Auto-refresh 30s." },
+      { chave: "Tabela DB",  valor: "retaguardas (retaguarda_id UUID UNIQUE, empresa_id, dominio, ip_publico, ultimo_heartbeat, metricas JSONB)" },
+      { chave: "Acesso interno LAN", valor: "Totem pode usar IP direto: http://192.168.x.x/totem/{slug}. Sem PWA mas funciona 100% (Chrome 'add to home' dá fullscreen)." },
+      { chave: "Acesso PWA + LAN", valor: "Split-DNS no roteador: loja-X.tthreedigital.com.br → IP local. Dentro da loja resolve LAN (1ms), fora resolve via CF tunnel." },
+      { chave: "Cache TTLs", valor: "Imagens /api/pub/media/* 7d · Cardápio /api/pub/cardapio/{slug} 5min · /_next/static/* 30d · POSTs pass-through" },
+      { chave: "Instalação", valor: "1 comando: curl -fsSL .../install.sh | sudo bash. Tempo: ~3min. Instala Docker, cria tunnel CF, sobe containers." },
+      { chave: "Não cacheado", valor: "Mutations (POST/PATCH/DELETE), HTML painel/totem (auth dinâmica), SSE/streams, /api/pub/cardapio/{slug}/taxa-entrega" },
+    ],
+  },
+  // ─────────────────────────────────────────────────────────────────────
+  {
+    id: "monitor",
+    titulo: "Monitor de saturação",
+    icone: Activity,
+    itens: [
+      { chave: "Endpoint",  valor: "GET /api/health/limits — público, sem auth (proxy externo decide)" },
+      { chave: "Retorna",   valor: "JSON com pool_db, postgres, node, redis, alerta_nivel (ok/atencao/critico), alertas []" },
+      { chave: "HTTP code", valor: "200 quando ok/atencao, 503 quando crítico — compatível com uptime-kuma/n8n" },
+      { chave: "Thresholds", valor: "Pool >75% atenção, >90% crítico · Cache PG <95% atenção · Redis offline crítico · RSS Node >800MB atenção" },
+      { chave: "Uso típico", valor: "uptime-kuma roda http check a cada 1min → se 503 dispara workflow n8n → envia mensagem WhatsApp pro admin" },
+    ],
+  },
+  // ─────────────────────────────────────────────────────────────────────
+  {
+    id: "fluxo-pedido",
+    titulo: "Fluxo completo de um pedido (totem → cozinha)",
+    icone: Workflow,
+    itens: [
+      { chave: "1. Cliente identifica", valor: "Totem GET /api/pub/cliente?slug=&tipo=&valor= (telefone/cpf) ou cadastra via POST /api/pub/cliente?slug=" },
+      { chave: "2. Carrega cardápio",   valor: "GET /api/pub/cardapio/{slug} → bate no Redis cache (5min); retaguarda cacheia em disco" },
+      { chave: "3. Adiciona ao carrinho", valor: "Estado React local; imagens vêm de /api/pub/media/* (cacheado 7d na retaguarda)" },
+      { chave: "4. Sugestão de bebida", valor: "Se cart sem bebida, modal automático mostra 3-6 produtos da categoria 'bebidas'" },
+      { chave: "5. Finaliza",          valor: "POST /api/pub/pedidos/{slug} com itens, forma_pagamento, tipo_consumo. Pedido criado com status 'pendente'" },
+      { chave: "6. PIX (se aplicável)", valor: "POST /api/pub/pagamentos/{slug} cria cobrança no gateway, retorna QR" },
+      { chave: "7. Imprime cupom",      valor: "Se forma síncrona (dinheiro/pinpad) OU totem (tipo_consumo ≠ delivery), dispatch imediato: cupom cozinha (sem preço) + cupom cliente (com totais)" },
+      { chave: "8. Agente puxa job",    valor: "print-agent local faz long-polling /api/agent/jobs → recebe job → imprime na impressora cadastrada" },
+      { chave: "9. Notifica cliente",   valor: "Se cliente_id presente, notificarEvolution dispara mensagem WhatsApp ('Recebemos seu pedido')" },
+      { chave: "10. Status updates",    valor: "PATCH /api/pedidos/{id}/status muda fase (confirmado→preparando→pronto→entregue). Cada transição dispara notify WhatsApp" },
+    ],
+  },
+  // ─────────────────────────────────────────────────────────────────────
+  {
     id: "limites",
     titulo: "Limites técnicos",
     icone: Globe,
