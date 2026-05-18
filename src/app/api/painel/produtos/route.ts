@@ -46,10 +46,10 @@ export async function GET(req: NextRequest) {
 
   const where = conditions.join(" AND ");
 
-  // Param adicional pra flag exclusivo_desta_filial
-  const idxEmpresa = i;
-  values.push(empresaId);
-  i++;
+  // Params extras só pra query principal (queryCount usa só `values` originais)
+  const idxEmpresa = i;       // pra flag exclusivo_desta_filial
+  const idxLimit   = i + 1;
+  const idxOffset  = i + 2;
 
   const [produtos, total] = await Promise.all([
     query(
@@ -61,8 +61,8 @@ export async function GET(req: NextRequest) {
        LEFT JOIN categorias c ON c.id = p.categoria_id
        WHERE ${where}
        ORDER BY c.ordem ASC, p.nome ASC
-       LIMIT $${i} OFFSET $${i + 1}`,
-      [...values, limit, offset]
+       LIMIT $${idxLimit} OFFSET $${idxOffset}`,
+      [...values, empresaId, limit, offset]
     ),
     queryCount(`SELECT COUNT(*) FROM produtos p WHERE ${where}`, values),
   ]);
