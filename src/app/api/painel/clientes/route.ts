@@ -7,6 +7,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { query, queryOne, queryCount } from "@/lib/db/client";
 import { ok, created, forbidden, serverError, badRequest, paginatedOk } from "@/lib/utils/response";
 import { notificarEvolution } from "@/lib/notify/evolution";
+import { clientesScope, whereClientes, valuesInsertCliente } from "@/lib/rede/clientes";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -31,10 +32,14 @@ export async function GET(req: NextRequest) {
   };
   const orderClause = SAFE_ORDERS[orderBy] ?? "pontos DESC";
 
-  const conditions: string[] = ["empresa_id = $1", "deleted_at IS NULL"];
-  const countParams: unknown[] = [empresaId];
-  const listParams:  unknown[] = [empresaId];
-  let idx = 2;
+  // Scope (standalone vs rede com fidelidade cross-filial)
+  const scope = await clientesScope(empresaId!);
+  const scopeWhere = whereClientes(scope, "", 1);
+
+  const conditions: string[] = [scopeWhere.clause, "deleted_at IS NULL"];
+  const countParams: unknown[] = [scopeWhere.value];
+  const listParams:  unknown[] = [scopeWhere.value];
+  let idx = scopeWhere.paramIndex;
 
   if (q) {
     const placeholder = `$${idx++}`;
@@ -142,23 +147,26 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Busca cliente existente por telefone ou CPF
+    // Scope: standalone OU cross-filial
+    const scope = await clientesScope(empresaId!);
+    const { clause: scopeClause, value: scopeValue } = whereClientes(scope, "", 1);
+
+    // Busca cliente existente por telefone ou CPF (no scope correto)
     let existing = null;
     if (cpf) {
       existing = await queryOne<{ id: string; nome: string; telefone: string; cpf: string; pontos: number }>(
-        `SELECT id, nome, telefone, cpf, pontos FROM clientes WHERE empresa_id = $1 AND cpf = $2`,
-        [empresaId, cpf]
+        `SELECT id, nome, telefone, cpf, pontos FROM clientes WHERE ${scopeClause} AND cpf = $2`,
+        [scopeValue, cpf]
       );
     }
     if (!existing && telefone) {
       existing = await queryOne<{ id: string; nome: string; telefone: string; cpf: string; pontos: number }>(
-        `SELECT id, nome, telefone, cpf, pontos FROM clientes WHERE empresa_id = $1 AND telefone = $2`,
-        [empresaId, telefone]
+        `SELECT id, nome, telefone, cpf, pontos FROM clientes WHERE ${scopeClause} AND telefone = $2`,
+        [scopeValue, telefone]
       );
     }
 
     if (existing) {
-      // Atualiza nome se fornecido
       if (nome && nome !== existing.nome) {
         await queryOne(
           `UPDATE clientes SET nome = $1, updated_at = NOW() WHERE id = $2 RETURNING id`,
@@ -168,25 +176,26 @@ export async function POST(req: NextRequest) {
       return ok({ ...existing, nome: nome || existing.nome, encontrado: true });
     }
 
-    // Cria novo cliente — tenta com data_nascimento; se coluna não existir, faz fallback
+    // Cria novo cliente — empresa_id é a matriz se for rede cross-filial
+    const { empresa_id: insertEmpresaId, rede_id: insertRedeId } = valuesInsertCliente(scope);
+
     let novo: { id: string; pontos: number } | null = null;
     try {
       novo = await queryOne<{ id: string; pontos: number }>(
-        `INSERT INTO clientes (empresa_id, nome, telefone, cpf, email, data_nascimento)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO clientes (empresa_id, rede_id, nome, telefone, cpf, email, data_nascimento)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, pontos`,
-        [empresaId, nome || null, telefone || null, cpf || null, email || null,
+        [insertEmpresaId, insertRedeId, nome || null, telefone || null, cpf || null, email || null,
          data_nascimento || null]
       );
     } catch (e) {
-      // Coluna data_nascimento pode não existir — tenta sem
       const msg = e instanceof Error ? e.message : "";
       if (msg.includes("data_nascimento") || msg.includes("does not exist")) {
         novo = await queryOne<{ id: string; pontos: number }>(
-          `INSERT INTO clientes (empresa_id, nome, telefone, cpf, email)
-           VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO clientes (empresa_id, rede_id, nome, telefone, cpf, email)
+           VALUES ($1, $2, $3, $4, $5, $6)
            RETURNING id, pontos`,
-          [empresaId, nome || null, telefone || null, cpf || null, email || null]
+          [insertEmpresaId, insertRedeId, nome || null, telefone || null, cpf || null, email || null]
         );
       } else {
         throw e;
