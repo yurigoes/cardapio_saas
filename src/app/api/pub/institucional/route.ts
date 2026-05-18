@@ -7,6 +7,10 @@
  */
 import { query, queryOne } from "@/lib/db/client";
 import { ok, serverError } from "@/lib/utils/response";
+import { getSaasBranding } from "@/lib/branding/server";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
@@ -48,7 +52,16 @@ export async function GET() {
       ? Math.max(1, Math.floor((Date.now() - inicio.getTime()) / 86400000))
       : 0;
 
+    const branding = await getSaasBranding().catch(() => null);
+
     return ok({
+      branding: {
+        nome:     branding?.nome     ?? "Three Digital",
+        logo_url: branding?.logo_url ?? null,
+        site:     branding?.site     ?? "https://tthreedigital.com.br",
+        whatsapp: branding?.whatsapp ?? null,
+        email:    branding?.email    ?? null,
+      },
       metricas: {
         total_pedidos:        Number(metr?.total_pedidos ?? 0),
         empresas_ativas:      Number(metr?.empresas_ativas ?? 0),

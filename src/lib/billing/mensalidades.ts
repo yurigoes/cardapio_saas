@@ -121,6 +121,9 @@ export async function criarPreferenciaPagamento(mensalidadeId: string): Promise<
   const mes = new Date(m.mes_referencia).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
   try {
+    // Em produção, MP bloqueia se payer.email == email do dono da conta MP.
+    // Solução: NÃO passamos email do pagador — deixamos MP perguntar no checkout.
+    // Isso também resolve "botão cinza desabilitado" em produção.
     const pref = await criarPreferencia({
       items: [{
         id:           m.id,
@@ -130,7 +133,7 @@ export async function criarPreferenciaPagamento(mensalidadeId: string): Promise<
         unit_price:   Number(m.valor),
         currency_id:  "BRL",
       }],
-      payer: { email: m.empresa_email ?? "pagador@empresa.com" },
+      // payer omitido propositalmente — MP pergunta no checkout
       external_reference: `MENS-${m.id}`,
       notification_url:   `${baseUrl}/api/webhooks/mercadopago-saas`,
       back_urls: {
@@ -138,11 +141,16 @@ export async function criarPreferenciaPagamento(mensalidadeId: string): Promise<
         failure: `${baseUrl}/painel/financeiro/mensalidades?fatura=fail`,
         pending: `${baseUrl}/painel/financeiro/mensalidades?fatura=pendente`,
       },
-      auto_return: "approved",
-    });
+      auto_return:         "approved",
+      statement_descriptor: branding.nome?.slice(0, 22) ?? "SaaS",  // aparece na fatura do cartão
+      payment_methods: {
+        installments: 12,    // permite parcelar até 12x
+      },
+    } as Parameters<typeof criarPreferencia>[0]);
 
     const sandbox = await isSandbox();
     const initPoint = sandbox ? pref.sandbox_init_point : pref.init_point;
+    console.info(`[MP-Pref] mensalidade=${m.id} pref=${pref.id} sandbox=${sandbox}`);
 
     await query(
       `UPDATE mensalidades

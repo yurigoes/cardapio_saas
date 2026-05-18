@@ -13,6 +13,13 @@ import {
 } from "lucide-react";
 
 interface InstitucionalData {
+  branding: {
+    nome: string;
+    logo_url: string | null;
+    site: string | null;
+    whatsapp: string | null;
+    email: string | null;
+  };
   metricas: {
     total_pedidos: number;
     empresas_ativas: number;
@@ -58,24 +65,35 @@ export default function SiteInstitucional() {
       .catch(() => {});
   }, []);
 
-  const m = data?.metricas;
+  const m = data?.metricas ?? { total_pedidos: 0, empresas_ativas: 0, chamados_resolvidos: 0, uptime_dias: 0 };
+  const branding = data?.branding;
+  const nomeMarca = branding?.nome ?? "Three Digital";
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/5 bg-slate-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20">
-              <ChefHat className="h-5 w-5 text-emerald-400" />
-            </div>
-            <span className="text-lg font-bold">Three Digital</span>
-          </div>
+          <a href="/" className="flex items-center gap-3">
+            {branding?.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={branding.logo_url} alt={nomeMarca}
+                className="h-10 w-auto max-w-[200px] object-contain" />
+            ) : (
+              <>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20">
+                  <ChefHat className="h-5 w-5 text-emerald-400" />
+                </div>
+                <span className="text-lg font-bold">{nomeMarca}</span>
+              </>
+            )}
+          </a>
           <nav className="hidden md:flex items-center gap-8 text-sm text-slate-300">
             <a href="#modulos" className="hover:text-white">Módulos</a>
             <a href="#integracoes" className="hover:text-white">Integrações</a>
             <a href="#planos" className="hover:text-white">Planos</a>
             <a href="#parceiros" className="hover:text-white">Parceiros</a>
+            <a href="#contato" className="hover:text-white">Contato</a>
           </nav>
           <div className="flex items-center gap-3">
             <a href={`${APP_URL}/login`}
@@ -115,15 +133,13 @@ export default function SiteInstitucional() {
             </a>
           </div>
 
-          {/* Métricas */}
-          {m && (
-            <div className="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-4 md:grid-cols-4">
-              <Stat valor={fmt(m.total_pedidos)}      label="Pedidos processados" />
-              <Stat valor={fmt(m.empresas_ativas)}    label="Restaurantes ativos" />
-              <Stat valor={`${m.uptime_dias}d`}       label="Dias em operação" icon={Clock} />
-              <Stat valor={fmt(m.chamados_resolvidos)} label="Chamados resolvidos" icon={ShieldCheck} />
-            </div>
-          )}
+          {/* Métricas — sempre mostra (zero é início) */}
+          <div className="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-4 md:grid-cols-4">
+            <Stat valor={fmt(m.total_pedidos)}      label="Pedidos processados" />
+            <Stat valor={fmt(m.empresas_ativas)}    label="Restaurantes ativos" />
+            <Stat valor={`${m.uptime_dias}d`}       label="Dias em operação" icon={Clock} />
+            <Stat valor={fmt(m.chamados_resolvidos)} label="Chamados resolvidos" icon={ShieldCheck} />
+          </div>
         </div>
       </section>
 
@@ -214,14 +230,19 @@ export default function SiteInstitucional() {
         </section>
       )}
 
-      {/* Parceiros */}
-      {data?.parceiros && data.parceiros.length > 0 && (
-        <section id="parceiros" className="border-y border-white/5 bg-white/[0.02] py-16 overflow-hidden">
-          <div className="mx-auto max-w-7xl px-6 text-center mb-8">
-            <h2 className="text-2xl sm:text-3xl font-bold">Restaurantes que confiam na gente</h2>
+      {/* Parceiros — sempre mostra */}
+      <section id="parceiros" className="border-y border-white/5 bg-white/[0.02] py-16 overflow-hidden">
+        <div className="mx-auto max-w-7xl px-6 text-center mb-8">
+          <h2 className="text-2xl sm:text-3xl font-bold">Restaurantes que confiam na gente</h2>
+          {data?.parceiros && data.parceiros.length > 0 ? (
             <p className="mt-2 text-sm text-slate-400">{data.parceiros.length} marcas ativas no sistema</p>
-          </div>
-          {/* Marquee infinito */}
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">
+              Seja um dos primeiros — sua logo pode estar aqui.
+            </p>
+          )}
+        </div>
+        {data?.parceiros && data.parceiros.length > 0 ? (
           <div className="relative">
             <div className="flex gap-12 animate-marquee whitespace-nowrap">
               {[...data.parceiros, ...data.parceiros].map((p, i) => (
@@ -230,16 +251,37 @@ export default function SiteInstitucional() {
                   className="h-14 w-auto max-w-[140px] object-contain opacity-60 hover:opacity-100 grayscale hover:grayscale-0 transition" />
               ))}
             </div>
+            <style jsx>{`
+              @keyframes marquee {
+                from { transform: translateX(0); }
+                to   { transform: translateX(-50%); }
+              }
+              .animate-marquee { animation: marquee 40s linear infinite; }
+            `}</style>
           </div>
-          <style jsx>{`
-            @keyframes marquee {
-              from { transform: translateX(0); }
-              to   { transform: translateX(-50%); }
-            }
-            .animate-marquee { animation: marquee 40s linear infinite; }
-          `}</style>
-        </section>
-      )}
+        ) : (
+          <div className="mx-auto max-w-2xl px-6">
+            <div className="rounded-2xl border-2 border-dashed border-white/10 p-8 text-center">
+              <Building2 className="h-10 w-10 text-slate-600 mx-auto mb-3" />
+              <p className="text-sm text-slate-500">
+                Quando seus restaurantes parceiros estiverem ativos no sistema (com logo cadastrada),
+                aparecerão aqui automaticamente em formato de carrossel.
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Formulário de contato */}
+      <section id="contato" className="mx-auto max-w-4xl px-6 py-20">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl sm:text-4xl font-bold">Fale com a gente</h2>
+          <p className="mt-3 text-slate-400">
+            Conta o que você procura, retornamos rapidinho.
+          </p>
+        </div>
+        <FormContato whatsapp={branding?.whatsapp ?? null} email={branding?.email ?? null} />
+      </section>
 
       {/* CTA final */}
       <section className="mx-auto max-w-4xl px-6 py-20 text-center">
@@ -285,4 +327,113 @@ function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n/1_000_000).toFixed(1)}M`;
   if (n >= 1_000)     return `${(n/1_000).toFixed(1)}k`;
   return n.toLocaleString("pt-BR");
+}
+
+function FormContato({ whatsapp, email }: { whatsapp: string | null; email: string | null }) {
+  const [nome, setNome]       = useState("");
+  const [e, setEmail]         = useState("");
+  const [tel, setTel]         = useState("");
+  const [empresa, setEmpresa] = useState("");
+  const [msg, setMsg]         = useState("");
+  const [busy, setBusy]       = useState(false);
+  const [ok, setOk]           = useState(false);
+  const [erro, setErro]       = useState("");
+
+  async function enviar(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (nome.length < 2 || e.length < 5 || msg.length < 10) {
+      setErro("Preencha nome, email e mensagem (mín. 10 caracteres).");
+      return;
+    }
+    setBusy(true); setErro("");
+    try {
+      const r = await fetch("/api/pub/contato", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome, email: e, telefone: tel, empresa, mensagem: msg }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error?.message ?? "Falha");
+      setOk(true);
+      setNome(""); setEmail(""); setTel(""); setEmpresa(""); setMsg("");
+    } catch (err) {
+      setErro((err as Error).message);
+    } finally { setBusy(false); }
+  }
+
+  if (ok) {
+    return (
+      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-8 text-center">
+        <Check className="h-10 w-10 text-emerald-400 mx-auto mb-3" />
+        <p className="text-xl font-bold text-white">Mensagem recebida!</p>
+        <p className="mt-2 text-sm text-emerald-200">
+          Retornamos no email ou WhatsApp que você informou.
+        </p>
+        <button onClick={() => setOk(false)}
+          className="mt-5 rounded-xl border border-emerald-500/30 px-4 py-2 text-xs text-emerald-300 hover:bg-emerald-500/10">
+          Enviar outra mensagem
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={enviar} className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormField label="Seu nome *">
+          <input type="text" value={nome} onChange={ev => setNome(ev.target.value)}
+            required minLength={2} maxLength={120}
+            className="w-full rounded-xl border border-white/10 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder:text-slate-500" />
+        </FormField>
+        <FormField label="Email *">
+          <input type="email" value={e} onChange={ev => setEmail(ev.target.value)}
+            required maxLength={120}
+            className="w-full rounded-xl border border-white/10 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder:text-slate-500" />
+        </FormField>
+        <FormField label="WhatsApp">
+          <input type="tel" value={tel} onChange={ev => setTel(ev.target.value)}
+            placeholder="(11) 99999-9999" maxLength={20}
+            className="w-full rounded-xl border border-white/10 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder:text-slate-500" />
+        </FormField>
+        <FormField label="Nome do restaurante">
+          <input type="text" value={empresa} onChange={ev => setEmpresa(ev.target.value)}
+            maxLength={120}
+            className="w-full rounded-xl border border-white/10 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder:text-slate-500" />
+        </FormField>
+      </div>
+      <FormField label="Sua mensagem *">
+        <textarea value={msg} onChange={ev => setMsg(ev.target.value)}
+          required minLength={10} maxLength={2000} rows={5}
+          placeholder="Conta o que precisa: módulo específico, orçamento, agendar demo..."
+          className="w-full rounded-xl border border-white/10 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder:text-slate-500" />
+      </FormField>
+      {erro && (
+        <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-200">{erro}</p>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-3 text-xs text-slate-400">
+          {whatsapp && <a href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}
+            target="_blank" rel="noopener" className="flex items-center gap-1 hover:text-emerald-300">
+            <MessageCircle className="h-3.5 w-3.5" /> Ou WhatsApp: {whatsapp}
+          </a>}
+          {email && <a href={`mailto:${email}`} className="flex items-center gap-1 hover:text-emerald-300">
+            <Mail className="h-3.5 w-3.5" /> {email}
+          </a>}
+        </div>
+        <button type="submit" disabled={busy}
+          className="flex items-center gap-2 rounded-xl bg-emerald-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-400 disabled:opacity-40">
+          {busy ? "Enviando..." : <>Enviar mensagem <ArrowRight className="h-4 w-4" /></>}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</label>
+      {children}
+    </div>
+  );
 }

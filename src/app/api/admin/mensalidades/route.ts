@@ -8,6 +8,9 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { query, queryOne } from "@/lib/db/client";
 import { ok, created, forbidden, badRequest, serverError } from "@/lib/utils/response";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
@@ -85,20 +88,24 @@ export async function POST(req: NextRequest) {
     );
     if (!empresa) return badRequest("Empresa não encontrada");
 
-    const r = await queryOne<{ id: string }>(
+    const r = await queryOne<{ id: string; status: string; criado_em: string }>(
       `INSERT INTO mensalidades
          (empresa_id, plano_id, mes_referencia, valor, vencimento, status, observacoes, criado_por)
        VALUES ($1, $2, $3, $4, $5, 'aberta', $6, $7)
        ON CONFLICT (empresa_id, mes_referencia) DO UPDATE
-         SET valor       = EXCLUDED.valor,
-             vencimento  = EXCLUDED.vencimento,
-             observacoes = COALESCE(EXCLUDED.observacoes, mensalidades.observacoes),
+         SET valor         = EXCLUDED.valor,
+             vencimento    = EXCLUDED.vencimento,
+             observacoes   = COALESCE(EXCLUDED.observacoes, mensalidades.observacoes),
+             status        = CASE WHEN mensalidades.status = 'paga'
+                                   THEN mensalidades.status
+                                   ELSE 'aberta' END,
              atualizado_em = NOW()
-       RETURNING id`,
+       RETURNING id, status, criado_em::text`,
       [body.empresa_id, empresa.plano_id, body.mes_referencia, body.valor,
        body.vencimento, body.observacoes ?? null, auth.payload.sub]
     );
-    return created({ id: r?.id });
+    console.info(`[Admin/Mensalidades/POST] criada/atualizada id=${r?.id} status=${r?.status} empresa=${body.empresa_id}`);
+    return created({ id: r?.id, status: r?.status });
   } catch (err) {
     console.error("[Admin/Mensalidades/POST]", err);
     return serverError(err instanceof Error ? err.message : undefined);

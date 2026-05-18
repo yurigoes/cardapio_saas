@@ -53,7 +53,7 @@ export async function POST(
         unit_price:  Number(c.valor),
         currency_id: "BRL",
       }],
-      payer: { email: c.empresa_email ?? "pagador@empresa.com" },
+      // payer omitido — MP pergunta no checkout (evita "botão cinza" se email == dono da conta)
       external_reference: `COBR-${params.id}`,
       notification_url:   `${baseUrl}/api/webhooks/mercadopago-saas`,
       back_urls: {
@@ -61,8 +61,10 @@ export async function POST(
         failure: `${baseUrl}/painel/financeiro/mensalidades?cobranca=fail`,
         pending: `${baseUrl}/painel/financeiro/mensalidades?cobranca=pendente`,
       },
-      auto_return: "approved",
-    });
+      auto_return:         "approved",
+      statement_descriptor: branding.nome?.slice(0, 22) ?? "SaaS",
+      payment_methods: { installments: 12 },
+    } as Parameters<typeof criarPreferencia>[0]);
 
     const sandbox = await isSandbox();
     const initPoint = sandbox ? pref.sandbox_init_point : pref.init_point;

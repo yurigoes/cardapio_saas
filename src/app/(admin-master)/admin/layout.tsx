@@ -46,6 +46,7 @@ const NAV: NavGroup[] = [
     { href: "/admin/integracoes/evolution", label: "WhatsApp (Evolution)", icon: MessageCircle },
   ]},
   { titulo: "Atendimento", items: [
+    { href: "/admin/contatos",               label: "Contatos site",    icon: Mail },
     { href: "/admin/suporte/chamados",       label: "Chamados",         icon: MessageCircle },
     { href: "/admin/suporte/dashboard",      label: "Dashboard TV",     icon: Tv2 },
     { href: "/admin/suporte/templates",      label: "Templates",        icon: FileText },

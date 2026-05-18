@@ -252,9 +252,29 @@ function PreviewModal({ template, onClose }: { template: Template; onClose: () =
           <h3 className="text-base font-bold text-white">Preview — {template.titulo}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="h-5 w-5" /></button>
         </div>
-        <article className="flex-1 overflow-y-auto bg-white p-8 prose">
-          <div dangerouslySetInnerHTML={{ __html: template.conteudo_html }} />
-        </article>
+        <div className="flex-1 overflow-y-auto bg-white">
+          <article
+            className="mx-auto max-w-2xl p-10 contrato-preview"
+            style={{
+              color: "#1a202c",
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
+              lineHeight: 1.7,
+            }}
+          >
+            <style jsx>{`
+              .contrato-preview :global(h1) { color:#0f172a;font-size:24px;font-weight:bold;margin:0 0 16px;border-bottom:2px solid #10b981;padding-bottom:8px; }
+              .contrato-preview :global(h2) { color:#10b981;font-size:18px;font-weight:bold;margin:24px 0 12px; }
+              .contrato-preview :global(h3) { color:#334155;font-size:15px;font-weight:bold;margin:18px 0 10px; }
+              .contrato-preview :global(p)  { color:#334155;margin:8px 0;font-size:14px; }
+              .contrato-preview :global(ul) { color:#334155;margin:8px 0;padding-left:24px;font-size:14px; }
+              .contrato-preview :global(li) { margin:4px 0; }
+              .contrato-preview :global(hr) { border:0;border-top:1px solid #e2e8f0;margin:20px 0; }
+              .contrato-preview :global(strong) { color:#0f172a; }
+              .contrato-preview :global(blockquote) { color:#475569;border-left:3px solid #10b981;padding-left:12px;margin:12px 0; }
+            `}</style>
+            <div dangerouslySetInnerHTML={{ __html: template.conteudo_html }} />
+          </article>
+        </div>
       </div>
     </div>
   );

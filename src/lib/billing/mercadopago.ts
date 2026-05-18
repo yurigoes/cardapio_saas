@@ -25,7 +25,7 @@ interface PreferencePayer { email: string; name?: string }
 
 interface CreatePreferenceParams {
   items:        PreferenceItem[];
-  payer:        PreferencePayer;
+  payer?:       PreferencePayer;
   external_reference: string;
   notification_url:   string;
   back_urls?: {
@@ -34,6 +34,12 @@ interface CreatePreferenceParams {
     pending?: string;
   };
   auto_return?: "approved" | "all";
+  statement_descriptor?: string;
+  payment_methods?: {
+    installments?: number;
+    excluded_payment_methods?: { id: string }[];
+    excluded_payment_types?:   { id: string }[];
+  };
 }
 
 interface PreferenceResponse {
