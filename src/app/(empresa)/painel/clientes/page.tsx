@@ -178,6 +178,43 @@ export default function ClientesPage() {
   const [limiteSaving, setLimiteSaving]       = useState(false);
   const [limiteMsg, setLimiteMsg]             = useState<string | null>(null);
 
+  // Trocar pontos por cupom (gerar p/ cliente)
+  const [trocaPts,  setTrocaPts]   = useState("");
+  const [trocaLoad, setTrocaLoad]  = useState(false);
+  const [trocaErr,  setTrocaErr]   = useState("");
+  const [trocaOk,   setTrocaOk]    = useState<{ codigo: string; valor: number; pontos: number } | null>(null);
+
+  async function gerarCupomTroca() {
+    if (!modalCliente) return;
+    const pts = parseInt(trocaPts, 10);
+    if (!pts || pts <= 0) { setTrocaErr("Quantidade inválida"); return; }
+    setTrocaLoad(true); setTrocaErr(""); setTrocaOk(null);
+    try {
+      const res  = await fetch(`/api/painel/clientes/${modalCliente.id}/trocar-pontos`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body:    JSON.stringify({ pontos: pts }),
+      });
+      const data = await res.json();
+      if (!data.success) { setTrocaErr(data.error ?? "Erro ao trocar"); return; }
+      setTrocaOk({
+        codigo: data.data.cupom.codigo,
+        valor:  data.data.cupom.valor,
+        pontos: data.data.pontos_debitados,
+      });
+      setTrocaPts("");
+      // Atualiza saldo no modal e lista
+      setModalCliente(prev => prev ? { ...prev, pontos: (prev.pontos ?? 0) - pts } : prev);
+      setClientes(prev => prev.map(c =>
+        c.id === modalCliente.id ? { ...c, pontos: (c.pontos ?? 0) - pts } : c
+      ));
+    } catch {
+      setTrocaErr("Erro de conexão");
+    } finally {
+      setTrocaLoad(false);
+    }
+  }
+
   async function salvarLimiteVale() {
     if (!modalCliente) return;
     const novo = parseFloat(limiteValeInput.replace(",", "."));
@@ -263,6 +300,9 @@ export default function ClientesPage() {
     setAjusteSaving(false);
     setAjusteOk(false);
     setAjusteErro("");
+    setTrocaPts("");
+    setTrocaErr("");
+    setTrocaOk(null);
   }
 
   async function salvarAjuste() {
@@ -755,6 +795,59 @@ export default function ClientesPage() {
                     )}
                     {ajusteErro && (
                       <p className="mt-2 text-xs text-red-400">{ajusteErro}</p>
+                    )}
+                  </div>
+
+                  {/* ── Trocar pontos por cupom (gera e dá ao cliente) ──────── */}
+                  <div className="mb-6 rounded-xl border border-amber-400/20 bg-amber-500/5 p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-amber-300">
+                      🎁 Gerar cupom (troca pontos por desconto)
+                    </p>
+                    {trocaOk ? (
+                      <div className="space-y-2">
+                        <div className="rounded-lg border-2 border-dashed border-amber-400/40 px-4 py-3 text-center">
+                          <p className="text-[11px] text-slate-400">Cupom gerado · {formatBRL(trocaOk.valor)} off</p>
+                          <code className="block mt-0.5 text-xl font-black tracking-widest text-amber-300">
+                            {trocaOk.codigo}
+                          </code>
+                          <p className="mt-1 text-[10px] text-slate-500">−{trocaOk.pontos} pts · válido 30 dias</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => navigator.clipboard.writeText(trocaOk.codigo)}
+                            className="flex-1 rounded-lg border border-white/10 py-2 text-xs text-slate-300 hover:bg-white/5"
+                          >Copiar código</button>
+                          <button
+                            onClick={() => setTrocaOk(null)}
+                            className="flex-1 rounded-lg bg-amber-500 py-2 text-xs font-semibold text-slate-900 hover:brightness-110"
+                          >Gerar outro</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex gap-2">
+                          <input
+                            type="number" min={1} max={modalCliente.pontos ?? undefined}
+                            value={trocaPts}
+                            onChange={e => { setTrocaPts(e.target.value.replace(/\D/g, "")); setTrocaErr(""); }}
+                            placeholder="Pontos a trocar"
+                            className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-400/50 focus:outline-none"
+                          />
+                          <button
+                            onClick={gerarCupomTroca}
+                            disabled={trocaLoad || !trocaPts}
+                            className="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-medium text-slate-900 hover:brightness-110 disabled:opacity-40 transition"
+                          >
+                            {trocaLoad ? "..." : "Gerar"}
+                          </button>
+                        </div>
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          Usa a regra de R$/pt do restaurante. Cliente pode gerar cupons enquanto tiver saldo.
+                        </p>
+                        {trocaErr && (
+                          <p className="mt-2 text-xs text-red-400">{trocaErr}</p>
+                        )}
+                      </>
                     )}
                   </div>
 

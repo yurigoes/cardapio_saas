@@ -29,9 +29,17 @@ export async function GET(
   if (!slug) return badRequest("Parâmetro 'slug' é obrigatório");
 
   try {
-    const empresa = await queryOne<{ id: string; nome_fantasia: string }>(
-      `SELECT id, nome_fantasia FROM empresas
-       WHERE slug = $1 AND deleted_at IS NULL AND status = 'ativo'`,
+    const empresa = await queryOne<{
+      id: string; nome_fantasia: string;
+      fidelidade_ativo: boolean | null;
+      real_por_ponto:   string | null;
+      pontos_por_real:  string | null;
+    }>(
+      `SELECT id, nome_fantasia,
+              COALESCE(fidelidade_ativo, false) AS fidelidade_ativo,
+              real_por_ponto, pontos_por_real
+         FROM empresas
+        WHERE slug = $1 AND deleted_at IS NULL AND status = 'ativo'`,
       [slug]
     );
     if (!empresa) return notFound("Empresa não encontrada");
@@ -108,7 +116,13 @@ export async function GET(
     );
 
     return ok({
-      empresa: { nome_fantasia: empresa.nome_fantasia, slug },
+      empresa: {
+        nome_fantasia:    empresa.nome_fantasia,
+        slug,
+        fidelidade_ativo: !!empresa.fidelidade_ativo,
+        real_por_ponto:   Number(empresa.real_por_ponto ?? 0),
+        pontos_por_real:  Number(empresa.pontos_por_real ?? 0),
+      },
       cliente,
       pedidos: pedidos.map((p) => ({ ...p, total: Number(p.total) })),
       cupons:  cupons.map((c) => ({

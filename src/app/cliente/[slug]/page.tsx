@@ -64,7 +64,13 @@ interface ProximoBeneficio {
 }
 
 interface PerfilCompleto {
-  empresa: { nome_fantasia: string; slug: string };
+  empresa: {
+    nome_fantasia:     string;
+    slug:              string;
+    fidelidade_ativo?: boolean;
+    real_por_ponto?:   number;
+    pontos_por_real?:  number;
+  };
   cliente: Cliente;
   pedidos: PedidoRecente[];
   cupons:  Cupom[];
@@ -147,6 +153,12 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
   const [resgateErro,  setResgateErro]  = useState("");
   const [resgateOk,    setResgateOk]    = useState<{ codigo: string; pontos: number } | null>(null);
   const [copiado, setCopiado] = useState(false);
+
+  // Troca livre de pontos → cupom
+  const [trocaPontos, setTrocaPontos] = useState("");
+  const [trocaLoad,   setTrocaLoad]   = useState(false);
+  const [trocaErro,   setTrocaErro]   = useState("");
+  const [trocaOk,     setTrocaOk]     = useState<{ codigo: string; valor: number; pontos: number } | null>(null);
 
   // ── Apply brand color ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -257,6 +269,34 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
     setResgateErro("");
     setResgateOk(null);
     setCopiado(false);
+  }
+
+  async function trocarPontos() {
+    if (!perfil) return;
+    const pts = parseInt(trocaPontos, 10);
+    if (!pts || pts <= 0) { setTrocaErro("Informe uma quantidade válida"); return; }
+    if (pts > perfil.cliente.pontos) { setTrocaErro("Saldo insuficiente"); return; }
+    setTrocaLoad(true); setTrocaErro("");
+    try {
+      const res = await fetch(`/api/pub/cliente/${perfil.cliente.id}/trocar-pontos`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ slug: params.slug, pontos: pts }),
+      });
+      const data = await res.json();
+      if (!data.success) { setTrocaErro(data.error || "Erro ao trocar"); return; }
+      setTrocaOk({
+        codigo: data.data.cupom.codigo,
+        valor:  data.data.cupom.valor,
+        pontos: data.data.pontos_debitados,
+      });
+      setTrocaPontos("");
+      await loadPerfil(perfil.cliente.id);
+    } catch {
+      setTrocaErro("Erro de conexão");
+    } finally {
+      setTrocaLoad(false);
+    }
   }
 
   function copiarCodigo(codigo: string) {
@@ -471,6 +511,96 @@ export default function ClientePainelPage({ params }: { params: { slug: string }
             </div>
           )}
         </section>
+
+        {/* ── Trocar pontos por cupom ───────────────────────────────────────── */}
+        {perfil.empresa.fidelidade_ativo && (perfil.empresa.real_por_ponto ?? 0) > 0 && cliente.pontos > 0 && (
+          <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Gift className="h-4 w-4" style={{ color: "var(--color-primary, #10b981)" }} />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
+                Trocar pontos por cupom
+              </h2>
+            </div>
+
+            {trocaOk ? (
+              <div className="space-y-3">
+                <div className="rounded-xl border-2 border-dashed p-4 text-center"
+                     style={{ borderColor: "var(--color-primary-50, rgba(16,185,129,0.4))" }}>
+                  <p className="text-xs text-slate-400">Cupom gerado · {formatBRL(trocaOk.valor)} de desconto</p>
+                  <code className="block mt-1 text-2xl font-black tracking-widest"
+                        style={{ color: "var(--color-primary, #10b981)" }}>
+                    {trocaOk.codigo}
+                  </code>
+                  <p className="mt-2 text-xs text-slate-500">−{trocaOk.pontos} pts · válido por 30 dias</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => copiarCodigo(trocaOk.codigo)}
+                          className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-white/10 py-2 text-xs font-medium text-slate-300 hover:bg-white/5 transition">
+                    <Copy className="h-3.5 w-3.5" />
+                    {copiado ? "Copiado!" : "Copiar código"}
+                  </button>
+                  <button onClick={() => setTrocaOk(null)}
+                          className="flex-1 rounded-lg py-2 text-xs font-semibold text-white transition hover:brightness-110"
+                          style={{ background: "var(--color-primary, #10b981)" }}>
+                    Trocar mais
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-slate-400 mb-3">
+                  Regra: <strong className="text-white">1 pt = {formatBRL(perfil.empresa.real_por_ponto ?? 0)}</strong>.
+                  Você tem <strong className="text-white">{cliente.pontos.toLocaleString("pt-BR")}</strong> pts
+                  {" "}(até {formatBRL(cliente.pontos * (perfil.empresa.real_por_ponto ?? 0))} em cupons).
+                </p>
+
+                <div className="flex gap-2 items-stretch">
+                  <input
+                    type="number" inputMode="numeric" min={1} max={cliente.pontos}
+                    value={trocaPontos}
+                    onChange={e => { setTrocaPontos(e.target.value.replace(/\D/g, "")); setTrocaErro(""); }}
+                    placeholder="Pontos a trocar"
+                    className="flex-1 min-w-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none"
+                  />
+                  <button onClick={trocarPontos} disabled={trocaLoad || !trocaPontos}
+                          className="flex-shrink-0 rounded-lg px-4 py-2.5 text-sm font-bold text-white transition hover:brightness-110 disabled:opacity-50"
+                          style={{ background: "var(--color-primary, #10b981)" }}>
+                    {trocaLoad ? "..." : "Trocar"}
+                  </button>
+                </div>
+
+                {trocaPontos && parseInt(trocaPontos, 10) > 0 && (
+                  <p className="mt-2 text-xs text-slate-400">
+                    = cupom de <strong style={{ color: "var(--color-primary, #10b981)" }}>
+                      {formatBRL(parseInt(trocaPontos, 10) * (perfil.empresa.real_por_ponto ?? 0))}
+                    </strong>
+                  </p>
+                )}
+
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  {[10, 50, 100, 500].filter(n => n <= cliente.pontos).map(n => (
+                    <button key={n} onClick={() => setTrocaPontos(String(n))}
+                            className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-400 hover:bg-white/5 transition">
+                      {n} pts
+                    </button>
+                  ))}
+                  {cliente.pontos > 0 && (
+                    <button onClick={() => setTrocaPontos(String(cliente.pontos))}
+                            className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-400 hover:bg-white/5 transition">
+                      Tudo ({cliente.pontos} pts)
+                    </button>
+                  )}
+                </div>
+
+                {trocaErro && (
+                  <p className="mt-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400">
+                    {trocaErro}
+                  </p>
+                )}
+              </>
+            )}
+          </section>
+        )}
 
         {/* ── Saldo de cashback ─────────────────────────────────────────────── */}
         {cashback?.empresa.cashback_ativo && (
