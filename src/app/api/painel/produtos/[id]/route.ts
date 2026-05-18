@@ -6,6 +6,7 @@ import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/re
 import { produtoUpdateSchema, parseBodyOrThrow } from "@/lib/utils/validators";
 import { z } from "zod";
 import { cardapioScope } from "@/lib/rede/cardapio";
+import { invalidarCardapioPorEmpresa } from "@/lib/cache/cardapio";
 
 /**
  * Helper: WHERE pra UPDATE/DELETE que respeita scope.
@@ -71,6 +72,7 @@ export async function PATCH(
     );
 
     if (!produto) return notFound("Produto não encontrado");
+    invalidarCardapioPorEmpresa(empresaId).catch(() => null);
     return ok({ id: params.id });
   } catch (err) {
     console.error("[Painel/Produtos/PATCH]", err);
@@ -99,6 +101,7 @@ export async function DELETE(
     );
 
     if (!produto) return notFound("Produto não encontrado");
+    invalidarCardapioPorEmpresa(empresaId).catch(() => null);
     return ok({ id: params.id });
   } catch (err) {
     console.error("[Painel/Produtos/DELETE]", err);

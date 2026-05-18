@@ -6,6 +6,7 @@ import { ok, created, forbidden, badRequest, serverError, paginatedOk } from "@/
 import { produtoCreateSchema, paginacaoSchema, parseBodyOrThrow } from "@/lib/utils/validators";
 import { z } from "zod";
 import { cardapioScope, buildWhereCardapio, valuesInsertCardapio } from "@/lib/rede/cardapio";
+import { invalidarCardapioPorEmpresa } from "@/lib/cache/cardapio";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest) {
       ]
     );
 
+    invalidarCardapioPorEmpresa(empresaId).catch(() => null);
     return created({ id: produto?.id, compartilhado_na_rede: !!rede_id });
   } catch (err) {
     console.error("[Painel/Produtos/POST]", err);

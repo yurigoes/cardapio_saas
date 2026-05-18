@@ -5,6 +5,7 @@ import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { z } from "zod";
 import { cardapioScope } from "@/lib/rede/cardapio";
+import { invalidarCardapioPorEmpresa } from "@/lib/cache/cardapio";
 
 async function whereOwnership(empresaId: string, paramStart: number) {
   const scope = await cardapioScope(empresaId);
@@ -65,6 +66,7 @@ export async function PATCH(
     );
 
     if (!cat) return notFound("Categoria não encontrada");
+    invalidarCardapioPorEmpresa(empresaId).catch(() => null);
     return ok({ id: params.id });
   } catch (err) {
     console.error("[Painel/Categorias/PATCH]", err);
@@ -93,6 +95,7 @@ export async function DELETE(
     );
 
     if (!cat) return notFound("Categoria não encontrada");
+    invalidarCardapioPorEmpresa(empresaId).catch(() => null);
     return ok({ id: params.id });
   } catch (err) {
     console.error("[Painel/Categorias/DELETE]", err);

@@ -2,11 +2,21 @@ import { NextRequest } from "next/server";
 import { query, queryOne } from "@/lib/db/client";
 import { ok, notFound, serverError } from "@/lib/utils/response";
 import { EMPRESA_OPERACIONAL_SQL } from "@/lib/billing/empresa-acesso";
+import { redisGet, redisSet } from "@/lib/db/redis";
+import { CACHE_CARDAPIO_TTL, cardapioCacheKey } from "@/lib/cache/cardapio";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: { slug: string } }
 ) {
+  // ── Cache hit? (rota é a mais chamada — totem, cardápio público, cliente)
+  // Caixa_aberto muda em runtime, mas só importa pro totem em loop e a janela
+  // de 5 min de cache é aceitável (refrescamos com TTL curto).
+  const cached = await redisGet<unknown>(cardapioCacheKey(params.slug)).catch(() => null);
+  if (cached) {
+    return ok(cached);
+  }
+
   try {
     const empresa = await queryOne<{
       id: string; nome_fantasia: string; logo_url: string | null;
@@ -79,7 +89,7 @@ export async function GET(
       ),
     ]);
 
-    return ok({
+    const payload = {
       empresa: {
         id:                  empresa.id,
         nome_fantasia:       empresa.nome_fantasia,
@@ -108,7 +118,13 @@ export async function GET(
       },
       categorias,
       produtos,
-    });
+    };
+
+    // Grava cache (best-effort, não bloqueia)
+    redisSet(cardapioCacheKey(params.slug), payload, CACHE_CARDAPIO_TTL)
+      .catch(() => null);
+
+    return ok(payload);
   } catch (err) {
     console.error("[Pub/Cardapio/GET]", err);
     return serverError();

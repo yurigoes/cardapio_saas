@@ -5,6 +5,7 @@ import { temPermissao } from "@/lib/auth/rbac";
 import { ok, created, forbidden, badRequest, serverError } from "@/lib/utils/response";
 import { z } from "zod";
 import { cardapioScope, buildWhereCardapio, valuesInsertCardapio } from "@/lib/rede/cardapio";
+import { invalidarCardapioPorEmpresa } from "@/lib/cache/cardapio";
 
 const categoriaSchema = z.object({
   nome:      z.string().min(2).max(100).trim(),
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
       [empresa_id, rede_id, body.nome, body.descricao ?? null, body.ordem, body.ativo, body.imagem_url ?? null]
     );
 
+    invalidarCardapioPorEmpresa(empresaId).catch(() => null);
     return created({ id: categoria?.id, compartilhado_na_rede: !!rede_id });
   } catch (err) {
     console.error("[Painel/Categorias/POST]", err);

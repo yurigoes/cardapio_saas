@@ -10,6 +10,7 @@ import { queryOne } from "@/lib/db/client";
 import { temPermissao } from "@/lib/auth/rbac";
 import { ok, forbidden, badRequest, notFound, serverError } from "@/lib/utils/response";
 import { cardapioScope } from "@/lib/rede/cardapio";
+import { invalidarCardapioPorEmpresa } from "@/lib/cache/cardapio";
 
 const schema = z.object({ exclusivo: z.boolean() });
 
@@ -43,6 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       [body.exclusivo ? empresaId : null, params.id]
     );
 
+    invalidarCardapioPorEmpresa(empresaId).catch(() => null);
     return ok({
       id: params.id,
       exclusivo: body.exclusivo,
