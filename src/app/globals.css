@@ -13,6 +13,41 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   <select> + <option> com identidade do sistema (dark)
+   Por padrão o <option> do navegador herda o tema do SO (branco com texto
+   branco no dark). Forçamos cores explícitas pra ficar legível.
+   ───────────────────────────────────────────────────────────────────────────── */
+select {
+  color-scheme: dark;          /* hints pro browser usar UI escura */
+  background-color: #1e293b;   /* slate-800 */
+  color: #f1f5f9;              /* slate-100 */
+}
+select option,
+select optgroup {
+  background-color: #1e293b !important;  /* slate-800 */
+  color: #f1f5f9 !important;             /* slate-100 */
+}
+select option:checked {
+  background-color: #10b981 !important;  /* emerald-500 */
+  color: #ffffff !important;
+}
+select option:hover {
+  background-color: #334155 !important;  /* slate-700 */
+}
+
+/* No light mode reverte */
+html[data-theme="light"] select {
+  color-scheme: light;
+  background-color: #ffffff;
+  color: #18181b;
+}
+html[data-theme="light"] select option,
+html[data-theme="light"] select optgroup {
+  background-color: #ffffff !important;
+  color: #18181b !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    LIGHT MODE — overrides aplicados quando html[data-theme="light"]
    Só ativo no painel admin (totem/cliente/master continuam dark-only).
    Estratégia: paleta zinc (cinza-quente) com fundo #fafafa, texto #18181b,

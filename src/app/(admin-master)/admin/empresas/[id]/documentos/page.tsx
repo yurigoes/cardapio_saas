@@ -38,6 +38,8 @@ export default function DocsEmpresaPage() {
   const { id } = useParams<{ id: string }>();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [rejeitando, setRejeitando] = useState<Doc | null>(null);
+  const [motivo, setMotivo] = useState("");
 
   const auth = () => ({
     Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("access_token") : ""}`,
@@ -51,27 +53,36 @@ export default function DocsEmpresaPage() {
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  async function setStatus(doc: Doc, status: Doc["status"]) {
+  async function setStatus(doc: Doc, status: Doc["status"], obs?: string) {
+    // Rejeição: abre modal pra motivo (não usa prompt nativo)
+    if (status === "rejeitado" && !obs) {
+      setRejeitando(doc);
+      setMotivo("");
+      return;
+    }
     setBusy(doc.id);
     try {
-      const obs = status === "rejeitado"
-        ? (prompt(`Motivo da rejeição de "${TIPO_LABELS[doc.tipo] ?? doc.tipo}":`) ?? undefined)
-        : undefined;
-      if (status === "rejeitado" && (!obs || obs.trim().length < 3)) {
-        await alertar({ titulo: "Motivo obrigatório", mensagem: "Informe um motivo claro para o cliente reenviar.", tipo: "alerta" });
-        setBusy(null);
-        return;
-      }
       const r = await fetch(`/api/admin/empresas/${id}/documentos`, {
         method: "PATCH", headers: auth(),
         body: JSON.stringify({ doc_id: doc.id, status, observacao: obs }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.error?.message ?? "Falha");
+      setRejeitando(null);
+      setMotivo("");
       carregar();
     } catch (e) {
       await alertar({ titulo: "Falha", mensagem: (e as Error).message, tipo: "perigo" });
     } finally { setBusy(null); }
+  }
+
+  async function confirmarRejeicao() {
+    if (!rejeitando) return;
+    if (motivo.trim().length < 3) {
+      await alertar({ titulo: "Motivo obrigatório", mensagem: "Informe pelo menos 3 caracteres explicando o motivo.", tipo: "alerta" });
+      return;
+    }
+    await setStatus(rejeitando, "rejeitado", motivo.trim());
   }
 
   return (
@@ -161,6 +172,63 @@ export default function DocsEmpresaPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal motivo da rejeição */}
+      {rejeitando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+             onClick={() => { setRejeitando(null); setMotivo(""); }}>
+          <div className="w-full max-w-md rounded-2xl border border-red-500/40 bg-slate-900 shadow-2xl"
+               onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+              <h3 className="flex items-center gap-2 text-base font-bold text-white">
+                <X className="h-5 w-5 text-red-400" />
+                Rejeitar documento
+              </h3>
+              <button onClick={() => { setRejeitando(null); setMotivo(""); }}
+                className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-slate-300">
+                <strong className="text-white">{TIPO_LABELS[rejeitando.tipo] ?? rejeitando.tipo}</strong>
+                <br />
+                <span className="text-xs text-slate-500">{rejeitando.nome_arquivo}</span>
+              </p>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Motivo da rejeição
+                </label>
+                <textarea
+                  value={motivo}
+                  onChange={e => setMotivo(e.target.value)}
+                  autoFocus
+                  rows={4}
+                  placeholder="Ex: Foto borrada, documento ilegível, CPF não confere com cadastro..."
+                  className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-red-500/50 focus:outline-none"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Esse motivo vai aparecer pro cliente reenviar o documento correto.
+                </p>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => { setRejeitando(null); setMotivo(""); }}
+                  className="flex-1 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-300 hover:bg-white/5">
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarRejeicao}
+                  disabled={busy !== null || motivo.trim().length < 3}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                  Confirmar rejeição
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
