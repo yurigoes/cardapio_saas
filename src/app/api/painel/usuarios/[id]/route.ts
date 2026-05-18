@@ -44,6 +44,12 @@ export async function PATCH(
     if (body.role     !== undefined) { sets.push(`role = $${i++}`);     values.push(body.role); }
     if (body.telefone !== undefined) { sets.push(`telefone = $${i++}`); values.push(body.telefone); }
     if (body.ativo    !== undefined) { sets.push(`ativo = $${i++}`);    values.push(body.ativo); }
+    if (body.opera_todas_filiais !== undefined) {
+      sets.push(`opera_todas_filiais = $${i++}`); values.push(body.opera_todas_filiais);
+    }
+    if (body.filial_padrao_id !== undefined) {
+      sets.push(`filial_padrao_id = $${i++}`); values.push(body.filial_padrao_id);
+    }
 
     sets.push(`updated_at = NOW()`);
     values.push(params.id, empresaId);

@@ -16,6 +16,9 @@ interface Usuario {
   ativo:        boolean;
   created_at:   string;
   ultimo_login: string | null;
+  rede_id?:     string | null;
+  filial_padrao_id?: string | null;
+  opera_todas_filiais?: boolean;
 }
 
 const ROLES: { value: string; label: string; icon: React.ElementType; color: string }[] = [
@@ -54,7 +57,21 @@ interface ModalCriarProps {
 function ModalCriar({ onClose, onSaved }: ModalCriarProps) {
   const [form, setForm] = useState({
     nome: "", email: "", senha: "", role: "garcom", telefone: "",
+    opera_todas_filiais: false,
   });
+  const [redeInfo, setRedeInfo] = useState<{ rede_id: string | null; rede_nome: string | null } | null>(null);
+
+  useEffect(() => {
+    const t = localStorage.getItem("access_token");
+    if (!t) return;
+    fetch("/api/painel/rede", { headers: { Authorization: `Bearer ${t}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.scope?.rede_id) {
+          setRedeInfo({ rede_id: d.data.scope.rede_id, rede_nome: d.data.scope.rede_nome });
+        }
+      }).catch(() => {});
+  }, []);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
 
@@ -73,6 +90,7 @@ function ModalCriar({ onClose, onSaved }: ModalCriarProps) {
           senha:    form.senha,
           role:     form.role,
           telefone: form.telefone.trim() || undefined,
+          opera_todas_filiais: form.opera_todas_filiais,
         }),
       });
       const data = await res.json();
@@ -151,6 +169,24 @@ function ModalCriar({ onClose, onSaved }: ModalCriarProps) {
             />
           </div>
 
+          {/* Rede: operador cross-filial */}
+          {redeInfo?.rede_id && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+              <label className="flex items-start gap-2 text-sm text-emerald-200 cursor-pointer">
+                <input type="checkbox" checked={form.opera_todas_filiais}
+                  onChange={e => setForm({ ...form, opera_todas_filiais: e.target.checked })}
+                  className="mt-0.5" />
+                <span>
+                  <strong>Operar todas as filiais da rede {redeInfo.rede_nome}</strong>
+                  <br />
+                  <span className="text-xs text-emerald-300/80">
+                    Habilita dropdown de troca de filial no header. Use pra gerentes/admins.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
             <button
               type="button" onClick={onClose}
@@ -182,7 +218,21 @@ function ModalEditar({ usuario, onClose, onSaved }: ModalEditarProps) {
   const [form, setForm] = useState({
     nome: usuario.nome, email: usuario.email, role: usuario.role,
     telefone: usuario.telefone ?? "", ativo: usuario.ativo,
+    opera_todas_filiais: usuario.opera_todas_filiais ?? false,
   });
+  const [redeInfo, setRedeInfo] = useState<{ rede_id: string | null; rede_nome: string | null } | null>(null);
+
+  useEffect(() => {
+    const t = localStorage.getItem("access_token");
+    if (!t) return;
+    fetch("/api/painel/rede", { headers: { Authorization: `Bearer ${t}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data?.scope?.rede_id) {
+          setRedeInfo({ rede_id: d.data.scope.rede_id, rede_nome: d.data.scope.rede_nome });
+        }
+      }).catch(() => {});
+  }, []);
   const [senha, setSenha]   = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
@@ -202,6 +252,7 @@ function ModalEditar({ usuario, onClose, onSaved }: ModalEditarProps) {
           role:     form.role,
           telefone: form.telefone.trim() || undefined,
           ativo:    form.ativo,
+          opera_todas_filiais: form.opera_todas_filiais,
         }),
       });
       const data = await res.json();
@@ -312,6 +363,24 @@ function ModalEditar({ usuario, onClose, onSaved }: ModalEditarProps) {
               />
               <span className="text-sm text-slate-300">Conta ativa</span>
             </label>
+
+            {redeInfo?.rede_id && (
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <label className="flex items-start gap-2 text-sm text-emerald-200 cursor-pointer">
+                  <input type="checkbox" checked={form.opera_todas_filiais}
+                    onChange={e => setForm({ ...form, opera_todas_filiais: e.target.checked })}
+                    className="mt-0.5" />
+                  <span>
+                    <strong>Opera todas as filiais</strong>
+                    <br />
+                    <span className="text-xs text-emerald-300/80">
+                      Habilita dropdown de troca de filial. Rede: {redeInfo.rede_nome}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
+
             <div className="flex gap-3 pt-2">
               <button
                 type="button" onClick={onClose}

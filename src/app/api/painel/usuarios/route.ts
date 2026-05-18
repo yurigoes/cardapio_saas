@@ -43,7 +43,9 @@ export async function GET(req: NextRequest) {
 
   const [usuarios, total] = await Promise.all([
     query(
-      `SELECT u.id, u.nome, u.email, u.role, u.telefone, u.ativo, u.created_at, u.ultimo_login
+      `SELECT u.id, u.nome, u.email, u.role, u.telefone, u.ativo, u.created_at, u.ultimo_login,
+              u.rede_id, u.filial_padrao_id,
+              COALESCE(u.opera_todas_filiais, FALSE) AS opera_todas_filiais
        FROM usuarios u
        WHERE ${where}
        ORDER BY u.nome ASC
@@ -80,14 +82,28 @@ export async function POST(req: NextRequest) {
 
     const hash = await bcrypt.hash(body.senha, 12);
 
+    // Detecta se empresa pertence a rede — pra setar rede_id no usuário
+    const emp = await queryOne<{ rede_id: string | null }>(
+      `SELECT rede_id FROM empresas WHERE id = $1`,
+      [empresaId]
+    ).catch(() => null);
+
+    // Por padrão: se empresa tem rede E user é admin/gerente, marca como
+    // "opera_todas_filiais" pra ele poder trocar de filial via dropdown.
+    const operaTodas = !!emp?.rede_id && (body.role === "admin" || body.role === "gerente");
+    const operaCustom = "opera_todas_filiais" in body ? body.opera_todas_filiais : operaTodas;
+
     const usuario = await queryOne<{ id: string }>(
-      `INSERT INTO usuarios (empresa_id, nome, email, senha_hash, role, telefone, ativo)
-       VALUES ($1, $2, $3, $4, $5, $6, true)
+      `INSERT INTO usuarios
+         (empresa_id, nome, email, senha_hash, role, telefone, ativo,
+          rede_id, filial_padrao_id, opera_todas_filiais)
+       VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9)
        RETURNING id`,
-      [empresaId, body.nome, body.email, hash, body.role, body.telefone ?? null]
+      [empresaId, body.nome, body.email, hash, body.role, body.telefone ?? null,
+       emp?.rede_id ?? null, empresaId, operaCustom]
     );
 
-    return created({ id: usuario?.id });
+    return created({ id: usuario?.id, rede_id: emp?.rede_id, opera_todas_filiais: operaCustom });
   } catch (err) {
     console.error("[Painel/Usuarios/POST]", err);
     return serverError();

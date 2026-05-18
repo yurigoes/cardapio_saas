@@ -157,11 +157,13 @@ export const pedidoCreateSchema = z.object({
 // Usuário
 // ─────────────────────────────────────────────
 export const usuarioCreateSchema = z.object({
-  nome:      z.string().min(2).max(255).trim(),
-  email:     emailSchema,
-  senha:     senhaSchema,
-  role:      z.enum(["admin","gerente","garcom","cozinha","atendente","financeiro","delivery","motoboy"]),
-  telefone:  telefoneSchema.optional(),
+  nome:                z.string().min(2).max(255).trim(),
+  email:               emailSchema,
+  senha:               senhaSchema,
+  role:                z.enum(["admin","gerente","garcom","cozinha","atendente","financeiro","delivery","motoboy"]),
+  telefone:            telefoneSchema.optional(),
+  opera_todas_filiais: z.boolean().optional(),  // rede only: usuário pode trocar filial
+  filial_padrao_id:    z.string().uuid().optional().nullable(),
 });
 
 export const usuarioUpdateSchema = usuarioCreateSchema
