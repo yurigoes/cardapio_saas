@@ -125,7 +125,10 @@ export function FecharContaModal({ pedido, open, onClose, onClosed, authToken }:
       });
       const d = await res.json();
       if (!d.success) {
-        setErro(d.error?.message ?? "Falha ao fechar conta");
+        const msg = typeof d.error === "string"
+          ? d.error
+          : (d.error?.message ?? JSON.stringify(d.error) ?? "Falha ao fechar conta");
+        setErro(msg);
         return;
       }
       onClosed();

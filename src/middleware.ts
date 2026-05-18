@@ -50,6 +50,7 @@ const PUBLIC_ROUTES = [
   "/termos",
   "/privacidade",
   "/comprovante/",
+  "/cliente",
   "/k/",
   "/api/k/",
 ];

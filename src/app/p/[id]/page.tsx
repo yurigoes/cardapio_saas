@@ -15,10 +15,17 @@ import {
 interface PedidoStatus {
   numero:       number;
   status:       string;
+  status_entrega?: string | null;
+  cliente_id?:  string | null;
   cliente_nome: string | null;
+  cliente_pontos?:    number | null;
+  cliente_pontos_ganhos_pedido?: number | null;
   total:        string | number;
+  empresa_id?:  string;
+  empresa_slug?: string;
   empresa_nome: string;
   empresa_logo: string | null;
+  empresa_cor?: string | null;
   tipo_consumo: string | null;
   itens:        Array<{ nome: string; quantidade: number; preco_unitario: number }>;
   created_at:   string;
@@ -29,21 +36,28 @@ const STEPS = [
   { id: "pendente",    label: "Recebido",       icon: Package },
   { id: "confirmado",  label: "Confirmado",     icon: CheckCircle2 },
   { id: "em_preparo",  label: "Em preparo",     icon: ChefHat },
-  { id: "pronto",      label: "Pronto",         icon: CheckCircle2 },
+  { id: "pronto",      label: "Pronto pra retirada", icon: CheckCircle2 },
   { id: "entregue",    label: "Entregue",       icon: CheckCircle2 },
 ];
 
 const STEPS_DELIVERY = [
-  { id: "pendente",     label: "Recebido",       icon: Package },
-  { id: "confirmado",   label: "Confirmado",     icon: CheckCircle2 },
-  { id: "em_preparo",   label: "Em preparo",     icon: ChefHat },
-  { id: "saiu_entrega", label: "Saiu pra entrega", icon: Bike },
-  { id: "entregue",     label: "Entregue",       icon: CheckCircle2 },
+  { id: "pendente",     label: "Recebido",          icon: Package },
+  { id: "confirmado",   label: "Confirmado",        icon: CheckCircle2 },
+  { id: "em_preparo",   label: "Em preparo",        icon: ChefHat },
+  { id: "pronto",       label: "Pronto",            icon: CheckCircle2 },
+  { id: "saiu_entrega", label: "Saiu pra entrega",  icon: Bike },
+  { id: "entregue",     label: "Entregue",          icon: CheckCircle2 },
 ];
 
+// Alguns sistemas legados usam nomes diferentes — normaliza pra o canônico
 const ALIAS: Record<string, string> = {
-  preparo: "em_preparo",
-  enviado: "saiu_entrega",
+  preparo:    "em_preparo",
+  preparando: "em_preparo",
+  enviado:    "saiu_entrega",
+  em_rota:    "saiu_entrega",
+  coletado:   "saiu_entrega",
+  atribuido:  "saiu_entrega",
+  aceito:     "confirmado",
 };
 
 export default function PedidoStatusPage() {
@@ -94,7 +108,18 @@ export default function PedidoStatusPage() {
     );
   }
 
-  const status = ALIAS[pedido.status] ?? pedido.status;
+  // Calcula status canônico considerando status principal + status_entrega
+  // Pra delivery: se status='entregue' usa entregue; se status_entrega='atribuido'/'coletado'/'em_rota'
+  // → considera saiu_entrega mesmo se o status principal ainda for 'pronto'/'em_preparo'
+  let statusCanon = ALIAS[pedido.status] ?? pedido.status;
+  if (pedido.tipo_consumo === "delivery" && pedido.status_entrega) {
+    const se = pedido.status_entrega;
+    if (se === "entregue") statusCanon = "entregue";
+    else if (["atribuido","coletado","em_rota"].includes(se) && statusCanon !== "entregue") {
+      statusCanon = "saiu_entrega";
+    }
+  }
+  const status = statusCanon;
   const isDelivery = pedido.tipo_consumo === "delivery";
   const steps = isDelivery ? STEPS_DELIVERY : STEPS;
 
@@ -103,23 +128,25 @@ export default function PedidoStatusPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-slate-900/50 px-4 py-4">
-        <div className="max-w-md mx-auto flex items-center gap-3">
+      {/* Header — logo absoluta sem caixinha */}
+      <header className="border-b border-white/10 bg-slate-900/50 px-4 py-5">
+        <div className="max-w-md mx-auto flex items-center gap-4">
           {pedido.empresa_logo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={pedido.empresa_logo} alt={pedido.empresa_nome} className="h-10 w-10 rounded-lg object-cover" />
+            <img
+              src={pedido.empresa_logo}
+              alt={pedido.empresa_nome}
+              className="h-14 w-auto max-w-[180px] object-contain"
+              style={{ maxHeight: 56 }}
+            />
           ) : (
-            <div className="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-              <ChefHat className="h-5 w-5 text-emerald-400" />
+            <div className="h-12 w-12 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+              <ChefHat className="h-6 w-6 text-emerald-400" />
             </div>
           )}
-          <div>
-            <p className="text-xs text-slate-400">Pedido</p>
-            <h1 className="text-lg font-bold">#{pedido.numero}</h1>
-          </div>
-          <div className="ml-auto text-right">
-            <p className="text-xs text-slate-400">{pedido.empresa_nome}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500">{pedido.empresa_nome}</p>
+            <h1 className="text-lg font-bold leading-tight">Pedido #{pedido.numero}</h1>
             <p className="text-[10px] text-slate-600">Atualizando a cada 10s</p>
           </div>
         </div>
@@ -188,6 +215,32 @@ export default function PedidoStatusPage() {
             </div>
           </div>
         </div>
+
+        {/* Bloco de pontos — só se cliente cadastrado */}
+        {pedido.cliente_id && pedido.cliente_pontos !== null && pedido.cliente_pontos !== undefined && (
+          <div className="rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 to-orange-500/5 p-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20">
+                <span className="text-2xl">⭐</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-xs uppercase tracking-wider text-amber-300/80">Seus pontos</p>
+                <p className="text-2xl font-black text-amber-200">{pedido.cliente_pontos.toLocaleString("pt-BR")}</p>
+                {pedido.cliente_pontos_ganhos_pedido !== undefined && pedido.cliente_pontos_ganhos_pedido !== null && pedido.cliente_pontos_ganhos_pedido > 0 && (
+                  <p className="text-[11px] text-emerald-300 mt-0.5">
+                    + {pedido.cliente_pontos_ganhos_pedido} pontos com este pedido
+                  </p>
+                )}
+              </div>
+            </div>
+            {pedido.empresa_slug && (
+              <a href={`/cliente?empresa=${pedido.empresa_slug}`}
+                className="mt-3 flex items-center justify-center gap-1 rounded-lg bg-amber-500/20 px-4 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/30">
+                Ver meus cupons e pontos →
+              </a>
+            )}
+          </div>
+        )}
 
         {pedido.cliente_nome && (
           <p className="text-center text-xs text-slate-500">

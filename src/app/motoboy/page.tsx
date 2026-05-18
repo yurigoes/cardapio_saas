@@ -95,7 +95,15 @@ export default function MotoboyPage() {
       body:    JSON.stringify({ lat, lng, precisao_m: precisao }),
     })
       .then(r => r.json())
-      .then(d => { if (!d.success) setPingErro(d.error?.message ?? "Falha ping"); else setPingErro(null); })
+      .then(d => {
+        if (!d.success) {
+          // error pode vir como string OU como objeto { message }
+          const msg = typeof d.error === "string"
+            ? d.error
+            : (d.error?.message ?? JSON.stringify(d.error) ?? "Falha ping");
+          setPingErro(msg);
+        } else setPingErro(null);
+      })
       .catch(() => setPingErro("Sem internet"));
   }
 

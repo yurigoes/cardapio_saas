@@ -70,7 +70,8 @@ export default function RastrearPage() {
 
   useEffect(() => {
     fetchData();
-    const id = setInterval(fetchData, 15_000);
+    // Poll mais rápido (5s) — tracking de motoboy em tempo real
+    const id = setInterval(fetchData, 5_000);
     return () => clearInterval(id);
   }, [fetchData]);
 
