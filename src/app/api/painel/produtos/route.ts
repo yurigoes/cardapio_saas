@@ -46,10 +46,17 @@ export async function GET(req: NextRequest) {
 
   const where = conditions.join(" AND ");
 
+  // Param adicional pra flag exclusivo_desta_filial
+  const idxEmpresa = i;
+  values.push(empresaId);
+  i++;
+
   const [produtos, total] = await Promise.all([
     query(
       `SELECT p.*, c.nome as categoria_nome,
-              (p.rede_id IS NOT NULL) AS compartilhado_na_rede
+              (p.rede_id IS NOT NULL) AS compartilhado_na_rede,
+              (p.exclusivo_filial_id IS NOT NULL
+               AND p.exclusivo_filial_id = $${idxEmpresa}) AS exclusivo_desta_filial
        FROM produtos p
        LEFT JOIN categorias c ON c.id = p.categoria_id
        WHERE ${where}

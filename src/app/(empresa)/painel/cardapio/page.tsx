@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingBag, FolderOpen, Plus, Search, X, Edit2, Trash2,
   ToggleLeft, ToggleRight, Star, Clock, ChevronDown, Upload, ImageOff,
+  Lock, Unlock,
 } from "lucide-react";
 import VariacoesEditor, { Variacoes } from "./_VariacoesEditor";
 import { confirmar } from "@/components/ui/ConfirmModal";
@@ -33,6 +34,7 @@ interface Produto {
   categoria_nome:    string | null;
   pontos_fidelidade: number | null;
   compartilhado_na_rede?: boolean;
+  exclusivo_desta_filial?: boolean;
   variacoes?:        Variacoes | null;
 }
 
@@ -268,6 +270,22 @@ export default function CardapioPage() {
     fetchProdutos(page);
   }
 
+  async function toggleExclusivo(prod: Produto) {
+    const novoExclusivo = !prod.exclusivo_desta_filial;
+    const msg = novoExclusivo
+      ? "Tornar este produto exclusivo desta filial?\n\nEle deixará de aparecer no cardápio das outras filiais da rede."
+      : "Voltar a disponibilizar este produto em todas as filiais da rede?";
+    if (!await confirmar({ titulo: novoExclusivo ? "Exclusivo desta filial" : "Liberar para a rede", mensagem: msg, okLabel: "Confirmar" })) return;
+    const res = await fetch(`/api/painel/produtos/${prod.id}/exclusivo`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json", ...authHeader() },
+      body:    JSON.stringify({ exclusivo: novoExclusivo }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!data?.success) setError(data?.error ?? "Falha ao alterar exclusividade");
+    fetchProdutos(page);
+  }
+
   async function deleteProd(id: string) {
     if (!await confirmar({ titulo: "Excluir produto?", okLabel: "Excluir", perigo: true })) return;
     await fetch(`/api/painel/produtos/${id}`, { method: "DELETE", headers: authHeader() });
@@ -392,10 +410,16 @@ export default function CardapioPage() {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {prod.destaque && <Star className="h-3 w-3 text-amber-400 flex-shrink-0" />}
                         <p className="font-medium text-white truncate">{prod.nome}</p>
-                        {prod.compartilhado_na_rede && (
+                        {prod.compartilhado_na_rede && !prod.exclusivo_desta_filial && (
                           <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300 uppercase tracking-wider"
                             title="Compartilhado entre todas as filiais da rede">
                             🌐 REDE
+                          </span>
+                        )}
+                        {prod.exclusivo_desta_filial && (
+                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-300 uppercase tracking-wider"
+                            title="Exclusivo desta filial — não aparece nas outras">
+                            🔒 EXCLUSIVO
                           </span>
                         )}
                       </div>
@@ -434,6 +458,17 @@ export default function CardapioPage() {
                     </div>
 
                     <div className="flex items-center gap-1">
+                      {prod.compartilhado_na_rede && (
+                        <button
+                          onClick={() => toggleExclusivo(prod)}
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-amber-300 transition"
+                          title={prod.exclusivo_desta_filial ? "Liberar p/ rede" : "Exclusivo desta filial"}
+                        >
+                          {prod.exclusivo_desta_filial
+                            ? <Lock   className="h-4 w-4 text-amber-300" />
+                            : <Unlock className="h-4 w-4" />}
+                        </button>
+                      )}
                       <button
                         onClick={() => toggleDisponivel(prod)}
                         className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 transition"

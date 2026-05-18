@@ -8,6 +8,7 @@ import { auditLog } from "@/lib/security/audit";
 import { isDuplicateKeyError } from "@/lib/utils/errors";
 import { sanitizeSlug } from "@/lib/security/sanitize";
 import { generateSlaveKey } from "@/lib/sync/auth";
+import { provisionarEvolution } from "@/lib/notify/evolution-provision";
 
 // Apenas master admin pode acessar
 function assertMaster(role: string) {
@@ -152,6 +153,17 @@ export async function POST(req: NextRequest) {
       dadosNovos: body,
       usuario:   { sub: auth.payload.sub, empresaId: undefined },
     });
+
+    // Auto-provisiona instância Evolution (best-effort, não bloqueia).
+    // Pode ser desabilitado via env EVOLUTION_AUTO_PROVISION=false.
+    if (empresa?.id && process.env.EVOLUTION_AUTO_PROVISION !== "false") {
+      provisionarEvolution(empresa.id)
+        .then(r => {
+          if (r.ok) console.info(`[Admin/Empresas] Evolution provisionada (${r.ja_existia ? "já existia" : "criada"}): ${r.instance}`);
+          else      console.warn(`[Admin/Empresas] Evolution NÃO provisionada: ${r.motivo}`);
+        })
+        .catch(e => console.warn("[Admin/Empresas] provisionarEvolution falhou", e));
+    }
 
     return created({ id: empresa?.id });
   } catch (err) {

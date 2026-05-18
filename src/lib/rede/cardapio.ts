@@ -62,11 +62,6 @@ export async function cardapioScope(empresaId: string): Promise<CardapioScope> {
 
 /**
  * Constrói a cláusula WHERE pra filtrar produtos/categorias.
- * Retorna [clause, value, paramIndex]
- *
- * Uso:
- *   const { clause, value } = buildWhereCardapio(scope, "p", 1);
- *   query(`SELECT * FROM produtos p WHERE ${clause} AND p.deleted_at IS NULL`, [value]);
  */
 export function buildWhereCardapio(
   scope: CardapioScope,
@@ -84,6 +79,32 @@ export function buildWhereCardapio(
   return {
     clause:     `${prefix}empresa_id = $${paramIndex}`,
     value:      scope.empresa_id,
+    paramIndex: paramIndex + 1,
+  };
+}
+
+/**
+ * Versão que considera exclusivo_filial_id (apenas pra PRODUTOS).
+ * Retorna produtos da rede que NÃO são exclusivos de outra filial OU
+ * que são exclusivos DESTA filial.
+ * Use no endpoint PÚBLICO de cardápio (totem/site) — admins veem tudo.
+ */
+export function buildWhereCardapioComExclusivo(
+  scope: CardapioScope,
+  tabelaAlias = "",
+  paramIndex = 1,
+): { clause: string; values: string[]; paramIndex: number } {
+  const prefix = tabelaAlias ? `${tabelaAlias}.` : "";
+  if (scope.sincronizado && scope.rede_id) {
+    return {
+      clause: `${prefix}rede_id = $${paramIndex} AND (${prefix}exclusivo_filial_id IS NULL OR ${prefix}exclusivo_filial_id = $${paramIndex + 1})`,
+      values: [scope.rede_id, scope.empresa_id],
+      paramIndex: paramIndex + 2,
+    };
+  }
+  return {
+    clause: `${prefix}empresa_id = $${paramIndex}`,
+    values: [scope.empresa_id],
     paramIndex: paramIndex + 1,
   };
 }

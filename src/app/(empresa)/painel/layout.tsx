@@ -8,7 +8,7 @@ import {
   Package, Users, Settings, LogOut, ChefHat, Bell, Tag, BarChart3,
   MapPin, CreditCard, Zap, LayoutGrid, Tv2, Wallet, Activity, ScrollText,
   Receipt, Sun, Moon, Database, Key, Printer, ShieldCheck, Mail, Server, LifeBuoy, MessageCircle,
-  Building2, FileText,
+  Building2, FileText, Network, Truck,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
 import { useTheme } from "@/lib/hooks/useTheme";
@@ -78,6 +78,11 @@ const NAV_GROUPS: NavGroup[] = [
     { href: "/painel/integracoes/terminais", label: "Terminais",       icon: CreditCard,  modulo: null },
     { href: "/painel/ifood",                 label: "iFood",           icon: Zap,         modulo: "ifood" },
     { href: "/painel/api-keys",              label: "API Keys",        icon: Key,         modulo: null },
+  ]},
+
+  { titulo: "Rede", items: [
+    { href: "/painel/rede",                label: "Dashboard rede",  icon: Network,  modulo: null },
+    { href: "/painel/rede/transferencias", label: "Transferências",  icon: Truck,    modulo: null },
   ]},
 
   { titulo: "Empresa", items: [
