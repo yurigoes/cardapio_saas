@@ -11,7 +11,7 @@ import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { queryOne } from "@/lib/db/client";
 import { ok, forbidden, notFound, badRequest, serverError } from "@/lib/utils/response";
 import { auditLog } from "@/lib/security/audit";
-import { notificarConfirmacaoCliente } from "@/lib/notify/evolution";
+import { notificarClienteSobrePedido } from "@/lib/notify/evolution";
 import { enviarLinkRastreio } from "@/lib/delivery/rastreio";
 import { syncIfoodAsync } from "@/lib/ifood/sync-status";
 
@@ -104,25 +104,27 @@ export async function POST(
     });
 
     // Notifica cliente em transições importantes (best-effort).
-    // - "atribuido" / "coletado" / "em_rota": envia link de rastreio com
-    //   nome do motoboy (cliente acompanha em tempo real)
-    // - "entregue": confirma entrega via template 'pronto'
     if (body.status === "atribuido" || body.status === "coletado" || body.status === "em_rota") {
+      // Link de rastreio com nome do motoboy (cliente acompanha em tempo real)
       enviarLinkRastreio(empresaId, params.id)
         .catch(e => console.warn("[StatusEntrega] rastreio:", e));
-      // Pedido iFood despachado pra entrega → /dispatch
+
+      // Notifica evento 'saiu_entrega' (template padrão tem {link_acompanhar})
+      notificarClienteSobrePedido(empresaId, params.id, "saiu_entrega")
+        .catch(e => console.warn("[StatusEntrega] saiu_entrega:", e));
+
       syncIfoodAsync(empresaId, params.id, "em_entrega");
     }
     if (body.status === "entregue") {
-      // Pedido iFood concluído
       syncIfoodAsync(empresaId, params.id, "entregue");
-    }
-    if (body.status === "entregue") {
-      notificarConfirmacaoCliente(empresaId, params.id)
-        .catch(e => console.warn("[StatusEntrega] notify:", e));
+      // Notifica como ENTREGUE (não confirmado)
+      notificarClienteSobrePedido(empresaId, params.id, "entregue")
+        .catch(e => console.warn("[StatusEntrega] entregue:", e));
     }
     if (body.status === "cancelado") {
       syncIfoodAsync(empresaId, params.id, "cancelado");
+      notificarClienteSobrePedido(empresaId, params.id, "cancelado")
+        .catch(e => console.warn("[StatusEntrega] cancelado:", e));
     }
 
     return ok({ id: params.id, status_entrega: body.status });

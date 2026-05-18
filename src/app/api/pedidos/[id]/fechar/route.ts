@@ -257,10 +257,11 @@ export async function POST(
 
     // Notifica cliente que pedido foi entregue (best-effort)
     if (result.status === "entregue" && result.cliente_telefone) {
-      notificarEvolution(empresaId, "pronto", {
+      notificarEvolution(empresaId, "entregue", {
         telefone:     result.cliente_telefone,
         pedidoNumero: result.numero,
-        total:        result.total,
+        pedidoId:     result.id,
+        total:        Number(result.total),
       }).catch(e => console.warn("[Pedidos/Fechar] notify:", e));
     }
 

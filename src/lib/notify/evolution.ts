@@ -67,7 +67,8 @@ export const EVENTOS_VALIDOS: EvolutionEvento[] = [
  * Variáveis suportadas: {empresa} {numero} {cliente} {total} {telefone}
  */
 export const TEMPLATES_DEFAULT: Record<EvolutionEvento, string> = {
-  novo_pedido:   `🔔 *{empresa}*\n\nNovo pedido #{numero} recebido{total_paren}.\nCliente: {cliente}`,
+  novo_pedido:   `🔔 *{empresa}*\n\nNovo pedido #{numero} recebido{total_paren}.\nCliente: {cliente}\n\nAcompanhar: {link_acompanhar}`,
+  // Link pro dono ver o pedido + compartilhar com o cliente
   confirmado:    `✅ *{empresa}*\n\nOlá {cliente}! Seu pedido #{numero} foi confirmado!{total_linha}\n\nAcompanhe em: {link_acompanhar}`,
   em_preparo:    `👨‍🍳 *{empresa}*\n\nSeu pedido #{numero} entrou em preparo!\nLogo logo estará pronto.\n\nAcompanhe em: {link_acompanhar}`,
   pronto:        `🍔 *{empresa}*\n\nSeu pedido #{numero} está pronto!\n\nAcompanhe em: {link_acompanhar}`,

@@ -8,6 +8,7 @@ import { auditLog } from "@/lib/security/audit";
 import { registrarVendaPedido, registrarEstornoPedido } from "@/lib/caixa/movimento";
 import { enviarPushParaUsuariosDaEmpresa } from "@/lib/push";
 import { syncIfoodAsync } from "@/lib/ifood/sync-status";
+import { notificarClienteSobrePedido } from "@/lib/notify/evolution";
 
 const statusSchema = z.object({
   // 'preparo' é alias do frontend → normalizado para 'preparando' antes da query
@@ -171,6 +172,22 @@ export async function PATCH(
         url:   `/painel/pedidos`,
         tag:   `pedido-${body.status}`,
       }).catch(e => console.warn("[Push] erro:", e));
+    }
+
+    // ── Notifica o CLIENTE no WhatsApp em transições relevantes ───────────
+    // (template padrão com {link_acompanhar} pra cliente acompanhar)
+    const STATUS_PARA_EVENTO: Record<string, "confirmado" | "em_preparo" | "pronto" | "entregue" | "cancelado"> = {
+      confirmado: "confirmado",
+      preparando: "em_preparo",
+      preparo:    "em_preparo",
+      pronto:     "pronto",
+      entregue:   "entregue",
+      cancelado:  "cancelado",
+    };
+    const eventoCliente = STATUS_PARA_EVENTO[body.status];
+    if (eventoCliente) {
+      notificarClienteSobrePedido(empresaId, params.id, eventoCliente)
+        .catch(e => console.warn(`[Pedido/Status] notify ${eventoCliente}:`, e));
     }
 
     return ok({ id: params.id, status: body.status });

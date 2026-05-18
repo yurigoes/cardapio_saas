@@ -329,6 +329,7 @@ export async function POST(req: NextRequest) {
       notificarEvolution(empresaId, "novo_pedido", {
         clienteNome:  body.cliente_nome ?? null,
         pedidoNumero: result.numero,
+        pedidoId:     result.id,
         total:        body.itens.reduce((a, i) => a + i.preco_unitario * i.quantidade, 0),
       }).catch(e => console.warn("[Pedidos/POST] notify:", e));
     }

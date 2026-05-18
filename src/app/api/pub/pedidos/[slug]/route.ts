@@ -497,23 +497,31 @@ export async function POST(
         notificarEvolution(empresa.id, "novo_pedido", {
           clienteNome:  body.cliente_nome ?? null,
           pedidoNumero: pedido.numero,
+          pedidoId:     pedido.id,
           total:        totalCalc,
         }).catch(e => console.warn("[Pub/Pedidos] notify novo_pedido:", e));
       }
 
-      // PRINT: só dispara imediatamente pra formas síncronas (dinheiro,
-      // pagar_entrega, cartão pinpad). PIX/cartão online aguardam o
-      // webhook do gateway aprovar — senão a cozinha imprime pedido que
-      // o cliente nunca pagou.
-      // NOTA: forma indefinida = NÃO imprime (segurança — assume async).
+      // PRINT: dispara imediatamente em cenários seguros:
+      //   - Formas síncronas (dinheiro, pinpad, etc) — pago na hora
+      //   - Pedidos via TOTEM físico (origem='totem' ou tipo='totem'):
+      //     totem só finaliza pedido APÓS confirmar pagamento na tela,
+      //     então sempre seguro imprimir.
+      // PIX/cartão online de delivery aguardam webhook do gateway.
       const SINCRONAS = new Set(["dinheiro", "pagar_entrega", "pinpad", "cartao_maquina"]);
       const formaSincrona = !!body.forma_pagamento && SINCRONAS.has(body.forma_pagamento);
+      // Totem = sem mesa, sem delivery, sem retirada (default fica "totem")
+      const eTotem = !body.mesa_id && body.tipo_consumo !== "delivery" && body.tipo_consumo !== "retirada";
+      const podeImprimir = formaSincrona || eTotem;
 
-      if (formaSincrona) {
+      if (podeImprimir) {
         dispatchCupomCozinha(empresa.id, pedido.id)
           .catch(e => console.warn("[Pub/Pedidos] print cozinha:", e));
         dispatchCupomCliente(empresa.id, pedido.id)
           .catch(e => console.warn("[Pub/Pedidos] print cliente:", e));
+        console.info(
+          `[Pub/Pedidos] pedido=${pedido.id} imprimiu (totem=${eTotem} forma=${body.forma_pagamento ?? "?"})`
+        );
       } else {
         console.info(
           `[Pub/Pedidos] pedido=${pedido.id} forma=${body.forma_pagamento ?? "(indefinida)"} ` +
