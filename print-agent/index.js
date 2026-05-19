@@ -19,7 +19,7 @@ const path = require("path");
 const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.6.1";  // 1.6.1: start-background.bat + install-startup.bat (alternativa simples ao scheduler)
+const VERSION     = "1.6.2";  // 1.6.2: install-startup.bat com PS single-line (sem caret quebrado)
 
 // ─── ESC/POS bytes ──────────────────────────────────────────
 const ESC = 0x1b;

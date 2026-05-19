@@ -45,18 +45,14 @@ echo  Criando atalho em:
 echo  %LINK%
 echo.
 
-REM Usa PowerShell pra criar o atalho .lnk
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$ws = New-Object -ComObject WScript.Shell; ^
-   $sc = $ws.CreateShortcut('%LINK%'); ^
-   $sc.TargetPath = '%TARGET%'; ^
-   $sc.WorkingDirectory = '%~dp0'; ^
-   $sc.WindowStyle = 7; ^
-   $sc.Description = 'Cardapio Print Agent - autostart'; ^
-   $sc.Save()"
+REM Cria atalho via PowerShell - tudo em UMA linha (caret do batch nao
+REM eh interpretado por PS, entao multi-linha quebra).
+REM Aspas duplas no -Command precisam virar simples no PS pra nao conflitar.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('%LINK%'); $sc.TargetPath = '%TARGET%'; $sc.WorkingDirectory = '%~dp0'; $sc.WindowStyle = 7; $sc.Description = 'Cardapio Print Agent autostart'; $sc.Save()"
 
 if not exist "%LINK%" (
   echo  [X] Falha ao criar atalho.
+  echo      Confirme PowerShell esta funcional: powershell -Command "Write-Host OK"
   pause
   exit /b 1
 )
