@@ -45,10 +45,16 @@ echo.
 
 REM ── [4] Tarefas no Agendador ──────────────────────
 echo  [4] Tarefas no Agendador do Windows:
-schtasks /Query /TN "CardapioPrintAgent_Boot" >nul 2>nul && (echo      [OK] CardapioPrintAgent_Boot) || (echo      [X] CardapioPrintAgent_Boot NAO criada)
-schtasks /Query /TN "CardapioPrintAgent_Logon" >nul 2>nul && (echo      [OK] CardapioPrintAgent_Logon) || (echo      [X] CardapioPrintAgent_Logon NAO criada)
-schtasks /Query /TN "CardapioPrintAgent_Watchdog" >nul 2>nul && (echo      [OK] CardapioPrintAgent_Watchdog) || (echo      [X] CardapioPrintAgent_Watchdog NAO criada)
-schtasks /Query /TN "CardapioPrintAgent" >nul 2>nul && echo      [!] Tarefa antiga "CardapioPrintAgent" existe - rode uninstall+install pra limpar
+schtasks /Query /TN "CardapioPrintAgent_Logon" >nul 2>nul && (echo      [OK] CardapioPrintAgent_Logon) || (echo      [X] CardapioPrintAgent_Logon NAO criada - rode install-service.bat como admin)
+schtasks /Query /TN "CardapioPrintAgent_Watchdog" >nul 2>nul && (echo      [OK] CardapioPrintAgent_Watchdog) || (echo      [!] CardapioPrintAgent_Watchdog NAO criada - sem retry automatico)
+schtasks /Query /TN "CardapioPrintAgent_Boot" >nul 2>nul && (echo      [!] Tarefa antiga _Boot existe - rode uninstall+install pra limpar) || (echo      [info] _Boot nao usada nesta versao v1.7+)
+echo.
+echo  Atalho na Startup (autostart no logon, sem precisar admin):
+if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\CardapioPrintAgent.lnk" (
+  echo      [OK] atalho instalado
+) else (
+  echo      [!] atalho NAO instalado - rode install-startup.bat se quiser autostart sem scheduler
+)
 echo.
 
 REM ── [5] Processos rodando ─────────────────────────
@@ -93,7 +99,8 @@ echo  Se [4] mostrou tarefas NAO criadas:
 echo      Rode install-service.bat COMO ADMINISTRADOR.
 echo.
 echo  Se [5] nao tem processo node:
-echo      Tente: schtasks /Run /TN "CardapioPrintAgent_Boot"
+echo      Tente: schtasks /Run /TN "CardapioPrintAgent_Logon"
+echo      OU:    start-background.bat (alternativa sem scheduler)
 echo      Aguarde 5s e roda este script novamente.
 echo.
 echo  Se [6] falhou:
