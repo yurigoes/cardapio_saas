@@ -44,6 +44,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/print-agent  ./print-agent
 # Pasta da retaguarda — install.sh servido via /install-retaguarda.sh
 COPY --from=builder --chown=nextjs:nodejs /app/retaguarda   ./retaguarda
 
+# Scripts confidenciais (migrate-disk.sh) — servidos via /api/admin/migracao-hd/script
+COPY --from=builder --chown=nextjs:nodejs /app/scripts      ./scripts
+
 USER nextjs
 
 EXPOSE 3000

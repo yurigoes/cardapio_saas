@@ -35,6 +35,7 @@ const NAV: NavGroup[] = [
     { href: "/admin/maquinas",          label: "Máquinas",            icon: Server },
     { href: "/admin/retaguardas",       label: "Retaguardas",         icon: Server },
     { href: "/admin/cloudflare-setup",  label: "Cloudflare API",      icon: Server },
+    { href: "/admin/migracao-hd",       label: "Migração HD 🔒",      icon: Server },
     { href: "/admin/erros",    label: "Erros",        icon: AlertTriangle },
     { href: "/admin/auditoria", label: "Auditoria",   icon: ScrollText },
     { href: "/admin/observability", label: "Observability", icon: Bug },
