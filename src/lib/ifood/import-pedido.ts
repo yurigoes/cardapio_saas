@@ -43,7 +43,32 @@ export async function importarPedidoIfood(
     // Calcula totais
     const itens    = Array.isArray(ord.items) ? ord.items : [];
     const subtotal = itens.reduce((a, i) => a + (i.unitPrice?.value ?? 0) * (i.quantity ?? 1), 0);
-    const total    = (ord.total as { orderAmount?: { value: number } })?.orderAmount?.value ?? subtotal;
+    const totalRaw = ord.total as { orderAmount?: { value: number }; deliveryFee?: { value: number }; benefits?: { value: number } } | undefined;
+    const total    = totalRaw?.orderAmount?.value ?? subtotal;
+    const taxaEntrega = totalRaw?.deliveryFee?.value ?? 0;
+
+    // ── Voucher / benefícios (Cenário 1 homologação)
+    // iFood envia "benefits" como array OU em total.benefits.value (formato varia).
+    interface BenefitItem { name?: string; value?: number; targetId?: string; target?: string; }
+    const rawBenefits = (ord as { benefits?: unknown }).benefits;
+    const benefitsArr: BenefitItem[] = Array.isArray(rawBenefits)
+      ? (rawBenefits as BenefitItem[])
+      : [];
+    const valorVoucher = benefitsArr.reduce((a, b) => a + (Number(b.value) || 0), 0)
+                      || Number(totalRaw?.benefits?.value || 0);
+    const voucherCodigo = benefitsArr.find(b => b.target === "VOUCHER" || b.name)?.name
+                      || benefitsArr[0]?.name
+                      || null;
+
+    // ── Agendamento (Cenário 1)
+    // iFood: orderTiming = "IMMEDIATE" | "SCHEDULED" + schedule.deliveryDateTimeStart
+    interface ScheduleObj { deliveryDateTimeStart?: string; deliveryDateTimeEnd?: string; }
+    const orderTiming = (ord as { orderTiming?: string }).orderTiming;
+    const schedule = (ord as { schedule?: ScheduleObj }).schedule ?? {};
+    let agendadoPara: string | null = null;
+    if (orderTiming === "SCHEDULED" && schedule.deliveryDateTimeStart) {
+      agendadoPara = new Date(schedule.deliveryDateTimeStart).toISOString();
+    }
 
     // tipo_consumo + tipo
     const ifoodMode = (ord.delivery as { mode?: string })?.mode
@@ -51,32 +76,75 @@ export async function importarPedidoIfood(
                    ?? "DELIVERY";
     const tipo_consumo = ifoodMode === "TAKEOUT" ? "retirada" : "delivery";
 
-    const cliente   = (ord.customer as { name?: string; phone?: string }) ?? {};
+    // Cliente — captura nome, telefone e documento (CPF/CNPJ — Cenário 5)
+    interface CustomerObj {
+      name?: string; phone?: string | { number?: string };
+      documentNumber?: string; taxPayerIdentificationNumber?: string;
+    }
+    const cliente = (ord.customer as CustomerObj) ?? {};
+    const clienteTel = typeof cliente.phone === "string"
+      ? cliente.phone
+      : (cliente.phone?.number ?? null);
+    const clienteDoc = (cliente.documentNumber ?? cliente.taxPayerIdentificationNumber ?? null);
+    const clienteDocLimpo = clienteDoc ? String(clienteDoc).replace(/\D/g, "").slice(0, 14) : null;
+
+    // ── Pagamento: troco + observações (Cenário 5)
+    // iFood: payments.methods[].cash.changeFor
+    interface PaymentMethod { method?: string; cash?: { changeFor?: number }; type?: string; }
+    interface PaymentsObj { methods?: PaymentMethod[]; prepaid?: number; }
+    const payments = (ord as { payments?: PaymentsObj }).payments ?? {};
+    const trocoMethod = (payments.methods ?? []).find(m => m.cash?.changeFor != null);
+    const trocoPara = trocoMethod?.cash?.changeFor ?? null;
+
+    // Forma de pagamento legível
+    const primMethod = (payments.methods ?? [])[0];
+    const formaPag = primMethod?.method?.toLowerCase()
+                  ?? (trocoPara ? "dinheiro" : null);
+
+    // Observações do cliente (comments / instructions)
+    const clienteObs = (ord as { comments?: string }).comments
+                    ?? (ord as { observations?: string }).observations
+                    ?? null;
 
     // INSERT pedido — status pendente + ifood_aceite_status pendente
-    // (será atualizado p/ auto_aceito após o INSERT se autoAceite=true)
     const novoPed = await client.query<{ id: string; numero: number }>(
       `INSERT INTO pedidos
          (empresa_id, tipo, status, ifood_order_id, origem, origem_id,
-          cliente_nome, cliente_telefone,
+          cliente_nome, cliente_telefone, cliente_documento, cliente_observacoes,
           subtotal, desconto, taxa_entrega, total,
+          valor_voucher, voucher_codigo,
+          troco_para, forma_pagamento,
           tipo_consumo, observacoes,
+          agendado_para,
           ifood_aceite_status)
        VALUES ($1, $2, 'pendente', $3::text, 'ifood', $3::text,
-               $4, $5,
-               $6, 0, 0, $7,
-               $8, $9, 'pendente')
+               $4, $5, $6, $7,
+               $8, $9, $10, $11,
+               $12, $13,
+               $14, $15,
+               $16, $17,
+               $18,
+               'pendente')
        RETURNING id, numero`,
       [
-        empresaId,
-        tipo_consumo === "delivery" ? "delivery" : "balcao",
-        ord.id,
-        cliente.name ?? null,
-        cliente.phone ?? null,
-        subtotal,
-        total,
-        tipo_consumo,
-        `iFood #${ord.displayId ?? ord.id.slice(0, 8)}`,
+        empresaId,                                          // 1
+        tipo_consumo === "delivery" ? "delivery" : "balcao",// 2
+        ord.id,                                             // 3
+        cliente.name ?? null,                               // 4
+        clienteTel,                                         // 5
+        clienteDocLimpo,                                    // 6
+        clienteObs,                                         // 7
+        subtotal,                                           // 8
+        valorVoucher,                                       // 9 desconto = voucher por enquanto
+        taxaEntrega,                                        // 10
+        total,                                              // 11
+        valorVoucher,                                       // 12
+        voucherCodigo,                                      // 13
+        trocoPara,                                          // 14
+        formaPag,                                           // 15
+        tipo_consumo,                                       // 16
+        `iFood #${ord.displayId ?? ord.id.slice(0, 8)}`,    // 17
+        agendadoPara,                                       // 18
       ]
     ).then(r => r.rows[0]);
 

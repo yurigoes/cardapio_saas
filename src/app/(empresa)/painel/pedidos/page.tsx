@@ -72,6 +72,18 @@ interface PedidoDetalhe extends Pedido {
   status_entrega:    string | null;
   tracking_token:    string | null;
   valor_motoboy:     number | string | null;
+  forma_pagamento:   string | null;
+  // ── iFood homologação
+  agendado_para:        string | null;        // ISO se SCHEDULED
+  cliente_documento:    string | null;        // CPF/CNPJ
+  cliente_observacoes:  string | null;        // comments do cliente
+  troco_para:           number | string | null;
+  valor_voucher:        number | string | null;
+  voucher_codigo:       string | null;
+  origem:               string | null;        // ifood/totem/whatsapp/etc
+  ifood_order_id:       string | null;
+  ifood_aceite_status:  string | null;
+  ifood_motivo_cancelamento: string | null;
   itens: {
     id:             string;
     nome:           string;
@@ -254,9 +266,107 @@ function PedidoModal({ pedidoId, onClose, onUpdate }: PedidoModalProps) {
             </div>
           </div>
 
+          {/* ── BLOCOS ESPECÍFICOS iFOOD (homologação) ───────────────────── */}
+
+          {/* AGENDAMENTO — tarja amarela bem visível */}
+          {pedido.agendado_para && (
+            <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4">
+              <p className="text-xs font-bold uppercase tracking-widest text-amber-300 mb-1">
+                ⏰ Pedido agendado
+              </p>
+              <p className="text-lg font-bold text-white">
+                {new Date(pedido.agendado_para).toLocaleString("pt-BR", {
+                  weekday: "long", day: "2-digit", month: "long",
+                  hour: "2-digit", minute: "2-digit",
+                })}
+              </p>
+              <p className="text-[11px] text-amber-200/80 mt-1">
+                Cliente quer receber/retirar neste horário (origem: iFood)
+              </p>
+            </div>
+          )}
+
+          {/* VOUCHER iFood */}
+          {(Number(pedido.valor_voucher ?? 0) > 0 || pedido.voucher_codigo) && (
+            <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300 mb-1">
+                🎟️ Voucher aplicado
+              </p>
+              <div className="flex items-center justify-between">
+                <code className="rounded bg-white/10 px-2 py-0.5 text-xs font-mono text-emerald-200">
+                  {pedido.voucher_codigo ?? "—"}
+                </code>
+                {Number(pedido.valor_voucher ?? 0) > 0 && (
+                  <span className="text-sm font-bold text-emerald-300">
+                    − {formatBRL(Number(pedido.valor_voucher))}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* PAGAMENTO + TROCO */}
+          {(pedido.forma_pagamento || pedido.troco_para != null) && (
+            <div className="rounded-xl border border-white/10 bg-slate-800/40 p-3 text-sm">
+              <p className="text-xs uppercase tracking-wider text-slate-500 mb-2">Pagamento</p>
+              <div className="grid grid-cols-2 gap-3">
+                {pedido.forma_pagamento && (
+                  <div>
+                    <p className="text-[10px] text-slate-500">Forma</p>
+                    <p className="font-semibold capitalize text-white">{pedido.forma_pagamento.replace(/_/g, " ")}</p>
+                  </div>
+                )}
+                {pedido.troco_para != null && (
+                  <div>
+                    <p className="text-[10px] text-slate-500">Cliente paga com</p>
+                    <p className="font-semibold text-white">{formatBRL(Number(pedido.troco_para))}</p>
+                    <p className="text-[10px] text-amber-300">
+                      Troco: {formatBRL(Math.max(0, Number(pedido.troco_para) - Number(pedido.total)))}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* CPF/CNPJ do cliente */}
+          {pedido.cliente_documento && (
+            <div className="rounded-xl border border-white/10 bg-slate-800/40 px-4 py-2.5 text-sm">
+              <p className="text-xs text-slate-500">CPF/CNPJ (nota fiscal)</p>
+              <p className="font-mono text-white">
+                {pedido.cliente_documento.length === 11
+                  ? pedido.cliente_documento.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
+                  : pedido.cliente_documento.length === 14
+                    ? pedido.cliente_documento.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
+                    : pedido.cliente_documento}
+              </p>
+            </div>
+          )}
+
+          {/* OBSERVAÇÕES DO CLIENTE (separado das observações internas) */}
+          {pedido.cliente_observacoes && (
+            <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-300 mb-1">
+                💬 Observação do cliente
+              </p>
+              <p className="text-slate-200 leading-relaxed">{pedido.cliente_observacoes}</p>
+            </div>
+          )}
+
+          {/* TARJA: cancelamento solicitado pelo iFood */}
+          {pedido.ifood_motivo_cancelamento && pedido.status !== "cancelado" && (
+            <div className="rounded-xl border-2 border-red-500/40 bg-red-500/10 p-4 animate-pulse">
+              <p className="text-xs font-bold uppercase tracking-widest text-red-300 mb-1">
+                ⚠️ Cancelamento solicitado pelo iFood
+              </p>
+              <p className="text-sm text-white">{pedido.ifood_motivo_cancelamento}</p>
+            </div>
+          )}
+
+          {/* ── observações INTERNAS (operador) ──────────────────────────── */}
           {pedido.observacoes && (
             <div className="rounded-xl bg-slate-800/50 px-4 py-3 text-sm text-slate-300">
-              <p className="text-xs text-slate-500 mb-1">Observação</p>
+              <p className="text-xs text-slate-500 mb-1">Observação interna</p>
               {pedido.observacoes}
             </div>
           )}

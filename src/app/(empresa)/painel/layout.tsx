@@ -106,6 +106,7 @@ const NAV_GROUPS: NavGroup[] = [
     { href: "/painel/ajuda",                      label: "Ajuda",             icon: LifeBuoy,      modulo: null, suporteOnly: true },
     { href: "/painel/ajuda/guia",                 label: "Guia do sistema",   icon: BookOpen,      modulo: null },
     { href: "/painel/ajuda/especificacoes",       label: "Specs técnicas",    icon: Cpu,           modulo: null },
+    { href: "/painel/ajuda/homologacao-ifood",    label: "Homologação iFood", icon: BookOpen,      modulo: null },
   ]},
 ];
 
