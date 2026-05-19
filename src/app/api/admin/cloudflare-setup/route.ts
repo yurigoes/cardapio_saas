@@ -79,39 +79,55 @@ export async function POST(req: NextRequest) {
   catch (err) { return badRequest(err instanceof Error ? err.message : "body inválido"); }
 
   // 1. Valida token contra CF API
+  //
+  // NÃO usamos GET /accounts/{id} nem GET /zones/{id} diretamente porque
+  // esses exigem permissões "Account Settings: Read" / "Zone: Read" que
+  // o token de install NÃO precisa ter. Em vez disso, validamos chamando
+  // endpoints cobertos pelas permissões REAIS de install:
+  //   - Listar Tunnels (cobre Cloudflare Tunnel: Edit)
+  //   - Listar DNS records (cobre Zone DNS: Edit)
   let validacaoOk = false;
   let validacaoErro: string | null = null;
 
   try {
+    // 1.1 Token válido?
     const verifyResp = await fetch("https://api.cloudflare.com/client/v4/user/tokens/verify", {
       headers: { Authorization: `Bearer ${body.api_token}` },
       signal:  AbortSignal.timeout(8000),
     });
     const verify = await verifyResp.json();
     if (!verify?.success) {
-      validacaoErro = `Token inválido: ${JSON.stringify(verify?.errors ?? verify)}`;
+      validacaoErro = `Token inválido: ${JSON.stringify(verify?.errors ?? verify).slice(0, 300)}`;
       return badRequest(validacaoErro);
     }
 
-    // Confere acesso à zona
-    const zoneResp = await fetch(`https://api.cloudflare.com/client/v4/zones/${body.zone_id}`, {
-      headers: { Authorization: `Bearer ${body.api_token}` },
-      signal:  AbortSignal.timeout(8000),
-    });
-    const zone = await zoneResp.json();
-    if (!zone?.success) {
-      validacaoErro = `Zone ID inválido ou sem acesso: ${JSON.stringify(zone?.errors ?? zone)}`;
+    // 1.2 Account ID + permissão Tunnel:Edit (lista tunnels da conta)
+    const tunResp = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${body.account_id}/cfd_tunnel?per_page=1`,
+      { headers: { Authorization: `Bearer ${body.api_token}` }, signal: AbortSignal.timeout(8000) }
+    );
+    const tun = await tunResp.json();
+    if (!tun?.success) {
+      const errs = JSON.stringify(tun?.errors ?? tun).slice(0, 300);
+      validacaoErro =
+        `Falha ao listar tunnels da conta. Possíveis causas: (a) Account ID errado, ` +
+        `(b) token sem permissão "Account → Cloudflare Tunnel → Edit", ` +
+        `(c) escopo do token não inclui essa conta. Detalhe: ${errs}`;
       return badRequest(validacaoErro);
     }
 
-    // Confere account
-    const accResp = await fetch(`https://api.cloudflare.com/client/v4/accounts/${body.account_id}`, {
-      headers: { Authorization: `Bearer ${body.api_token}` },
-      signal:  AbortSignal.timeout(8000),
-    });
-    const acc = await accResp.json();
-    if (!acc?.success) {
-      validacaoErro = `Account ID inválido ou sem acesso: ${JSON.stringify(acc?.errors ?? acc)}`;
+    // 1.3 Zone ID + permissão Zone DNS:Edit (lista 1 DNS record)
+    const dnsResp = await fetch(
+      `https://api.cloudflare.com/client/v4/zones/${body.zone_id}/dns_records?per_page=1`,
+      { headers: { Authorization: `Bearer ${body.api_token}` }, signal: AbortSignal.timeout(8000) }
+    );
+    const dns = await dnsResp.json();
+    if (!dns?.success) {
+      const errs = JSON.stringify(dns?.errors ?? dns).slice(0, 300);
+      validacaoErro =
+        `Falha ao listar DNS records da zona. Possíveis causas: (a) Zone ID errado, ` +
+        `(b) token sem permissão "Zone → DNS → Edit", ` +
+        `(c) escopo do token não inclui esta zona. Detalhe: ${errs}`;
       return badRequest(validacaoErro);
     }
 
