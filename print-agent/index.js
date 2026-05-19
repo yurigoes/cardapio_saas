@@ -20,7 +20,7 @@ const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
 const LOCK_PATH   = path.resolve(__dirname, "agent.lock");
-const VERSION     = "1.8.0";  // 1.8: lock file pra anti-duplicação correta
+const VERSION     = "1.9.0";  // 1.9: keep-alive off + backoff exp + anti-flood log
 
 // ─── Lock file (anti-duplicação) ────────────────────────────
 // Se agente já está rodando, sai. Lock = arquivo com PID.
@@ -91,9 +91,19 @@ function loadConfig(force = false) {
 }
 
 // ─── HTTP helpers ───────────────────────────────────────────
+// HTTP keepAlive desabilitado pra evitar conexões zumbis em CF Tunnel.
+// Tunnel CF as vezes mata TCP idle, próxima request pega socket morto
+// e CF responde 502. Sem keep-alive abre TCP novo sempre = mais robusto
+// (custo: ~10ms a mais por request, irrelevante em polling de 3s).
+const _https = require("https");
+const _http  = require("http");
+const httpsAgent = new _https.Agent({ keepAlive: false });
+const httpAgent  = new _http.Agent({ keepAlive: false });
+
 async function httpJson(method, url, agentKey, body) {
-  const u   = new URL(url);
-  const lib = u.protocol === "https:" ? require("https") : require("http");
+  const u    = new URL(url);
+  const lib  = u.protocol === "https:" ? _https : _http;
+  const agt  = u.protocol === "https:" ? httpsAgent : httpAgent;
   const data = body ? JSON.stringify(body) : null;
 
   return new Promise((resolve, reject) => {
@@ -102,11 +112,14 @@ async function httpJson(method, url, agentKey, body) {
       hostname: u.hostname,
       port:     u.port || (u.protocol === "https:" ? 443 : 80),
       path:     u.pathname + u.search,
+      agent:    agt,
       headers: {
         "Authorization":   `Bearer ${agentKey}`,
         "X-Agent-Version": VERSION,
+        "User-Agent":      `CardapioPrintAgent/${VERSION}`,
         "Content-Type":    "application/json",
         "Accept":          "application/json",
+        "Connection":      "close",
         ...(data ? { "Content-Length": Buffer.byteLength(data) } : {}),
       },
       timeout: 30000,
@@ -114,13 +127,20 @@ async function httpJson(method, url, agentKey, body) {
       let buf = "";
       res.on("data", (c) => { buf += c; });
       res.on("end", () => {
+        // 502/503/504 do Cloudflare retornam HTML/texto, não JSON.
+        // Trata explicitamente sem tentar parsear como JSON.
+        if (res.statusCode === 502 || res.statusCode === 503 || res.statusCode === 504) {
+          return reject(new Error(`HTTP ${res.statusCode} (CF/origem temporariamente indisponível)`));
+        }
         try {
           const parsed = buf ? JSON.parse(buf) : {};
           if (res.statusCode >= 400) {
             return reject(new Error(`HTTP ${res.statusCode}: ${buf.slice(0, 200)}`));
           }
           resolve(parsed);
-        } catch (e) { reject(new Error(`JSON parse: ${e.message}`)); }
+        } catch (e) {
+          reject(new Error(`HTTP ${res.statusCode} parse: ${e.message} | body: ${buf.slice(0, 100)}`));
+        }
       });
     });
     req.on("error",   reject);
@@ -288,9 +308,27 @@ async function processarJob(job) {
   }
 }
 
+// Backoff em erros transitórios (502/503/504/timeout): em vez de
+// floodar o log com 1 erro por segundo, dobra o intervalo até 60s.
+// Reseta pra cfg.pollMs após sucesso.
+let _backoffMs = 0;
+let _lastErrMsg = "";
+let _errStreak = 0;
+
 async function tick() {
+  if (_backoffMs > 0) {
+    // Pula o tick atual pra respeitar backoff
+    _backoffMs -= cfg.pollMs;
+    return;
+  }
   try {
     const r = await httpJson("GET", `${cfg.apiUrl}/api/agent/jobs`, cfg.agentKey);
+    // Sucesso: reseta backoff
+    if (_errStreak > 0) {
+      console.log(`[poll] ✓ reconectado após ${_errStreak} falhas`);
+      _errStreak = 0;
+      _lastErrMsg = "";
+    }
     const jobs = r.jobs || [];
     if (jobs.length === 0) return;
 
@@ -304,7 +342,15 @@ async function tick() {
       }
     }
   } catch (err) {
-    console.warn(`[poll] ${err.message}`);
+    _errStreak++;
+    // Backoff exponencial: 5s, 10s, 20s, 40s, 60s (cap)
+    const backoff = Math.min(60000, 5000 * Math.pow(2, Math.min(4, _errStreak - 1)));
+    _backoffMs = backoff;
+    // Só loga a 1ª vez do erro e a cada 10 ocorrências (anti-flood)
+    if (err.message !== _lastErrMsg || _errStreak % 10 === 1) {
+      console.warn(`[poll #${_errStreak}] ${err.message} — backoff ${backoff / 1000}s`);
+      _lastErrMsg = err.message;
+    }
   }
 }
 
