@@ -511,33 +511,39 @@ export async function POST(
 
       // PRINT — 3 cenários:
       //
-      // 1. CARTÃO NO CAIXA (cartao_caixa): cliente vai pagar manual no balcão.
-      //    Imprime APENAS um ticket de identificação (com código de barras
-      //    Code128 + número grande + tarja "AGUARDANDO PAGAMENTO").
-      //    Cozinha + via final SÓ saem quando operador confirma pagamento via
-      //    POST /api/painel/pedidos/[id]/confirmar-pagamento.
+      // 1. PAGAMENTO NO CAIXA (cartao_caixa OU dinheiro vindo do totem):
+      //    cliente vai pagar manual no balcão. Imprime APENAS um ticket de
+      //    identificação (código de barras Code128 + número grande + tarja
+      //    "AGUARDANDO PAGAMENTO"). Cozinha + via final SÓ saem quando
+      //    operador confirma pagamento via POST
+      //    /api/painel/pedidos/[id]/confirmar-pagamento (aceita a forma
+      //    real que o cliente pagou — dinheiro/pix/cartão).
       //
-      // 2. FORMAS SÍNCRONAS (dinheiro/pinpad) OU TOTEM com PIX local OU
-      //    qualquer pedido sem delivery+retirada: imprime cozinha + cliente
-      //    imediatamente (cliente está presente / já pagou).
+      // 2. FORMAS SÍNCRONAS já confirmadas (dinheiro em PDV/balcão, pinpad
+      //    direto, cartao_maquina já lida) OU PIX no totem (cliente está
+      //    pagando no QR ali na hora): imprime cozinha + cliente imediato.
       //
       // 3. PIX/cartão online de delivery: aguarda webhook do gateway.
-      const SINCRONAS = new Set(["dinheiro", "pagar_entrega", "pinpad", "cartao_maquina"]);
+      const SINCRONAS = new Set(["pagar_entrega", "pinpad", "cartao_maquina"]);
       const formaSincrona = !!body.forma_pagamento && SINCRONAS.has(body.forma_pagamento);
       const eTotem = !body.mesa_id && body.tipo_consumo !== "delivery" && body.tipo_consumo !== "retirada";
       const pixNoLocal = body.forma_pagamento === "pix"
                       && !body.mesa_id
                       && body.tipo_consumo !== "delivery";
-      const cartaoNoCaixa = body.forma_pagamento === "cartao_caixa";
+      // Dinheiro vindo do totem = ir ao caixa (operador receber + dar troco)
+      // Dinheiro fora do totem (PDV/balcão) = já foi pago no momento do pedido
+      const dinheiroNoTotem = body.forma_pagamento === "dinheiro" && eTotem;
+      const cartaoNoCaixa   = body.forma_pagamento === "cartao_caixa";
+      const dinheiroEmBalcao = body.forma_pagamento === "dinheiro" && !eTotem;
 
-      if (cartaoNoCaixa) {
+      if (cartaoNoCaixa || dinheiroNoTotem) {
         // Só ticket pequeno pro cliente levar ao caixa
         dispatchTicketAguardandoPagamento(empresa.id, pedido.id)
           .catch(e => console.warn("[Pub/Pedidos] print ticket-aguardando:", e));
         console.info(
-          `[Pub/Pedidos] pedido=${pedido.id} forma=cartao_caixa — imprimiu ticket de identificação (aguardando confirmação do caixa)`
+          `[Pub/Pedidos] pedido=${pedido.id} forma=${body.forma_pagamento} — imprimiu ticket de identificação (aguardando confirmação do caixa)`
         );
-      } else if (formaSincrona || eTotem || pixNoLocal) {
+      } else if (formaSincrona || dinheiroEmBalcao || pixNoLocal || (eTotem && body.forma_pagamento !== "dinheiro" && body.forma_pagamento !== "cartao_caixa")) {
         dispatchCupomCozinha(empresa.id, pedido.id)
           .catch(e => console.warn("[Pub/Pedidos] print cozinha:", e));
         dispatchCupomCliente(empresa.id, pedido.id)

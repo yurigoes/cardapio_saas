@@ -1967,15 +1967,16 @@ interface SuccessScreenProps {
   totalPontos?:  number;
   idioma:      Idioma;
   onReset:     () => void;
-  // Quando forma_pagamento = cartao_caixa, mostramos tela grande
-  // "Pague no caixa" em vez do success simples.
+  // Quando forma_pagamento = cartao_caixa OU dinheiro (no totem),
+  // mostramos tela grande "Pague no caixa" em vez do success simples.
   pagueNoCaixa?: boolean;
+  formaPagamento?: FormaPagTotem;
   total?:       number;
 }
 
 function SuccessScreen({
   numero, mesaNumero, clienteNome, pontosGanhos, totalPontos, idioma, onReset,
-  pagueNoCaixa, total,
+  pagueNoCaixa, formaPagamento, total,
 }: SuccessScreenProps) {
   // Tela "Pague no caixa": countdown maior (30s) pra dar tempo do cliente ir e
   // o caixa identificar o pedido.
@@ -2007,11 +2008,15 @@ function SuccessScreen({
           className="flex h-20 w-20 items-center justify-center rounded-full mb-4"
           style={{ background: "var(--color-primary-15, rgba(16,185,129,0.15))" }}
         >
-          <CreditCard className="h-10 w-10" style={{ color: "var(--color-primary, #10b981)" }} />
+          {formaPagamento === "dinheiro"
+            ? <Banknote   className="h-10 w-10" style={{ color: "var(--color-primary, #10b981)" }} />
+            : <CreditCard className="h-10 w-10" style={{ color: "var(--color-primary, #10b981)" }} />}
         </div>
 
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400 mb-2">
-          Vá ao caixa para pagar
+          {formaPagamento === "dinheiro"
+            ? "Vá ao caixa para pagar em dinheiro"
+            : "Vá ao caixa para pagar"}
         </p>
 
         <p
@@ -3149,7 +3154,10 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           totalPontos={pedidoFeito.totalPontos}
           idioma={idioma}
           onReset={handleFullReset}
-          pagueNoCaixa={pedidoFeito.formaPagamento === "cartao_caixa"}
+          // Dinheiro e cartão no totem: cliente vai pagar no caixa
+          pagueNoCaixa={pedidoFeito.formaPagamento === "cartao_caixa"
+                     || pedidoFeito.formaPagamento === "dinheiro"}
+          formaPagamento={pedidoFeito.formaPagamento}
           total={pedidoFeito.total}
         />
       )}

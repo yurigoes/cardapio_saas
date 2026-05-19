@@ -19,7 +19,7 @@ const path = require("path");
 const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.4.0";  // 1.4: suporte a [BARCODE128:xxx] inline
+const VERSION     = "1.5.0";  // 1.5: install-service v2 (boot+logon+watchdog, anti-dup)
 
 // ─── ESC/POS bytes ──────────────────────────────────────────
 const ESC = 0x1b;
