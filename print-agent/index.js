@@ -19,7 +19,7 @@ const path = require("path");
 const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.6.0";  // 1.6: runner.vbs estatico + node-path.txt + check-status.bat
+const VERSION     = "1.6.1";  // 1.6.1: start-background.bat + install-startup.bat (alternativa simples ao scheduler)
 
 // ─── ESC/POS bytes ──────────────────────────────────────────
 const ESC = 0x1b;
