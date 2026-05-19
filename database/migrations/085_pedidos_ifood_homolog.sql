@@ -23,25 +23,9 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_agendados
   WHERE agendado_para IS NOT NULL AND deleted_at IS NULL
     AND status NOT IN ('entregue', 'cancelado');
 
-COMMENT ON COLUMN pedidos.agendado_para IS
-  'Pedido agendado pra esse horário. iFood manda em orderTiming=SCHEDULED + scheduledDateTime. ' ||
-  'NULL = pedido imediato.';
-
-COMMENT ON COLUMN pedidos.troco_para IS
-  'Valor pelo qual o cliente vai pagar em dinheiro (pra calcular troco). ' ||
-  'Ex: total R$45, cliente paga com R$50, troco_para=50.00.';
-
-COMMENT ON COLUMN pedidos.cliente_documento IS
-  'CPF (11 dígitos) ou CNPJ (14) do cliente, sem máscara. iFood manda em ' ||
-  'customer.documentNumber ou taxPayerIdentificationNumber.';
-
-COMMENT ON COLUMN pedidos.cliente_observacoes IS
-  'Notas/comentários adicionais do cliente sobre o pedido. Vem de iFood.comments. ' ||
-  'É diferente de "observacoes" que pode ser nota interna do operador.';
-
-COMMENT ON COLUMN pedidos.valor_voucher IS
-  'Valor do voucher iFood aplicado (incluído em desconto total). ' ||
-  'Ex: voucher de R$10 → valor_voucher=10.';
-
-COMMENT ON COLUMN pedidos.voucher_codigo IS
-  'Código do voucher iFood. Ex: VOUCHER_ENTGRATIS.';
+COMMENT ON COLUMN pedidos.agendado_para           IS 'Pedido agendado pra esse horário. iFood: orderTiming=SCHEDULED + scheduledDateTime. NULL=imediato.';
+COMMENT ON COLUMN pedidos.troco_para              IS 'Valor pelo qual o cliente vai pagar em dinheiro (pra calcular troco). Ex: total R$45, cliente paga com R$50, troco_para=50.';
+COMMENT ON COLUMN pedidos.cliente_documento       IS 'CPF (11 dígitos) ou CNPJ (14) do cliente, sem máscara. iFood: customer.documentNumber ou taxPayerIdentificationNumber.';
+COMMENT ON COLUMN pedidos.cliente_observacoes     IS 'Notas/comentários adicionais do cliente sobre o pedido. iFood: comments. Diferente de observacoes (nota interna).';
+COMMENT ON COLUMN pedidos.valor_voucher           IS 'Valor do voucher iFood aplicado. Ex: voucher de R$10 -> valor_voucher=10.';
+COMMENT ON COLUMN pedidos.voucher_codigo          IS 'Código do voucher iFood. Ex: VOUCHER_ENTGRATIS.';

@@ -20,7 +20,4 @@ CREATE TABLE IF NOT EXISTS master_cloudflare_config (
 -- Singleton: força sempre 1 linha
 INSERT INTO master_cloudflare_config (id) VALUES (1) ON CONFLICT DO NOTHING;
 
-COMMENT ON TABLE master_cloudflare_config IS
-  'Credenciais Cloudflare do master pra auto-provisionar tunnels nas retaguardas. ' ||
-  'api_token cifrado com ENCRYPTION_KEY. Usado por /api/retaguarda/install-config ' ||
-  'quando install-token tem flag include_cf=true.';
+COMMENT ON TABLE master_cloudflare_config IS 'Credenciais Cloudflare do master pra auto-provisionar tunnels nas retaguardas. api_token cifrado com ENCRYPTION_KEY. Usado por /api/retaguarda/install-config.';

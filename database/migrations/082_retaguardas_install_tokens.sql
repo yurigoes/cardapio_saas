@@ -21,7 +21,4 @@ CREATE TABLE IF NOT EXISTS retaguardas_install_tokens (
 CREATE INDEX IF NOT EXISTS idx_retaguardas_install_tokens_expires
   ON retaguardas_install_tokens(expires_at) WHERE consumed_at IS NULL;
 
-COMMENT ON TABLE retaguardas_install_tokens IS
-  'One-time tokens pra setup remoto da retaguarda. Operador no master gera, ' ||
-  'copia o comando curl, e cola no mini-PC novo. Setup.sh consulta o token, ' ||
-  'recebe config (slug, heartbeat secret, CF token cifrado), executa, marca consumed.';
+COMMENT ON TABLE retaguardas_install_tokens IS 'One-time tokens pra setup remoto da retaguarda. Operador no master gera, copia o comando curl, e cola no mini-PC novo. Setup.sh consulta o token, recebe config (slug, heartbeat secret, CF token cifrado), executa, marca consumed.';

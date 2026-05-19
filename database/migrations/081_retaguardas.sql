@@ -24,6 +24,4 @@ CREATE INDEX IF NOT EXISTS idx_retaguardas_empresa
 CREATE INDEX IF NOT EXISTS idx_retaguardas_heartbeat
   ON retaguardas(ultimo_heartbeat DESC) WHERE ativo = TRUE;
 
-COMMENT ON TABLE retaguardas IS
-  'Mini-PCs rodando reverse-proxy/cache nas lojas dos clientes. ' ||
-  'Reduz acessos simultâneos ao master servindo cardápio + imagens localmente.';
+COMMENT ON TABLE retaguardas IS 'Mini-PCs rodando reverse-proxy/cache nas lojas dos clientes. Reduz acessos simultâneos ao master servindo cardápio + imagens localmente.';
