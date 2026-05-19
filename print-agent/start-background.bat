@@ -1,33 +1,60 @@
 @echo off
 REM ═══════════════════════════════════════════════════════════
-REM Cardapio Print Agent - Inicia em SEGUNDO PLANO
+REM Cardapio Print Agent - Inicia em SEGUNDO PLANO (v2)
 REM
-REM Diferenca do start.bat: roda DETACHADO, voce pode fechar o CMD
-REM e o agente continua. Mais simples que install-service.bat.
+REM Usa wscript runner.vbs pra rodar SEM JANELA NENHUMA.
+REM Voce pode fechar QUALQUER cmd, agente continua invisivel.
 REM
-REM Pra autostart no boot: rode install-startup.bat (uma vez).
+REM Pra parar: kill-duplicates.bat (opcao 1 = so do agente)
+REM            ou taskkill /F /IM node.exe (mata todos node)
+REM
+REM Pra autostart no logon: install-startup.bat (cria atalho Startup)
+REM Pra autostart com watchdog: install-service.bat (como admin)
 REM ═══════════════════════════════════════════════════════════
 title Cardapio Print Agent - Inicializar
 cd /d "%~dp0"
 
-REM Mata processo anterior (evita duplicacao)
-taskkill /F /FI "WINDOWTITLE eq CardapioPrintAgent" >nul 2>nul
+REM Limpa lock obsoleto se houver
+if exist agent.lock (
+  REM Le PID e checa se ainda esta vivo
+  set /p OLDPID=<agent.lock
+  tasklist /FI "PID eq %OLDPID%" 2>nul | findstr /I "node.exe" >nul
+  if errorlevel 1 (
+    del /F agent.lock 2>nul
+  )
+)
 
-REM Inicia em segundo plano com janela MINIMIZADA + titulo
-REM /B nao funciona com >> redirect, entao usamos start "title"
-start "CardapioPrintAgent" /MIN cmd /c "node index.js >> agent.log 2>&1"
+REM Garante node-path.txt existe (necessario pro runner.vbs em SYSTEM)
+if not exist node-path.txt (
+  for /f "tokens=*" %%i in ('where node 2^>nul') do (
+    echo %%i > node-path.txt
+    goto :nodefound
+  )
+  echo [X] node.exe nao achado no PATH. Instale Node.js 18+.
+  pause
+  exit /b 1
+)
+:nodefound
 
-REM Da 3s pro node subir
-timeout /t 3 /nobreak >nul
+REM Mata processo anterior do agente (anti-dup)
+taskkill /F /FI "WINDOWTITLE eq CardapioPrintAgent*" >nul 2>nul
 
-REM Verifica se subiu
+REM ── Lanca via wscript runner.vbs (TOTALMENTE INVISIVEL) ─────
+REM wscript executa o VBS e sai. O VBS lanca node detachado em
+REM cmd hidden (WshShell.Run cmdLine, 0, False). Resultado: node
+REM rodando em segundo plano sem janela nenhuma visivel.
+wscript.exe "%~dp0runner.vbs"
+
+REM Da 5s pro node subir e escrever no log
+timeout /t 5 /nobreak >nul
+
+REM Verifica se node subiu
 tasklist /FI "IMAGENAME eq node.exe" 2>nul | findstr /I "node.exe" >nul
 if errorlevel 1 (
   echo.
   echo  [X] Agente NAO subiu. Verifique:
-  echo      - node esta instalado:    node --version
-  echo      - config.json existe:     dir config.json
-  echo      - log de erros:           type agent.log
+  echo      check-status.bat        diagnostico completo
+  echo      type agent.log          ultimos erros
   echo.
   pause
   exit /b 1
@@ -35,20 +62,18 @@ if errorlevel 1 (
 
 echo.
 echo  ============================================
-echo  [OK] Agente rodando em segundo plano!
+echo  [OK] Agente rodando INVISIVEL em segundo plano!
 echo  ============================================
 echo.
-echo  Voce pode FECHAR esta janela.
-echo  O agente continua rodando.
+echo  Voce pode FECHAR esta janela. Pode reiniciar o
+echo  PC, fechar tudo - agente continua rodando.
 echo.
-echo  Pra ver o que esta acontecendo:
-echo      type agent.log
+echo  Pra ver status:        check-status.bat
+echo  Pra ver log ao vivo:   type agent.log
+echo  Pra parar:             kill-duplicates.bat
 echo.
-echo  Pra parar o agente:
-echo      taskkill /F /IM node.exe
-echo.
-echo  Pra rodar TODA VEZ no boot do PC:
-echo      install-startup.bat (como admin)
+echo  Pra autostart no logon do PC:
+echo      install-startup.bat (atalho na pasta Startup)
 echo.
 echo  ============================================
 echo.
