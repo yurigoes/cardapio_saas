@@ -7,7 +7,7 @@ import {
   ShoppingCart, X, Plus, Minus, ChefHat, CheckCircle, ArrowLeft,
   Search, MapPin, User, Phone, RotateCcw, Clock, Star, Gift,
   UtensilsCrossed, PackageCheck, Bike,
-  Copy, Banknote, QrCode, Tag, CheckCircle2,
+  Copy, Banknote, QrCode, Tag, CheckCircle2, CreditCard,
   WifiOff, CloudUpload, Lock,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
@@ -1383,7 +1383,7 @@ interface GatewayInfo {
   metodos: string[];
 }
 
-type FormaPagTotem = "pix" | "dinheiro" | "pagar_entrega";
+type FormaPagTotem = "pix" | "dinheiro" | "cartao_caixa" | "pagar_entrega";
 
 interface CartDrawerProps {
   cart:        CartItem[];
@@ -1724,10 +1724,11 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoCon
         {/* Forma de pagamento */}
         <div>
           <p className="mb-2 text-xs font-medium text-slate-400">{t(idioma, "pagamento_titulo")}</p>
-          <div className={`grid gap-2 ${tipoConsumo === "delivery" ? "grid-cols-3" : "grid-cols-2"}`}>
+          <div className={`grid gap-2 ${tipoConsumo === "delivery" ? "grid-cols-3" : "grid-cols-3"}`}>
             {((tipoConsumo === "delivery"
               ? (["dinheiro", "pix", "pagar_entrega"] as const)
-              : (["dinheiro", "pix"] as const)) as readonly FormaPagTotem[])
+              // Local/retirada: dinheiro (opcional), pix, cartão no caixa
+              : (["dinheiro", "pix", "cartao_caixa"] as const)) as readonly FormaPagTotem[])
               .filter(m => m !== "dinheiro" || aceitaDinheiro === true)
               .map((metodo) => {
               const ativo      = formaPag === metodo;
@@ -1753,10 +1754,12 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoCon
                 >
                   {metodo === "pix"            ? <QrCode className="h-5 w-5" />
                    : metodo === "dinheiro"    ? <Banknote className="h-5 w-5" />
+                   : metodo === "cartao_caixa" ? <CreditCard className="h-5 w-5" />
                    :                            <Bike className="h-5 w-5" />}
                   <span className="text-center leading-tight">
                     {metodo === "pix"           ? t(idioma, "pagamento_pix")
                      : metodo === "dinheiro"   ? t(idioma, "pagamento_dinheiro")
+                     : metodo === "cartao_caixa" ? "Cartão no caixa"
                      :                           labelEntrega}
                   </span>
                   {desabilitado && (
@@ -1964,13 +1967,20 @@ interface SuccessScreenProps {
   totalPontos?:  number;
   idioma:      Idioma;
   onReset:     () => void;
+  // Quando forma_pagamento = cartao_caixa, mostramos tela grande
+  // "Pague no caixa" em vez do success simples.
+  pagueNoCaixa?: boolean;
+  total?:       number;
 }
 
 function SuccessScreen({
   numero, mesaNumero, clienteNome, pontosGanhos, totalPontos, idioma, onReset,
+  pagueNoCaixa, total,
 }: SuccessScreenProps) {
-  const [remaining, setRemaining] = useState(15);
-  const TOTAL = 15;
+  // Tela "Pague no caixa": countdown maior (30s) pra dar tempo do cliente ir e
+  // o caixa identificar o pedido.
+  const TOTAL = pagueNoCaixa ? 30 : 15;
+  const [remaining, setRemaining] = useState(TOTAL);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -1985,6 +1995,65 @@ function SuccessScreen({
   const radius    = 30;
   const circumference = 2 * Math.PI * radius;
   const dashOffset  = circumference * (1 - remaining / TOTAL);
+
+  // ── Variante "Pague no caixa" ─────────────────────────────────────────────
+  // Tela grande, número de pedido GIGANTE, valor destacado, instrução clara.
+  // O atendente do caixa identifica o pedido pelo número e processa o cartão
+  // na maquininha manualmente.
+  if (pagueNoCaixa) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
+        <div
+          className="flex h-20 w-20 items-center justify-center rounded-full mb-4"
+          style={{ background: "var(--color-primary-15, rgba(16,185,129,0.15))" }}
+        >
+          <CreditCard className="h-10 w-10" style={{ color: "var(--color-primary, #10b981)" }} />
+        </div>
+
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400 mb-2">
+          Vá ao caixa para pagar
+        </p>
+
+        <p
+          className="text-[12rem] leading-none font-black mb-4"
+          style={{ color: "var(--color-primary, #10b981)" }}
+        >
+          #{numero}
+        </p>
+
+        {typeof total === "number" && (
+          <div className="rounded-2xl border-2 border-dashed px-8 py-4 mb-4"
+               style={{ borderColor: "var(--color-primary-50, rgba(16,185,129,0.4))" }}>
+            <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Total a pagar</p>
+            <p className="text-5xl font-black text-white">
+              {total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+            </p>
+          </div>
+        )}
+
+        <p className="max-w-md text-sm text-slate-400 leading-relaxed mb-6">
+          Diga o número <strong className="text-white">#{numero}</strong> ao atendente do caixa.
+          Ele(a) vai cobrar você na maquininha de cartão.
+        </p>
+
+        {clienteNome && (
+          <p className="text-xs text-slate-500 mb-4">{clienteNome}</p>
+        )}
+
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <Clock className="h-3 w-3" />
+          Volta à tela inicial em {remaining}s
+        </div>
+
+        <button
+          onClick={onReset}
+          className="mt-6 rounded-2xl border border-white/10 px-6 py-3 text-sm font-medium text-slate-300 hover:bg-white/5 transition"
+        >
+          Já entendi, voltar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-slate-950 p-8 text-center">
@@ -2132,6 +2201,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   } | null>(null);
   const [pedidoFeito, setPedidoFeito]   = useState<{
     numero: number; clienteNome: string; pontosGanhos?: number; totalPontos?: number;
+    formaPagamento?: FormaPagTotem; total?: number;
   } | null>(null);
 
   // PIX payment state
@@ -2552,6 +2622,8 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
       clienteNome: nomeExibido,
       pontosGanhos,
       totalPontos: totalPontos > 0 ? totalPontos : undefined,
+      formaPagamento,
+      total:       cartTotal,
     });
   }
 
@@ -3077,6 +3149,8 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           totalPontos={pedidoFeito.totalPontos}
           idioma={idioma}
           onReset={handleFullReset}
+          pagueNoCaixa={pedidoFeito.formaPagamento === "cartao_caixa"}
+          total={pedidoFeito.total}
         />
       )}
     </div>
