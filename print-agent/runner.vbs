@@ -1,25 +1,39 @@
 ' Cardapio Print Agent - runner oculto
 '
-' Este arquivo eh RE-GERADO automaticamente pelo install-service.bat
-' com o caminho ABSOLUTO do node.exe detectado. A versao abaixo eh um
-' fallback que tenta achar node no PATH (funciona se rodado pelo user
-' interativo, mas pode falhar no contexto SYSTEM/scheduled task).
+' Roda o agente sem janela visivel, redirecionando stdout/stderr pra agent.log.
+' Lê caminho do node de node-path.txt (gerado pelo install-service.bat).
+' Se nao existir, faz fallback pra "node" no PATH.
 '
-' Pra instalacao correta como servico: SEMPRE rode install-service.bat
-' (clique direito - Executar como administrador). Ele regenera este
-' arquivo com o caminho absoluto certo + cria 3 tarefas (boot, logon,
-' watchdog).
+' Anti-duplicacao: se ja tem agente rodando (detecta pelo titulo da janela),
+' nao inicia outro. Permite que o watchdog rode a cada 5min sem duplicar.
+
 Set WshShell = CreateObject("WScript.Shell")
-Set fso = CreateObject("Scripting.FileSystemObject")
-scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
+Set fso      = CreateObject("Scripting.FileSystemObject")
+scriptDir    = fso.GetParentFolderName(WScript.ScriptFullName)
 WshShell.CurrentDirectory = scriptDir
 
-' Anti-duplicacao: se ja tem um agente rodando, nao inicia outro
-Set exec = WshShell.Exec("tasklist /V /FI ""IMAGENAME eq node.exe"" /FO CSV")
-out = exec.StdOut.ReadAll()
-If InStr(out, "CardapioPrintAgent") > 0 Then
-  WScript.Quit 0
+' Lê caminho do node
+nodePath = "node"
+nodePathFile = scriptDir & "\node-path.txt"
+If fso.FileExists(nodePathFile) Then
+    Set f = fso.OpenTextFile(nodePathFile, 1)
+    nodePath = Trim(f.ReadAll())
+    f.Close
 End If
 
-' Inicia o agente com title pra deteccao no proximo watchdog
-WshShell.Run "cmd /c title CardapioPrintAgent & node index.js >> agent.log 2>&1", 0, False
+' Anti-duplicacao: se ja tem janela com titulo CardapioPrintAgent, sai
+On Error Resume Next
+Set exec = WshShell.Exec("tasklist /V /FI ""IMAGENAME eq cmd.exe"" /FO CSV /NH")
+If Err.Number = 0 Then
+    out = exec.StdOut.ReadAll()
+    If InStr(out, "CardapioPrintAgent") > 0 Then
+        WScript.Quit 0
+    End If
+End If
+On Error Goto 0
+
+' Comando final
+cmdLine = "cmd /c title CardapioPrintAgent && """ & nodePath & """ """ & scriptDir & "\index.js"" >> agent.log 2>&1"
+
+' Executa em segundo plano (janela 0=hidden, wait False)
+WshShell.Run cmdLine, 0, False
