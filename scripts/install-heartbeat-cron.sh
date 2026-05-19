@@ -37,7 +37,7 @@ fi
 
 # Cria entry — roda a cada 5min
 cat > "$CRON_FILE" <<EOF
-# Heartbeat check Cardápio SaaS
+# Heartbeat check Three Digital
 # Marca agentes offline + envia alerta a quem responsável
 # Gerado por scripts/install-heartbeat-cron.sh
 SHELL=/bin/bash

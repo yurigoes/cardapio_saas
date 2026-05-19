@@ -97,7 +97,7 @@ async function configurarSetor(rl, setor, prev, impressorasWin) {
 
 async function main() {
   console.log("\n╔══════════════════════════════════════════════╗");
-  console.log("║  Cardápio SaaS — Agente de Impressão Local   ║");
+  console.log("║  Three Digital — Agente de Impressão Local   ║");
   console.log("║  Configuração inicial                         ║");
   console.log("╚══════════════════════════════════════════════╝\n");
 

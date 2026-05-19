@@ -75,7 +75,7 @@ Usa **Resend** (3000 emails grátis/mês — recomendado) ou SendGrid.
 4. Adiciona no .env:
 ```bash
 echo "RESEND_API_KEY=re_xxxxxxxx" >> /opt/cardapio_saas/.env
-echo "RESEND_FROM=Cardápio SaaS <noreply@tthreedigital.com.br>" >> /opt/cardapio_saas/.env
+echo "RESEND_FROM=Three Digital <noreply@tthreedigital.com.br>" >> /opt/cardapio_saas/.env
 docker compose -f docker-compose.prod.yml -f docker-compose.override.yml up -d --force-recreate app
 ```
 
@@ -89,7 +89,7 @@ Conta grátis no **UptimeRobot** ou **BetterStack**:
 2. **Add new monitor**:
    - Type: HTTPS
    - URL: `https://app.tthreedigital.com.br/api/health`
-   - Friendly name: Cardápio SaaS Production
+   - Friendly name: Three Digital Production
    - Interval: 5 min
 3. **Alert contacts:** seu email + WhatsApp via SMS gateway
 4. Salva

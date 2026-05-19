@@ -23,7 +23,7 @@ export interface SaasBranding {
 }
 
 const DEFAULT: SaasBranding = {
-  nome:         "Cardápio SaaS",
+  nome:         "Three Digital",
   logo_url:     null,
   email:        null,
   telefone:     null,

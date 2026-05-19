@@ -130,7 +130,7 @@ export default function IfoodMasterPage() {
           <span className="text-xs font-medium text-slate-400 mb-1 block">Nome do app (interno)</span>
           <input type="text" value={cfg.app_nome ?? ""}
             onChange={e => setCfg({ ...cfg, app_nome: e.target.value })}
-            placeholder="Ex: Cardápio SaaS - Produção"
+            placeholder="Ex: Three Digital - Produção"
             className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white" />
         </label>
 

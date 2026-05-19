@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-#  Cardapio SaaS — Deploy script
+#  Three Digital — Deploy script
 #
 #  Faz deploy seguro com:
 #    1. Backup do banco (pg_dumpall)

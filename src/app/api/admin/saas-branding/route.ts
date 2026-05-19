@@ -12,7 +12,7 @@ import { ok, forbidden, badRequest, serverError } from "@/lib/utils/response";
 
 const KEY = "saas_branding";
 const DEFAULT = {
-  nome:        "Cardápio SaaS",
+  nome:        "Three Digital",
   logo_url:    null as string | null,
   email:       null as string | null,
   telefone:    null as string | null,

@@ -1,5 +1,5 @@
 /**
- * Métricas Prometheus do Cardápio SaaS.
+ * Métricas Prometheus do Three Digital.
  *
  * Singleton — `prom-client` registra métricas globalmente, então criamos
  * uma única vez e exportamos pra uso em qualquer route handler.

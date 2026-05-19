@@ -50,7 +50,7 @@ echo "✓ config OK"
 
 # Cria cron entry — roda 03:00 UTC todo dia
 cat > "$CRON_FILE" <<EOF
-# Backup automático Cardápio SaaS → Cloudflare R2
+# Backup automático Three Digital → Cloudflare R2
 # Gerado por scripts/install-backup-cron.sh
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

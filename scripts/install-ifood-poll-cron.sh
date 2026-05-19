@@ -40,7 +40,7 @@ if [[ -z "$CRON_SECRET" ]]; then
 fi
 
 cat > "$CRON_FILE" <<EOF
-# iFood polling Cardápio SaaS — a cada 30s
+# iFood polling Three Digital — a cada 30s
 # Gerado por scripts/install-ifood-poll-cron.sh
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

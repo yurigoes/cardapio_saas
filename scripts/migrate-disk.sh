@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# migrate-disk.sh — Clonagem segura de disco do master Cardápio SaaS
+# migrate-disk.sh — Clonagem segura de disco do master Three Digital
 #
 # Cenário: você plugou um HD/SSD novo na mesma máquina e quer migrar TUDO
 # (sistema operacional + Docker + dados) pro novo disco. O disco antigo
@@ -74,7 +74,7 @@ confirm() {
 # ─── 0. Sanity ────────────────────────────────────────────────────────
 echo
 echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"
-echo -e "${W}  Cardápio SaaS — Migração de disco                ${N}"
+echo -e "${W}  Three Digital — Migração de disco                ${N}"
 echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"
 [ "$DRY_RUN" -eq 1 ] && echo -e "  ${Y}MODO DRY-RUN — nenhuma alteração será feita${N}"
 echo
@@ -179,7 +179,7 @@ echo "    [7/7] Validação + instruções finais"
 echo
 
 [ "$DRY_RUN" -eq 0 ] && {
-  echo -e "${R}ATENÇÃO:${N} essa operação faz downtime no Cardápio SaaS. Não rode em horário de pico."
+  echo -e "${R}ATENÇÃO:${N} essa operação faz downtime no Three Digital. Não rode em horário de pico."
   echo
   if ! confirm "Confirma migrar $SRC_DISK → $TARGET_DISK?"; then
     fatal "cancelado pelo usuário"

@@ -20,13 +20,15 @@ export interface SaasBrandingServer {
   razao_social: string | null;
 }
 
+// Fallback caso settings.saas_branding ainda não tenha sido configurado
+// na instalação. Pode ser sobrescrito 100% via /admin/config (branding).
 const DEFAULT: SaasBrandingServer = {
-  nome:         "Cardápio SaaS",
+  nome:         "Three Digital",
   logo_url:     null,
   email:        null,
   telefone:     null,
   whatsapp:     null,
-  site:         null,
+  site:         "https://tthreedigital.com.br",
   dpo_nome:     null,
   dpo_email:    null,
   dpo_telefone: null,

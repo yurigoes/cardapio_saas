@@ -102,7 +102,7 @@ export async function enviarDireto(p: EnviarParams): Promise<EnviarResult> {
   if (!conn) return { ok: false, erro: "smtp não configurado/desativado" };
 
   try {
-    const fromName  = conn.cfg.from_name  ?? "Cardápio SaaS";
+    const fromName  = conn.cfg.from_name  ?? "Three Digital";
     const fromEmail = conn.cfg.from_email!;
     const info = await conn.transporter.sendMail({
       from:    `"${fromName}" <${fromEmail}>`,

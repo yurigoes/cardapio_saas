@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Cardápio SaaS — Print Agent
+ * Three Digital — Print Agent
  *
  * Long-poll dos jobs em GET /api/agent/jobs e envia ESC/POS para
  * impressoras locais. Suporta:

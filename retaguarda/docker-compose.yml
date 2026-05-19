@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# RETAGUARDA do Cardápio SaaS — stack completo no mini-PC da loja
+# RETAGUARDA do Three Digital — stack completo no mini-PC da loja
 #
 #   nginx-cache  proxy + cache 3 zonas (html/media/static)
 #   redis        buffer offline + idempotency

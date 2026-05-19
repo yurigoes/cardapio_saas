@@ -92,7 +92,7 @@ public class RawPrinterHelper {
     public static bool SendBytesToPrinter(string szPrinterName, byte[] data) {
         IntPtr hPrinter;
         DOCINFOA di = new DOCINFOA();
-        di.pDocName = "Cardapio SaaS Print Job";
+        di.pDocName = "Three Digital Print Job";
         di.pDataType = "RAW";
         if (!OpenPrinter(szPrinterName, out hPrinter, IntPtr.Zero))
             throw new Exception("OpenPrinter failed for: " + szPrinterName + " (err=" + Marshal.GetLastWin32Error() + ")");

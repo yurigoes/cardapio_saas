@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AUTO-INSTALADOR da Retaguarda Cardápio SaaS
+# AUTO-INSTALADOR da Retaguarda Three Digital
 #
 # Roda em qualquer Ubuntu/Debian/Raspberry Pi OS limpo. Instala tudo:
 #   - Docker + docker compose v2
@@ -52,7 +52,7 @@ esac
 
 echo
 echo -e "${G}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"
-echo -e "${G}  Cardápio SaaS — Auto-instalador da Retaguarda  ${N}"
+echo -e "${G}  Three Digital — Auto-instalador da Retaguarda  ${N}"
 echo -e "${G}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"
 echo "  SO detectado: $OS_ID $OS_VER"
 echo
@@ -255,7 +255,7 @@ EXISTING_DNS=$(curl -s -H "Authorization: Bearer $CF_API_TOKEN" \
 DNS_BODY=$(jq -nc \
   --arg name "$RETAGUARDA_DOMAIN" \
   --arg content "$TUNNEL_HOST" \
-  '{type:"CNAME", name:$name, content:$content, proxied:true, ttl:1, comment:"Retaguarda Cardápio SaaS — auto-managed"}')
+  '{type:"CNAME", name:$name, content:$content, proxied:true, ttl:1, comment:"Retaguarda Three Digital — auto-managed"}')
 
 if [ -n "$EXISTING_DNS" ]; then
   curl -s -X PUT \

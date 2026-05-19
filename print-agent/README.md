@@ -1,4 +1,4 @@
-# Cardápio SaaS — Print Agent
+# Three Digital — Print Agent
 
 Agente que roda na máquina do restaurante e imprime os pedidos nas
 impressoras térmicas. Substitui os popups de impressão no navegador.
@@ -69,7 +69,7 @@ node setup-wizard.js
 ```ini
 # /etc/systemd/system/cardapio-print-agent.service
 [Unit]
-Description=Cardapio SaaS Print Agent
+Description=Three Digital Print Agent
 After=network.target
 
 [Service]

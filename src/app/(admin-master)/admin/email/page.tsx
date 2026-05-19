@@ -212,7 +212,7 @@ export default function AdminEmailPage() {
             <span className="text-xs font-medium text-slate-400 mb-1 block">Nome de exibição</span>
             <input value={cfg.from_name ?? ""}
               onChange={e => setCfg({ ...cfg, from_name: e.target.value })}
-              placeholder="Cardápio SaaS"
+              placeholder="Three Digital"
               className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white" />
           </label>
           <label className="block">

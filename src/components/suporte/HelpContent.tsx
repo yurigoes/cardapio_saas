@@ -260,7 +260,7 @@ ss -ulnp | grep 21116
           </Step>
 
           <Step n={6} title="Atualizar o app principal pra apontar pro relay">
-            <p>Se o app Cardápio SaaS roda em <strong>outra máquina</strong> (não nesta VPS),
+            <p>Se o app Three Digital roda em <strong>outra máquina</strong> (não nesta VPS),
               edita o <code>.env</code> da máquina do app e adiciona:</p>
             <CodeBlock>{`# /opt/cardapio_saas/.env (na máquina do app, não na VPS do relay)
 RUSTDESK_RELAY_HOST=rustdesk.tthreedigital.com.br

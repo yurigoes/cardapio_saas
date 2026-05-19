@@ -1,4 +1,4 @@
-# Retaguarda — Cardápio SaaS
+# Retaguarda — Three Digital
 
 Mini-PC dentro da loja que faz reverse-proxy + cache local + buffer offline.
 Totens, PDVs e painéis chamam essa retaguarda; ela serve o que pode local

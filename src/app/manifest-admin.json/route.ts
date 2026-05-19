@@ -2,7 +2,7 @@
  * GET /manifest-admin.json
  *
  * Manifest dinâmico do PWA admin/painel — usa nome + cor do branding
- * configurado pelo master, mascarando o "Cardápio SaaS" hardcoded
+ * configurado pelo master, mascarando o "Three Digital" hardcoded
  * do arquivo static legado.
  */
 import { NextResponse } from "next/server";
