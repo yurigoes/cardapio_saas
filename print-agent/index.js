@@ -19,7 +19,42 @@ const path = require("path");
 const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.7.0";  // 1.7: install-service sem /RU SYSTEM (Win Home compat); 2 tarefas (Logon+Watchdog)
+const LOCK_PATH   = path.resolve(__dirname, "agent.lock");
+const VERSION     = "1.8.0";  // 1.8: lock file pra anti-duplicação correta
+
+// ─── Lock file (anti-duplicação) ────────────────────────────
+// Se agente já está rodando, sai. Lock = arquivo com PID.
+// Se PID morto, sobrescreve. runner.vbs também checa isso ANTES
+// de lançar, mas dupla checagem aqui em race condition.
+function adquirirLock() {
+  try {
+    if (fs.existsSync(LOCK_PATH)) {
+      const pid = parseInt(fs.readFileSync(LOCK_PATH, "utf-8").trim(), 10);
+      if (pid && pid !== process.pid) {
+        try {
+          // SIGNAL 0 = check if process alive (não mata)
+          process.kill(pid, 0);
+          console.error(`[lock] Agente já rodando (PID ${pid}). Saindo.`);
+          process.exit(0);
+        } catch {
+          // PID morto, segue
+          console.log(`[lock] Lock antigo (PID ${pid}) morto. Sobrescrevendo.`);
+        }
+      }
+    }
+    fs.writeFileSync(LOCK_PATH, String(process.pid));
+  } catch (err) {
+    console.warn("[lock] Erro ao criar lock:", err.message);
+  }
+}
+function liberarLock() {
+  try { if (fs.existsSync(LOCK_PATH)) fs.unlinkSync(LOCK_PATH); } catch {}
+}
+process.on("exit",    liberarLock);
+process.on("SIGINT",  () => { liberarLock(); process.exit(0); });
+process.on("SIGTERM", () => { liberarLock(); process.exit(0); });
+process.on("SIGHUP",  () => { liberarLock(); process.exit(0); });
+adquirirLock();
 
 // ─── ESC/POS bytes ──────────────────────────────────────────
 const ESC = 0x1b;
