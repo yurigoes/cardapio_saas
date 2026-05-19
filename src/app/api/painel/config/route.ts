@@ -52,7 +52,12 @@ export async function GET(req: NextRequest) {
     return ok(empresa);
   } catch (err) {
     console.error("[Config/GET]", err);
-    return serverError();
+    const msg = err instanceof Error ? err.message : "erro desconhecido";
+    // Detecta coluna faltante e devolve mensagem útil pro front
+    if (msg.includes("column") && msg.includes("does not exist")) {
+      return serverError(`Schema desatualizado — rode migration 086. Detalhe: ${msg.slice(0, 200)}`);
+    }
+    return serverError(msg.slice(0, 200));
   }
 }
 
@@ -131,6 +136,10 @@ export async function PATCH(req: NextRequest) {
     return ok({ updated: true });
   } catch (err) {
     console.error("[Config/PATCH]", err);
-    return serverError();
+    const msg = err instanceof Error ? err.message : "erro desconhecido";
+    if (msg.includes("column") && msg.includes("does not exist")) {
+      return serverError(`Schema desatualizado — rode migration 086. Detalhe: ${msg.slice(0, 200)}`);
+    }
+    return serverError(msg.slice(0, 200));
   }
 }
