@@ -20,7 +20,7 @@ const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
 const LOCK_PATH   = path.resolve(__dirname, "agent.lock");
-const VERSION     = "1.9.0";  // 1.9: keep-alive off + backoff exp + anti-flood log
+const VERSION     = "1.10.0";  // 1.10: não exit FATAL em 502 inicial (só 401/403)
 
 // ─── Lock file (anti-duplicação) ────────────────────────────
 // Se agente já está rodando, sai. Lock = arquivo com PID.
@@ -368,12 +368,21 @@ async function main() {
   }`);
   console.log(`Polling a cada ${cfg.pollMs}ms — Ctrl+C para sair\n`);
 
+  // Tentativa inicial de auth — APENAS pra logar feedback.
+  // Não derruba o agente em caso de falha (CF pode estar instável,
+  // 502 do tunnel, etc). O tick() faz retry com backoff exponencial.
   try {
     await httpJson("GET", `${cfg.apiUrl}/api/agent/jobs`, cfg.agentKey);
     console.log("✓ Autenticado no servidor.\n");
   } catch (err) {
-    console.error(`[FATAL] não foi possível autenticar: ${err.message}`);
-    process.exit(2);
+    // 401 ainda é fatal — key errada, não adianta retry
+    if (err.message.includes("HTTP 401") || err.message.includes("HTTP 403")) {
+      console.error(`[FATAL] credenciais rejeitadas: ${err.message}`);
+      console.error("        Re-cadastre o agente em /painel/impressoras → Gerar key");
+      process.exit(2);
+    }
+    // Outros erros (502, timeout, etc) — segue rodando, retry via tick()
+    console.warn(`[WARN] 1ª autenticação falhou (${err.message}). Tentando reconectar via polling…`);
   }
 
   setInterval(tick, cfg.pollMs);
