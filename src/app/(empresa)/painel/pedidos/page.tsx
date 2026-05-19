@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   ShoppingBag, Clock, CheckCircle, XCircle, Truck, ChefHat,
-  RefreshCw, Eye, X, Filter, Bell, BellOff, Printer,
+  RefreshCw, Eye, X, Filter, Bell, BellOff, Printer, ScanLine, CreditCard,
 } from "lucide-react";
 import { useNewOrderAlerts } from "@/lib/hooks/useNewOrderAlerts";
 import { useWebPush } from "@/lib/hooks/useWebPush";
@@ -523,6 +523,9 @@ export default function PedidosPage() {
 
   return (
     <div className="space-y-6">
+      {/* Confirmação rápida de pagamento (scanner Code 128 ou digitar nº) */}
+      <ConfirmarPagamentoWidget onConfirmado={() => fetchPedidos()} />
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -753,6 +756,132 @@ export default function PedidosPage() {
           onClose={() => setDetalhe(null)}
           onUpdate={fetchPedidos}
         />
+      )}
+    </div>
+  );
+}
+
+// ─── ConfirmarPagamentoWidget ────────────────────────────────────────────────
+// Card no topo da página de pedidos. Operador no caixa:
+//  - Lê o código de barras Code 128 do ticket "Aguardando pagamento" com
+//    leitor USB (a maioria atua como teclado HID, digita os números e tecla
+//    Enter) OU digita o nº manualmente
+//  - Backend muda status pra 'confirmado' + dispara cozinha + via final
+//  - Auto-foca o input pra próximo pedido — ideal pra um turno corrido
+function ConfirmarPagamentoWidget({ onConfirmado }: { onConfirmado: () => void }) {
+  const [numero, setNumero] = useState("");
+  const [forma, setForma]   = useState("cartao_caixa");
+  const [busy, setBusy]     = useState(false);
+  const [msg, setMsg]       = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
+  const [collapse, setCollapse] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-foca input no mount + sempre que termina uma operação
+  useEffect(() => { if (!collapse) inputRef.current?.focus(); }, [collapse]);
+
+  async function confirmar() {
+    const n = numero.trim().replace(/\D/g, "");
+    if (!n) { setMsg({ tipo: "err", texto: "Informe o nº do pedido" }); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const t = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const r = await fetch(`/api/painel/pedidos/cartao-caixa/confirmar-pagamento?numero=${encodeURIComponent(n)}`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", ...(t ? { Authorization: `Bearer ${t}` } : {}) },
+        body:    JSON.stringify({ forma_pagamento: forma }),
+      });
+      const d = await r.json();
+      if (!d.success) { setMsg({ tipo: "err", texto: d.error || "Falha" }); return; }
+      const ja = d.data?.ja_confirmado;
+      setMsg({
+        tipo: "ok",
+        texto: ja
+          ? `Pedido #${d.data.numero} já tinha sido confirmado.`
+          : `✓ Pedido #${d.data.numero} confirmado — cozinha e via final foram impressas.`,
+      });
+      setNumero("");
+      onConfirmado();
+      setTimeout(() => { setMsg(null); inputRef.current?.focus(); }, 4000);
+    } catch {
+      setMsg({ tipo: "err", texto: "Erro de conexão" });
+    } finally { setBusy(false); }
+  }
+
+  if (collapse) {
+    return (
+      <button
+        onClick={() => setCollapse(false)}
+        className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10 transition"
+      >
+        <ScanLine className="h-3.5 w-3.5" />
+        Confirmar pagamento (cartão no caixa)
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <CreditCard className="h-4 w-4 text-emerald-400" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-emerald-300">
+            Confirmar pagamento no caixa
+          </h2>
+        </div>
+        <button onClick={() => setCollapse(true)} className="text-xs text-slate-500 hover:text-slate-300">
+          esconder
+        </button>
+      </div>
+
+      <p className="mb-3 text-xs text-slate-400">
+        Leia o código de barras do ticket "Aguardando pagamento" ou digite o nº do pedido.
+        Após confirmar, o sistema imprime cozinha + via final do cliente.
+      </p>
+
+      <form
+        onSubmit={(e) => { e.preventDefault(); confirmar(); }}
+        className="flex flex-wrap items-stretch gap-2"
+      >
+        <div className="relative flex-1 min-w-[200px]">
+          <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-400" />
+          <input
+            ref={inputRef}
+            value={numero}
+            onChange={(e) => setNumero(e.target.value)}
+            placeholder="Ex: 0042  (leitor manda Enter no fim)"
+            inputMode="numeric"
+            autoFocus
+            disabled={busy}
+            className="w-full rounded-xl border border-emerald-400/30 bg-slate-900/40 pl-10 pr-3 py-3 text-base font-mono text-white placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none disabled:opacity-50"
+          />
+        </div>
+
+        <select
+          value={forma}
+          onChange={(e) => setForma(e.target.value)}
+          disabled={busy}
+          className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white focus:border-emerald-400/40 focus:outline-none"
+        >
+          <option value="cartao_caixa">Cartão</option>
+          <option value="dinheiro">Dinheiro</option>
+          <option value="pix">PIX</option>
+        </select>
+
+        <button
+          type="submit"
+          disabled={busy || !numero.trim()}
+          className="flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
+        >
+          {busy ? "Confirmando..." : "Confirmar"}
+        </button>
+      </form>
+
+      {msg && (
+        <p className={`mt-3 rounded-lg px-3 py-2 text-xs ${
+          msg.tipo === "ok"
+            ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+            : "border border-red-500/20 bg-red-500/10 text-red-400"
+        }`}>{msg.texto}</p>
       )}
     </div>
   );

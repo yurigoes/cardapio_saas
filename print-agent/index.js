@@ -19,7 +19,7 @@ const path = require("path");
 const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
-const VERSION     = "1.3.1";
+const VERSION     = "1.4.0";  // 1.4: suporte a [BARCODE128:xxx] inline
 
 // ─── ESC/POS bytes ──────────────────────────────────────────
 const ESC = 0x1b;
@@ -136,10 +136,56 @@ function sanitize(s) {
   return out;
 }
 
+// Gera comandos ESC/POS pra imprimir código de barras Code128.
+// data = string ASCII (números/letras). Compatível com EPSON/Bematech/Daruma.
+//
+// Comandos:
+//   GS h n          altura em pontos (n=80 ≈ 1cm)
+//   GS w n          largura do módulo (n=2-3)
+//   GS H n          posição HRI (2 = abaixo)
+//   GS f n          fonte HRI (0 = padrão)
+//   GS k 73 len d   imprime Code128 (m=73, len bytes, data bytes)
+function escposBarcode128(data) {
+  const payload = Buffer.from("{B" + data, "ascii"); // {B = code set B
+  return Buffer.concat([
+    Buffer.from([GS, 0x68, 80]),                    // height
+    Buffer.from([GS, 0x77, 3]),                     // width
+    Buffer.from([GS, 0x48, 2]),                     // HRI position: below
+    Buffer.from([GS, 0x66, 0]),                     // HRI font
+    Buffer.from([GS, 0x6b, 73, payload.length]),    // GS k 73 len
+    payload,
+    Buffer.from([0x0a]),                            // LF final
+  ]);
+}
+
+// Encontra padrões [BARCODE128:xxxx] e substitui por comandos ESC/POS.
+// Pra impressoras que não suportam (raras), o fallback é não imprimir nada
+// (a legenda numérica já está em texto na linha seguinte).
+function injetarBarcodes(conteudo) {
+  const re = /\[BARCODE128:([A-Za-z0-9\-_.]{1,40})\]/g;
+  const parts = [];
+  let last = 0; let m;
+  while ((m = re.exec(conteudo)) !== null) {
+    if (m.index > last) {
+      const text = conteudo.slice(last, m.index);
+      parts.push(Buffer.from(sanitize(text).replace(/\n/g, "\r\n"), "latin1"));
+    }
+    parts.push(escposBarcode128(m[1]));
+    last = m.index + m[0].length;
+  }
+  if (last < conteudo.length) {
+    const text = conteudo.slice(last);
+    parts.push(Buffer.from(sanitize(text).replace(/\n/g, "\r\n"), "latin1"));
+  }
+  return Buffer.concat(parts);
+}
+
 function montarPayloadTexto(conteudo) {
-  const limpo = sanitize(conteudo);
-  // Encoding latin1 = mesmos bytes que WPC1252 pra acentos PT-BR
-  const body = Buffer.from(limpo.replace(/\n/g, "\r\n") + "\r\n", "latin1");
+  // Se conteudo tem marcadores [BARCODE128:xxx], renderiza inline.
+  const hasBarcode = /\[BARCODE128:/.test(conteudo);
+  const body = hasBarcode
+    ? injetarBarcodes(conteudo)
+    : Buffer.from(sanitize(conteudo).replace(/\n/g, "\r\n") + "\r\n", "latin1");
   return Buffer.concat([INIT, CHARSET, CODEPAGE, ALIGN_L, body, FEED2, CUT]);
 }
 

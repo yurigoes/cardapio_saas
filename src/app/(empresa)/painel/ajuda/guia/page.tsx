@@ -480,12 +480,15 @@ const SECOES: Secao[] = [
       { nome: "Quando integrar full", descricao: "Se você fechar partnership oficial Stone, dá pra implementar Stone Marketplace API (cobrança pré-autorizada na maquininha) ou Stone SDK custom Android. Hoje não compensa." },
     ],
     fluxos: [
-      { titulo: "Cliente paga cartão Stone no totem (fluxo atual)", passos: [
+      { titulo: "Cliente paga cartão Stone no totem (fluxo completo c/ código de barras)", passos: [
         "Totem: cliente termina pedido, escolhe 'Cartão no caixa'",
-        "Tela mostra: número do pedido GIGANTE + total destacado + 'Vá ao caixa'",
-        "Cliente leva o número até o balcão",
-        "Atendente abre maquininha Stone, digita valor, passa o cartão",
-        "Pedido fica marcado com forma_pagamento='cartao_caixa' — no /painel/pedidos aparece pra fechamento",
+        "Tela mostra: número do pedido GIGANTE + total + 'Vá ao caixa'",
+        "Impressora do balcão imprime UM ticket pequeno com código de barras Code 128 + tarja AGUARDANDO PAGAMENTO (NÃO imprime cozinha ainda)",
+        "Cliente leva o ticket até o balcão",
+        "Operador do caixa: no /painel/pedidos, lê o código de barras com leitor USB (ou digita o nº) no widget verde 'Confirmar pagamento'",
+        "Operador escolhe a forma real (cartão/dinheiro/pix) e clica Confirmar",
+        "Sistema marca pagamento_confirmado_em + AGORA dispara impressão de cozinha + via final do cliente",
+        "Atendente entrega via final + comprovante da maquininha pro cliente",
       ]},
       { titulo: "Cliente paga PIX Stone no totem (integrado)", passos: [
         "Totem: escolhe PIX → backend cria cobrança via Stone OpenBank API",

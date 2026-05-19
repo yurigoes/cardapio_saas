@@ -41,6 +41,67 @@ function brl(v: number | string | null | undefined): string {
   return Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/**
+ * Ticket de identificação para pagamento no caixa.
+ *
+ * Impresso pelo totem QUANDO forma_pagamento='cartao_caixa'. Cliente
+ * leva esse ticket até o caixa, atendente lê código de barras (Code128
+ * do número do pedido) ou digita o número, confirma o pagamento na
+ * maquininha de cartão, e aí o sistema imprime cozinha+via final.
+ *
+ * Contém código de barras Code128 do número do pedido. O agente de
+ * impressão converte os marcadores ESC/POS abaixo em comandos reais:
+ *   \x1Dh<n>     altura
+ *   \x1Dw<n>     largura
+ *   \x1DH<n>     posição HRI
+ *   \x1Dk\x49<len><data>  Code128
+ *
+ * Se a impressora não suporta gráfico (texto puro), mostramos o
+ * número grande + sequência de "||| ||| 0042 ||| |||" como fallback
+ * visual.
+ */
+export function formatarTicketAguardandoPagamento(
+  empresa: string,
+  p: { numero: number | null; total: number | string; cliente_nome?: string | null; tipo: string }
+): string {
+  const out: string[] = [];
+  const num = String(p.numero ?? 0).padStart(4, "0");
+
+  out.push(center(empresa.toUpperCase()));
+  out.push(line("="));
+  out.push("");
+  out.push(center("*** AGUARDANDO PAGAMENTO ***"));
+  out.push("");
+  out.push(line("-"));
+  out.push("");
+  out.push(center("PEDIDO N."));
+  // Número GIGANTE — repetimos a string usando double-width ESC/POS implícito
+  out.push(center(`>>>  #${num}  <<<`));
+  out.push("");
+  // Código de barras Code128 — marcador especial que o agente converte
+  // pra comandos ESC/POS reais (GS k 73 len data). Fallback texto puro
+  // se impressora ignorar.
+  out.push(`[BARCODE128:${num}]`);
+  out.push(center(num));   // legenda humanlegível
+  out.push("");
+  out.push(line("-"));
+  out.push("");
+  out.push(row("TOTAL A PAGAR:", "R$ " + brl(p.total)));
+  out.push("");
+  out.push(line("="));
+  out.push(center("APRESENTE ESTE CUPOM"));
+  out.push(center("NO CAIXA PARA PAGAR"));
+  out.push(line("="));
+  out.push("");
+  if (p.cliente_nome) out.push(`Cliente: ${p.cliente_nome}`);
+  out.push(`Tipo:    ${p.tipo}`);
+  out.push(`Hora:    ${new Date().toLocaleString("pt-BR")}`);
+  out.push("");
+  out.push("");
+  out.push("");
+  return out.join("\n");
+}
+
 /** Cupom da cozinha — só itens, sem preço */
 export function formatarCozinha(empresa: string, p: PedidoCupom): string {
   const out: string[] = [];

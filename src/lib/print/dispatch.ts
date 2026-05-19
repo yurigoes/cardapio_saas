@@ -8,6 +8,7 @@ import { enqueuePrint, type SetorImpressora, type TipoCupom } from "@/lib/print/
 import {
   formatarCozinha, formatarCupomCliente,
   formatarFechamentoCaixa, formatarCupomMotoboySintetico, formatarCupomMotoboyAnalitico,
+  formatarTicketAguardandoPagamento,
 } from "@/lib/print/formatadores";
 
 interface PedidoRow {
@@ -91,6 +92,42 @@ async function enqueueCascade(
     if (ids.length > 0) return { jobIds: ids, setor_usado: qualquer[0].setor };
   }
   return { jobIds: [], setor_usado: null };
+}
+
+/**
+ * Ticket de aguardando pagamento — impresso quando forma_pagamento='cartao_caixa'.
+ * Contém número de pedido + código de barras pra leitor do caixa.
+ * NÃO imprime cupom da cozinha — esse só sai quando operador confirma o pagamento.
+ */
+export async function dispatchTicketAguardandoPagamento(empresaId: string, pedidoId: string): Promise<{
+  ok: boolean; jobs: number; setor_usado: string | null; motivo?: string;
+}> {
+  try {
+    const data = await carregarPedido(empresaId, pedidoId);
+    if (!data) return { ok: false, jobs: 0, setor_usado: null, motivo: "pedido não encontrado" };
+
+    const conteudo = formatarTicketAguardandoPagamento(data.empresaNome, {
+      numero:       data.pedido.numero,
+      total:        data.pedido.total,
+      cliente_nome: data.pedido.cliente_nome,
+      tipo:         data.pedido.tipo,
+    });
+
+    // Preferência: cupom do cliente vai pra impressora do BALCAO (perto do
+    // caixa). Cascata: balcao → caixa → qualquer.
+    const { jobIds, setor_usado } = await enqueueCascade(
+      empresaId, pedidoId, conteudo, "cupom",
+      ["balcao", "caixa"],
+    );
+    if (jobIds.length === 0) {
+      console.warn("[print/dispatch/ticket-aguardando] nenhuma impressora ativa", { empresaId, pedidoId });
+      return { ok: false, jobs: 0, setor_usado: null, motivo: "nenhuma impressora ativa" };
+    }
+    return { ok: true, jobs: jobIds.length, setor_usado };
+  } catch (err) {
+    console.warn("[print/dispatch/ticket-aguardando]", (err as Error).message);
+    return { ok: false, jobs: 0, setor_usado: null, motivo: (err as Error).message };
+  }
 }
 
 /**
