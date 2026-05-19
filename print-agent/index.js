@@ -20,7 +20,7 @@ const { imprimirWindows } = require("./lib/windows-printer");
 
 const CONFIG_PATH = path.resolve(__dirname, "config.json");
 const LOCK_PATH   = path.resolve(__dirname, "agent.lock");
-const VERSION     = "1.10.0";  // 1.10: não exit FATAL em 502 inicial (só 401/403)
+const VERSION     = "1.11.0";  // 1.11: start-background.bat usa wscript (TOTALMENTE invisivel)
 
 // ─── Lock file (anti-duplicação) ────────────────────────────
 // Se agente já está rodando, sai. Lock = arquivo com PID.
