@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Three Digital — Mídia Indoor (Xibo CMS) — stack ISOLADO
+#
+# Roda na MESMA VPS do Three Digital sem encostar nos containers do
+# restaurante. Rede própria (midia_net), portas próprias, limites de
+# memória rígidos (cap ~2.3GB pra deixar 5.5GB pro resto).
+#
+# Componentes (oficiais Xibo):
+#   cms-db    MySQL 8 — banco do Xibo
+#   cms-xmr   XMR — message relay (push pros players em tempo real)
+#   cms-web   o CMS em si (painel web + API REST)
+#
+# Acesso: bind em 127.0.0.1:8080 → Cloudflare Tunnel roteia
+#         midia.tthreedigital.com.br → localhost:8080
+#
+# Como subir:
+#   1. cp .env.example .env  e preencher senhas
+#   2. docker compose up -d
+#   3. Primeiro acesso: http://127.0.0.1:8080 (ou via tunnel)
+#      Login inicial: xibo_admin / senha em CMS_SERVER_NAME (ver README)
+# ─────────────────────────────────────────────────────────────────────────────
+version: "2.4"
+
+services:
+  cms-db:
+    image: mysql:8.0
+    container_name: midia_xibo_db
+    restart: unless-stopped
+    volumes:
+      - xibo_db:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE:      cms
+      MYSQL_USER:          cms
+      MYSQL_PASSWORD:      "${MYSQL_PASSWORD}"
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    command: --default-authentication-plugin=mysql_native_password
+    mem_limit: 1g
+    networks: [midia_net]
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
+  cms-xmr:
+    image: xibosignage/xibo-xmr:latest
+    container_name: midia_xibo_xmr
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9505:9505"   # só local — players conectam via tunnel/proxy
+    mem_limit: 256m
+    networks: [midia_net]
+    logging:
+      driver: "json-file"
+      options: { max-size: "5m", max-file: "3" }
+
+  cms-web:
+    image: xibosignage/xibo-cms:release-4.1.0
+    container_name: midia_xibo_web
+    restart: unless-stopped
+    depends_on: [cms-db, cms-xmr]
+    ports:
+      - "127.0.0.1:8080:80"     # bind local — Cloudflare Tunnel expõe
+    volumes:
+      - xibo_library:/var/www/cms/library
+      - xibo_custom:/var/www/cms/custom
+      - xibo_backup:/var/www/backup
+      - xibo_web:/var/www/cms/web/theme/custom
+    environment:
+      MYSQL_HOST:          cms-db
+      MYSQL_USER:          cms
+      MYSQL_PASSWORD:      "${MYSQL_PASSWORD}"
+      MYSQL_DATABASE:      cms
+      MYSQL_PORT:          "3306"
+      CMS_SERVER_NAME:     "${CMS_SERVER_NAME}"           # midia.tthreedigital.com.br
+      XMR_HOST:            cms-xmr
+      # Email pra alertas/recuperação (usa o mesmo SMTP do Three Digital se quiser)
+      CMS_SMTP_SERVER:     "${CMS_SMTP_SERVER:-}"
+      CMS_SMTP_USERNAME:   "${CMS_SMTP_USERNAME:-}"
+      CMS_SMTP_PASSWORD:   "${CMS_SMTP_PASSWORD:-}"
+      CMS_SMTP_USE_TLS:    "${CMS_SMTP_USE_TLS:-YES}"
+      CMS_SMTP_USE_STARTTLS: "${CMS_SMTP_USE_STARTTLS:-YES}"
+      CMS_SMTP_REWRITE_DOMAIN: "${CMS_SMTP_REWRITE_DOMAIN:-tthreedigital.com.br}"
+      CMS_SMTP_HOSTNAME:   "${CMS_SMTP_HOSTNAME:-tthreedigital.com.br}"
+      CMS_SMTP_FROM:       "${CMS_SMTP_FROM:-Three Digital Midia <noreply@tthreedigital.com.br>}"
+      # PHP — ajusta limites pra uploads de vídeo
+      CMS_PHP_UPLOAD_MAX_FILESIZE: "256M"
+      CMS_PHP_POST_MAX_SIZE:       "256M"
+      CMS_PHP_MEMORY_LIMIT:        "256M"
+      CMS_PHP_MAX_EXECUTION_TIME:  "300"
+    mem_limit: 1300m
+    networks: [midia_net]
+    logging:
+      driver: "json-file"
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  xibo_db:
+  xibo_library:    # mídia (imagens/vídeos) — pode crescer; monitorar disco
+  xibo_custom:
+  xibo_backup:
+  xibo_web:        # tema customizado (sua marca)
+
+networks:
+  midia_net:
+    driver: bridge
+    name: midia_net
