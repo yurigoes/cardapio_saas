@@ -1,0 +1,37 @@
+/* Three Digital Mídia — override de cores do painel Xibo
+   Roxo da marca (combina com a landing). Ajuste os hex se quiser. */
+
+:root {
+  --td-roxo: #7c3aed;
+  --td-roxo-dark: #5b21b6;
+}
+
+/* Navbar superior */
+.navbar, .navbar-default, .navbar-inverse {
+  background-color: var(--td-roxo) !important;
+  border-color: var(--td-roxo-dark) !important;
+}
+
+/* Botões primários */
+.btn-primary {
+  background-color: var(--td-roxo) !important;
+  border-color: var(--td-roxo-dark) !important;
+}
+.btn-primary:hover, .btn-primary:focus {
+  background-color: var(--td-roxo-dark) !important;
+}
+
+/* Links */
+a { color: var(--td-roxo); }
+a:hover { color: var(--td-roxo-dark); }
+
+/* Menu lateral ativo */
+.nav-pills > li.active > a,
+.sidebar .nav > li.active > a {
+  background-color: var(--td-roxo) !important;
+}
+
+/* Tela de login */
+.login-box-body, .login-page .panel {
+  border-top: 3px solid var(--td-roxo);
+}
