@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # Adiciona rotas no Cloudflare Tunnel EXISTENTE pra:
-#   midia.tthreedigital.com.br        → localhost:8080  (Xibo CMS)
+#   midia.tthreedigital.com.br        → localhost:8085  (Xibo CMS)
 #   midiaindoor.tthreedigital.com.br  → localhost:3100  (landing)
 #
 # Detecta automaticamente se o tunnel é:
@@ -21,7 +21,7 @@ err() { echo -e "${R}✗${N} $*"; }
 
 DOMAIN="tthreedigital.com.br"
 declare -A ROUTES=(
-  ["midia.$DOMAIN"]="http://localhost:8080"
+  ["midia.$DOMAIN"]="http://localhost:8085"
   ["midiaindoor.$DOMAIN"]="http://localhost:3100"
 )
 

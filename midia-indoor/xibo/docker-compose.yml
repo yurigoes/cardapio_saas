@@ -10,16 +10,15 @@
 #   cms-xmr   XMR — message relay (push pros players em tempo real)
 #   cms-web   o CMS em si (painel web + API REST)
 #
-# Acesso: bind em 127.0.0.1:8080 → Cloudflare Tunnel roteia
-#         midia.tthreedigital.com.br → localhost:8080
+# Acesso: bind em 127.0.0.1:8085 → Cloudflare Tunnel roteia
+#         midia.tthreedigital.com.br → localhost:8085
 #
 # Como subir:
 #   1. cp .env.example .env  e preencher senhas
 #   2. docker compose up -d
-#   3. Primeiro acesso: http://127.0.0.1:8080 (ou via tunnel)
+#   3. Primeiro acesso: http://127.0.0.1:8085 (ou via tunnel)
 #      Login inicial: xibo_admin / senha em CMS_SERVER_NAME (ver README)
 # ─────────────────────────────────────────────────────────────────────────────
-version: "2.4"
 
 services:
   cms-db:
@@ -53,12 +52,12 @@ services:
       options: { max-size: "5m", max-file: "3" }
 
   cms-web:
-    image: xibosignage/xibo-cms:release-4.1.0
+    image: xibosignage/xibo-cms:release-3.3.3
     container_name: midia_xibo_web
     restart: unless-stopped
     depends_on: [cms-db, cms-xmr]
     ports:
-      - "127.0.0.1:8080:80"     # bind local — Cloudflare Tunnel expõe
+      - "127.0.0.1:8085:80"     # bind local — Cloudflare Tunnel expõe
     volumes:
       - xibo_library:/var/www/cms/library
       - xibo_custom:/var/www/cms/custom

@@ -6,7 +6,7 @@ VPS do Three Digital sem interferir no sistema de restaurante.
 - Rede Docker própria (`midia_net`) — isolada dos containers do restaurante
 - Limites de memória: ~2.3 GB total (db 1G + web 1.3G + xmr 256M),
   deixando ~5.5 GB pro Three Digital
-- Bind local 127.0.0.1:8080 → Cloudflare Tunnel expõe `midia.tthreedigital.com.br`
+- Bind local 127.0.0.1:8085 → Cloudflare Tunnel expõe `midia.tthreedigital.com.br`
 
 ## Pré-requisitos
 
@@ -49,7 +49,7 @@ nele apontando pro Xibo. Duas formas:
 1. https://one.dash.cloudflare.com → Networks → Tunnels
 2. Abra o tunnel existente → Public Hostnames → **Add a public hostname**
 3. Subdomain: `midia` · Domain: `tthreedigital.com.br`
-4. Service: `HTTP` → `localhost:8080`
+4. Service: `HTTP` → `localhost:8085`
 5. Save
 
 ### Via API (se preferir automatizar)

@@ -49,7 +49,7 @@ midia-indoor/
 1. **Xibo** (`xibo/README.md`) — sobe o CMS, configura tunnel, sua marca
 2. **Landing** (`landing/README.md`) — sobe o site comercial
 3. **Cloudflare** — adiciona 2 hostnames no tunnel existente:
-   - `midia.tthreedigital.com.br` → localhost:8080 (Xibo)
+   - `midia.tthreedigital.com.br` → localhost:8085 (Xibo)
    - `midiaindoor.tthreedigital.com.br` → localhost:3100 (landing)
 
 ## Estado atual
