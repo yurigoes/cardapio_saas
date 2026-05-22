@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Three Digital Mídia — Landing/SaaS self-service
+#
+# Roda na MESMA VPS, isolado. Bind em 127.0.0.1:3100 → Cloudflare Tunnel
+# roteia midiaindoor.tthreedigital.com.br → localhost:3100.
+#
+# Rede:
+#   - midia_net (externa, criada pelo stack do Xibo) → fala com o CMS por
+#     dentro via http://midia_xibo_web (XIBO_URL no .env)
+#   - Postgres: usa o host (host-gateway). No .env aponte DATABASE_URL pra
+#     postgres://...@host.docker.internal:5432/cardapio_saas
+#
+# Subir:
+#   1. cp .env.example .env  e preencher (DATABASE_URL, JWT_SECRET, XIBO_*, MP_ACCESS_TOKEN)
+#   2. docker compose up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  landing:
+    build: .
+    image: midia_landing:latest
+    container_name: midia_landing
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3100:3100"
+    env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    mem_limit: 512m
+    networks: [midia_net]
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
+networks:
+  midia_net:
+    external: true
+    name: midia_net

@@ -1,58 +1,100 @@
-# Three Digital Mídia — Landing + Cadastro
+# Three Digital Mídia — Landing + SaaS self-service
 
-Site de divulgação do serviço de mídia indoor, com planos e captação de leads.
+Site comercial **e** plataforma self-service de mídia indoor. O cliente assina,
+paga, faz upload de mídia e pareia as TVs — tudo sozinho. Por trás, a API
+conversa com o Xibo CMS (mesma VPS, rede Docker interna) e provisiona tudo.
+
 Roda na porta **3100** (não conflita com o Three Digital na 3000).
 
-## O que faz hoje (MVP)
+## Fluxo completo
 
-- Landing page completa (hero, recursos, como funciona, planos, CTA)
-- Página de cadastro `/cadastro?plano=X` com formulário
-- API `/api/leads` que:
-  - Salva o lead no Postgres (tabela `midia_leads`, criada automática)
-  - Notifica você via WhatsApp (Evolution) que chegou lead novo
+```
+/cadastro  ──signup──▶  conta+assinatura (pendente)  +  JWT
+           ──pagamento/criar──▶  Mercado Pago PreApproval (recorrente)
+           ──redirect──▶  checkout do Mercado Pago
+                                │
+                  (cliente paga)│
+                                ▼
+   /api/pagamento/webhook ◀── MP notifica "authorized"
+        │  marca assinatura = ativa
+        └─ provisionarConta(): cria Folder + Display Group no Xibo
+                                ▼
+/painel  ──login──▶  upload de mídia (vai pra pasta Xibo do cliente)
+                     parear TVs (autoriza display + vincula ao grupo)
+```
+
+## Endpoints
+
+| Rota | O que faz |
+|------|-----------|
+| `POST /api/auth/signup` | cria conta + assinatura (pendente), devolve JWT |
+| `POST /api/auth/login` | email+senha → JWT |
+| `POST /api/pagamento/criar` | cria PreApproval no MP, devolve `init_point` *(auth)* |
+| `POST/GET /api/pagamento/webhook` | MP notifica → ativa assinatura + provisiona Xibo |
+| `GET /api/painel/me` | dados da conta + status da assinatura *(auth)* |
+| `GET/POST /api/painel/midias` | lista / faz upload de mídia na pasta do cliente *(auth)* |
+| `GET/POST /api/painel/telas` | lista telas + pendentes / pareia uma TV *(auth)* |
+| `POST /api/leads` | captação de lead (marketing) |
+
+## Variáveis de ambiente
+
+Veja `.env.example`. Essenciais:
+
+- `DATABASE_URL` — Postgres (tabelas `midia_*` criadas no boot)
+- `APP_URL` — URL pública (back_url do MP)
+- `JWT_SECRET` — segredo forte
+- `XIBO_URL` / `XIBO_CLIENT_ID` / `XIBO_CLIENT_SECRET` — API do Xibo
+- `MP_ACCESS_TOKEN` — Mercado Pago
+
+### Criar as credenciais do Xibo
+
+No CMS: **Administration → Applications → Add Application**
+- Name: `Three Digital Landing`
+- Client Credentials: **Sim** (grant `client_credentials`)
+- Marque os escopos necessários (library, displays, displaygroups, folders)
+- Copie `Client ID` e `Client Secret` → `.env`
+
+### Configurar o Webhook do Mercado Pago
+
+No painel MP → **Suas integrações → Webhooks**, aponte para:
+```
+https://midiaindoor.tthreedigital.com.br/api/pagamento/webhook
+```
+Evento: **Assinaturas (preapproval)**.
 
 ## Rodar local
 
 ```bash
 cd landing
-cp .env.example .env   # preenche DATABASE_URL + Evolution
+cp .env.example .env   # preencher
 npm install
 npm run dev            # http://localhost:3100
 ```
 
-## Deploy na VPS (Docker)
+## Deploy na VPS (Docker — recomendado)
+
+O compose junta o container à rede `midia_net` (criada pelo stack do Xibo),
+então a landing fala com o CMS por dentro via `http://midia_xibo_web`.
 
 ```bash
-# Build standalone
-npm install && npm run build
-
-# Roda em container (ou direto com node)
-docker run -d --name midia_landing \
-  --network cardapio_net \
-  -p 127.0.0.1:3100:3100 \
-  --restart unless-stopped \
-  --env-file .env \
-  -v $(pwd)/.next/standalone:/app \
-  node:20-alpine node /app/server.js
+cd /opt/midia-indoor/landing       # ajuste ao seu path na VPS
+git pull
+cp .env.example .env               # editar: DATABASE_URL (host.docker.internal),
+                                   #         JWT_SECRET, XIBO_*, MP_ACCESS_TOKEN, APP_URL
+docker compose up -d --build
+docker logs -f midia_landing       # conferir boot
 ```
 
-Depois adiciona no Cloudflare Tunnel: `midiaindoor.tthreedigital.com.br` → `localhost:3100`
-(ou use o domínio que preferir pra parte comercial).
+Confirme que a rede do Xibo já existe (`docker network ls | grep midia_net`).
+Se a landing precisar do Postgres do host, `DATABASE_URL` deve usar
+`host.docker.internal:5432` (o compose já adiciona o `host-gateway`).
+
+### Cloudflare Tunnel
+
+A rota `midiaindoor.tthreedigital.com.br → localhost:3100` já foi adicionada
+em `/etc/cloudflared/config.yml` (ver `../setup-tunnel-routes.sh`). Se não,
+adicione o ingress e rode `cloudflared tunnel route dns <tunnel> midiaindoor.tthreedigital.com.br`.
 
 ## Editar planos
 
 `src/lib/planos.ts` — muda preço, nome, recursos. Reflete na landing + cadastro.
-
-## Roadmap (próximas etapas)
-
-Esta é a fundação (marketing + captação). Pra virar SaaS self-service completo:
-
-- [ ] **Pagamento recorrente** (Mercado Pago PreApproval — reusar lógica do Three Digital)
-- [ ] **Área do cliente** (login, ver fatura, gerenciar telas)
-- [ ] **Auto-provisionamento Xibo**: ao aprovar pagamento, criar via API Xibo
-      o usuário + pasta + display do cliente automaticamente
-- [ ] **Painel admin** pra você aprovar leads → ativar conta → cobrar
-- [ ] **Onboarding**: cliente recebe instruções de instalar o player Android
-
-Quando quiser implementar, dá pra clonar muita coisa do Three Digital
-(auth JWT, gateways de pagamento, mensalidades).
