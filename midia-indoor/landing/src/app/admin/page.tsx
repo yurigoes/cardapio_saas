@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, LogOut, LayoutDashboard, Users, Package, FileText, UserCog,
-  Tv, Search, Plus, X, RefreshCw,
+  Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
 } from "lucide-react";
 
 const TOKEN_KEY = "midia_admin_token";
@@ -15,7 +15,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "contas" | "planos" | "usuarios" | "contratos";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "pacotes" | "contratos" | "usuarios";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -42,11 +42,13 @@ export default function AdminPage() {
 
   const isMaster = role === "master";
   const abas: { id: Aba; label: string; icon: typeof LayoutDashboard; master?: boolean }[] = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "contas",    label: "Clientes",  icon: Users },
-    { id: "planos",    label: "Planos",    icon: Package, master: true },
-    { id: "contratos", label: "Contratos", icon: FileText, master: true },
-    { id: "usuarios",  label: "Usuários",  icon: UserCog, master: true },
+    { id: "dashboard",   label: "Dashboard",   icon: LayoutDashboard },
+    { id: "campanhas",   label: "Campanhas",   icon: Megaphone },
+    { id: "anunciantes", label: "Anunciantes", icon: Users },
+    { id: "locais",      label: "Locais",      icon: MapPin, master: true },
+    { id: "pacotes",     label: "Pacotes",     icon: Package, master: true },
+    { id: "contratos",   label: "Contratos",   icon: FileText, master: true },
+    { id: "usuarios",    label: "Usuários",    icon: UserCog, master: true },
   ];
 
   return (
@@ -72,11 +74,13 @@ export default function AdminPage() {
       </header>
 
       <div className="mx-auto max-w-6xl px-6 py-8">
-        {aba === "dashboard" && <Dashboard token={token} />}
-        {aba === "contas"    && <Contas token={token} isMaster={isMaster} />}
-        {aba === "planos"    && <Planos token={token} />}
-        {aba === "contratos" && <Contratos token={token} />}
-        {aba === "usuarios"  && <Usuarios token={token} />}
+        {aba === "dashboard"   && <Dashboard token={token} />}
+        {aba === "campanhas"   && <Campanhas token={token} isMaster={isMaster} />}
+        {aba === "anunciantes" && <Anunciantes token={token} isMaster={isMaster} />}
+        {aba === "locais"      && <Locais token={token} />}
+        {aba === "pacotes"     && <Pacotes token={token} />}
+        {aba === "contratos"   && <Contratos token={token} />}
+        {aba === "usuarios"    && <Usuarios token={token} />}
       </div>
     </main>
   );
@@ -159,149 +163,416 @@ function Badge({ s }: { s: string }) {
   return <span className={`text-xs font-medium capitalize ${m[s] ?? "text-slate-400"}`}>{s}</span>;
 }
 
-// ─── Contas / Clientes ──────────────────────────────────────────────────────
-interface Conta {
-  id: string; nome: string; empresa: string; email: string; whatsapp: string | null; cidade: string | null;
-  status: string; plano: string | null; preco_tela: string | null; qtd_telas: number | null;
-  assinatura_status: string | null; telas: number; created_at: string;
-}
-function Contas({ token, isMaster }: { token: string; isMaster: boolean }) {
-  const [contas, setContas] = useState<Conta[]>([]);
-  const [q, setQ] = useState(""); const [loading, setLoading] = useState(true);
-  const [contratoFor, setContratoFor] = useState<Conta | null>(null);
+// ─── Tipos compartilhados ────────────────────────────────────────────────────
+interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; }
+interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
+interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
+interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; }
 
+const STATUS_CAMP: Record<string, string> = { rascunho: "text-slate-400", aguardando_arte: "text-amber-300", no_ar: "text-emerald-300", pausada: "text-amber-300", encerrada: "text-slate-500" };
+const TIPO_LABEL: Record<string, string> = { video: "Vídeo", banner_estatico: "Banner estático", banner_eletronico: "Banner eletrônico", peca: "Peça publicitária" };
+
+// ─── Campanhas ────────────────────────────────────────────────────────────────
+function Campanhas({ token, isMaster }: { token: string; isMaster: boolean }) {
+  const [camps, setCamps] = useState<Camp[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [novo, setNovo] = useState(false);
+  const [detalhe, setDetalhe] = useState<Camp | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
-    const r = await aapi(token, `/api/admin/contas?q=${encodeURIComponent(q)}`);
-    const d = await r.json(); if (d.ok) setContas(d.contas);
-    setLoading(false);
-  }, [token, q]);
+    const r = await aapi(token, "/api/admin/campanhas"); const d = await r.json();
+    if (d.ok) setCamps(d.campanhas); setLoading(false);
+  }, [token]);
   useEffect(() => { load(); }, [load]);
 
-  async function mudarStatus(c: Conta, status: string) {
-    await aapi(token, "/api/admin/contas", { method: "PATCH", body: JSON.stringify({ conta_id: c.id, status }) });
-    load();
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-bold">Campanhas</h2>
+        <div className="flex gap-2">
+          <button onClick={load} className="rounded-xl border border-white/10 p-2 hover:bg-white/5"><RefreshCw className="h-4 w-4" /></button>
+          {isMaster && <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Nova campanha</button>}
+        </div>
+      </div>
+      {loading ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
+        <div className="overflow-x-auto rounded-xl border border-white/10">
+          <table className="w-full text-sm">
+            <thead className="bg-white/5 text-left text-slate-400"><tr>
+              <th className="p-3">Campanha / Anunciante</th><th className="p-3">Tipo</th><th className="p-3">Inserções</th>
+              <th className="p-3">Período</th><th className="p-3">Locais</th><th className="p-3">Status</th><th className="p-3">Pgto</th>
+            </tr></thead>
+            <tbody>
+              {camps.map(c => (
+                <tr key={c.id} className="cursor-pointer border-t border-white/5 hover:bg-white/5" onClick={() => setDetalhe(c)}>
+                  <td className="p-3"><div className="font-medium">{c.nome}</div><div className="text-xs text-slate-400">{c.empresa}</div></td>
+                  <td className="p-3 text-xs">{TIPO_LABEL[c.tipo] ?? c.tipo}</td>
+                  <td className="p-3 text-xs">{c.insercoes_dia}/dia · {c.segundos}s</td>
+                  <td className="p-3 text-xs">{c.data_inicio ?? "—"}{c.data_fim ? ` → ${c.data_fim}` : ""}</td>
+                  <td className="p-3">{c.locais}</td>
+                  <td className="p-3"><span className={`text-xs font-medium capitalize ${STATUS_CAMP[c.status] ?? ""}`}>{c.status.replace("_", " ")}</span></td>
+                  <td className="p-3"><span className={`text-xs ${c.status_pagamento === "pago" ? "text-emerald-300" : c.status_pagamento === "isento" ? "text-slate-400" : "text-amber-300"}`}>{c.status_pagamento}</span></td>
+                </tr>
+              ))}
+              {!camps.length && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Nenhuma campanha ainda.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {novo && <NovaCampanhaModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
+      {detalhe && <CampanhaDetalhe token={token} camp={detalhe} isMaster={isMaster} onClose={() => setDetalhe(null)} onChange={load} />}
+    </div>
+  );
+}
+
+function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose: () => void; onSaved: () => void }) {
+  const [anuncs, setAnuncs] = useState<Anunc[]>([]);
+  const [pacotes, setPacotes] = useState<Pacote[]>([]);
+  const [locais, setLocais] = useState<Local[]>([]);
+  const [contaId, setContaId] = useState(""); const [pacoteId, setPacoteId] = useState("");
+  const [nome, setNome] = useState(""); const [valor, setValor] = useState("");
+  const [inicio, setInicio] = useState(""); const [fim, setFim] = useState("");
+  const [selLocais, setSelLocais] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+
+  useEffect(() => {
+    aapi(token, "/api/admin/anunciantes").then(r => r.json()).then(d => d.ok && setAnuncs(d.anunciantes));
+    aapi(token, "/api/admin/pacotes").then(r => r.json()).then(d => d.ok && setPacotes(d.pacotes.filter((p: Pacote) => p.ativo)));
+    aapi(token, "/api/admin/locais").then(r => r.json()).then(d => d.ok && setLocais(d.locais.filter((l: Local) => l.ativo)));
+  }, [token]);
+
+  // Ao escolher pacote, sugere datas a partir de hoje
+  useEffect(() => {
+    const pac = pacotes.find(p => p.id === pacoteId);
+    if (pac && inicio) {
+      const d = new Date(inicio + "T00:00:00"); d.setDate(d.getDate() + pac.dias - 1);
+      setFim(d.toISOString().slice(0, 10));
+    }
+  }, [pacoteId, inicio, pacotes]);
+
+  function toggleLocal(id: string) { setSelLocais(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]); }
+
+  async function salvar() {
+    setBusy(true); setErr("");
+    const body = { conta_id: contaId, nome, pacote_id: pacoteId || undefined, data_inicio: inicio || undefined, data_fim: fim || undefined, valor: valor || 0, locais: selLocais };
+    const r = await aapi(token, "/api/admin/campanhas", { method: "POST", body: JSON.stringify(body) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro"); return; }
+    onSaved();
   }
+
+  return (
+    <Modal onClose={onClose} title="Nova campanha" wide>
+      <label className="mb-1 block text-sm text-slate-300">Anunciante</label>
+      <select value={contaId} onChange={e => setContaId(e.target.value)} className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+        <option value="">{anuncs.length ? "Selecione…" : "Cadastre um anunciante antes"}</option>
+        {anuncs.map(a => <option key={a.id} value={a.id}>{a.empresa} — {a.nome}</option>)}
+      </select>
+      <Field label="Nome da campanha" value={nome} onChange={setNome} placeholder="ex: Promoção de inverno" />
+      <label className="mb-1 block text-sm text-slate-300">Pacote</label>
+      <select value={pacoteId} onChange={e => setPacoteId(e.target.value)} className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+        <option value="">Selecione um pacote…</option>
+        {pacotes.map(p => <option key={p.id} value={p.id}>{p.nome} · {p.insercoes_dia}/dia · {p.segundos}s</option>)}
+      </select>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Início" value={inicio} onChange={setInicio} type="date" />
+        <Field label="Fim" value={fim} onChange={setFim} type="date" />
+      </div>
+      <Field label="Valor (R$)" value={valor} onChange={setValor} type="number" />
+      <label className="mb-1 block text-sm text-slate-300">Locais ({selLocais.length} selecionados)</label>
+      <div className="mb-3 max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-2">
+        {locais.map(l => (
+          <label key={l.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
+            <input type="checkbox" checked={selLocais.includes(l.id)} onChange={() => toggleLocal(l.id)} />
+            <span>{l.nome}{l.cidade ? <span className="text-slate-500"> · {l.cidade}</span> : null}</span>
+          </label>
+        ))}
+        {!locais.length && <p className="p-2 text-xs text-slate-500">Cadastre locais antes.</p>}
+      </div>
+      {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+      <button onClick={salvar} disabled={busy || !contaId || !selLocais.length} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar campanha</button>
+    </Modal>
+  );
+}
+
+function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: string; camp: Camp; isMaster: boolean; onClose: () => void; onChange: () => void }) {
+  const [det, setDet] = useState<{ campanha: Camp & { data_inicio: string | null; data_fim: string | null; valor: string }; locais: Local[]; relatorio: { plays: number; duracao: number } | null } | null>(null);
+  const [busy, setBusy] = useState(""); const [msg, setMsg] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    const r = await aapi(token, `/api/admin/campanhas/${camp.id}`); const d = await r.json();
+    if (d.ok) setDet(d);
+  }, [token, camp.id]);
+  useEffect(() => { load(); }, [load]);
+
+  async function acao(path: string, label: string) {
+    setBusy(label); setMsg("");
+    const r = await aapi(token, `/api/admin/campanhas/${camp.id}/${path}`, { method: "POST" });
+    const d = await r.json(); setBusy("");
+    if (!d.ok) { setMsg(d.error || "Erro"); return; }
+    load(); onChange();
+  }
+  async function enviarArte(file: File) {
+    setBusy("arte"); setMsg("");
+    const fd = new FormData(); fd.append("file", file);
+    const r = await fetch(`/api/admin/campanhas/${camp.id}/arte`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    const d = await r.json(); setBusy("");
+    if (!d.ok) { setMsg(d.error || "Erro no upload"); return; }
+    load(); onChange();
+  }
+  async function marcarPgto(status: string) {
+    await aapi(token, `/api/admin/campanhas/${camp.id}`, { method: "PATCH", body: JSON.stringify({ status_pagamento: status }) });
+    load(); onChange();
+  }
+
+  const c = det?.campanha;
+  return (
+    <Modal onClose={onClose} title={camp.nome} wide>
+      {!c ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
+        <div className="space-y-4 text-sm">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            <Info label="Anunciante" v={camp.empresa} />
+            <Info label="Tipo" v={TIPO_LABEL[camp.tipo] ?? camp.tipo} />
+            <Info label="Inserções/dia" v={`${camp.insercoes_dia} · ${camp.segundos}s`} />
+            <Info label="Período" v={`${c.data_inicio ?? "—"} → ${c.data_fim ?? "—"}`} />
+            <Info label="Valor" v={brl(Number(c.valor))} />
+            <Info label="Status" v={c.status.replace("_", " ")} />
+          </div>
+
+          <div>
+            <p className="mb-1 text-slate-400">Locais ({det.locais.length})</p>
+            <div className="flex flex-wrap gap-1">{det.locais.map(l => <span key={l.id} className="rounded bg-white/5 px-2 py-1 text-xs">{l.nome}</span>)}</div>
+          </div>
+
+          {det.relatorio && (
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+              <p className="flex items-center gap-2 font-medium text-emerald-300"><BarChart3 className="h-4 w-4" /> Proof-of-play</p>
+              <p className="mt-1 text-slate-300">{det.relatorio.plays} exibições · {Math.round(det.relatorio.duracao)}s no total</p>
+            </div>
+          )}
+
+          {msg && <p className="text-sm text-red-400">{msg}</p>}
+
+          {isMaster && (
+            <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5">
+                {busy === "arte" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {camp.arte_nome ? "Trocar arte" : "Enviar arte"}
+                <input ref={inputRef} type="file" accept="image/*,video/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) enviarArte(f); }} />
+              </label>
+              <button onClick={() => acao("lancar", "lancar")} disabled={!!busy} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark disabled:opacity-50">
+                {busy === "lancar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />} {camp.status === "no_ar" ? "Reaplicar" : "Lançar no ar"}
+              </button>
+              <button onClick={() => acao("encerrar", "encerrar")} disabled={!!busy} className="flex items-center gap-2 rounded-xl border border-red-500/30 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50">
+                {busy === "encerrar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />} Encerrar
+              </button>
+              <div className="ml-auto flex items-center gap-1 text-xs">
+                <span className="text-slate-400">Pgto:</span>
+                {["pago", "pendente", "isento"].map(s => (
+                  <button key={s} onClick={() => marcarPgto(s)} className={`rounded px-2 py-1 ${c.status_pagamento === s ? "bg-brand text-white" : "border border-white/15 hover:bg-white/5"}`}>{s}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {camp.arte_nome && <p className="text-xs text-slate-500">Arte atual: {camp.arte_nome}</p>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+function Info({ label, v }: { label: string; v: string }) {
+  return <div><p className="text-xs text-slate-500">{label}</p><p className="font-medium capitalize">{v}</p></div>;
+}
+
+// ─── Anunciantes ────────────────────────────────────────────────────────────
+function Anunciantes({ token, isMaster }: { token: string; isMaster: boolean }) {
+  const [lista, setLista] = useState<Anunc[]>([]);
+  const [q, setQ] = useState(""); const [loading, setLoading] = useState(true);
+  const [novo, setNovo] = useState(false);
+  const [contratoFor, setContratoFor] = useState<Anunc | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    const r = await aapi(token, `/api/admin/anunciantes?q=${encodeURIComponent(q)}`); const d = await r.json();
+    if (d.ok) setLista(d.anunciantes); setLoading(false);
+  }, [token, q]);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div>
       <div className="mb-4 flex items-center gap-2">
         <div className="flex flex-1 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3">
           <Search className="h-4 w-4 text-slate-500" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por empresa, nome ou e-mail"
-            className="w-full bg-transparent py-2 text-sm outline-none" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar anunciante" className="w-full bg-transparent py-2 text-sm outline-none" />
         </div>
-        <button onClick={load} className="rounded-xl border border-white/10 p-2 hover:bg-white/5"><RefreshCw className="h-4 w-4" /></button>
+        {isMaster && <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo anunciante</button>}
       </div>
       {loading ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
         <div className="overflow-x-auto rounded-xl border border-white/10">
           <table className="w-full text-sm">
-            <thead className="bg-white/5 text-left text-slate-400"><tr>
-              <th className="p-3">Empresa / Contato</th><th className="p-3">Plano</th><th className="p-3">Telas</th>
-              <th className="p-3">Status</th><th className="p-3">Ações</th>
-            </tr></thead>
+            <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Empresa / Contato</th><th className="p-3">Campanhas</th><th className="p-3">Status</th><th className="p-3"></th></tr></thead>
             <tbody>
-              {contas.map(c => (
-                <tr key={c.id} className="border-t border-white/5 align-top">
-                  <td className="p-3"><div className="font-medium">{c.empresa}</div><div className="text-xs text-slate-400">{c.nome} · {c.email}{c.whatsapp ? ` · ${c.whatsapp}` : ""}</div></td>
-                  <td className="p-3 capitalize">{c.plano ?? "—"}{c.preco_tela ? <div className="text-xs text-slate-500">{brl(Number(c.preco_tela))}/tela</div> : null}</td>
-                  <td className="p-3">{c.telas}/{c.qtd_telas ?? 0}</td>
-                  <td className="p-3"><Badge s={c.status} />{c.assinatura_status ? <div className="text-xs text-slate-500">assin: {c.assinatura_status}</div> : null}</td>
-                  <td className="p-3">
-                    {isMaster && (
-                      <div className="flex flex-wrap gap-1">
-                        {c.status !== "ativo"     && <button onClick={() => mudarStatus(c, "ativo")} className="rounded border border-emerald-500/30 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10">Ativar</button>}
-                        {c.status !== "suspenso"  && <button onClick={() => mudarStatus(c, "suspenso")} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-300 hover:bg-amber-500/10">Suspender</button>}
-                        <button onClick={() => setContratoFor(c)} className="rounded border border-white/15 px-2 py-1 text-xs hover:bg-white/5">Contrato</button>
-                      </div>
-                    )}
-                  </td>
+              {lista.map(a => (
+                <tr key={a.id} className="border-t border-white/5">
+                  <td className="p-3"><div className="font-medium">{a.empresa}</div><div className="text-xs text-slate-400">{a.nome} · {a.email}{a.whatsapp ? ` · ${a.whatsapp}` : ""}</div></td>
+                  <td className="p-3">{a.campanhas}</td>
+                  <td className="p-3"><Badge s={a.status} /></td>
+                  <td className="p-3 text-right">{isMaster && <button onClick={() => setContratoFor(a)} className="rounded border border-white/15 px-2 py-1 text-xs hover:bg-white/5">Contrato</button>}</td>
                 </tr>
               ))}
-              {!contas.length && <tr><td colSpan={5} className="p-6 text-center text-slate-500">Nenhum cliente.</td></tr>}
+              {!lista.length && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhum anunciante.</td></tr>}
             </tbody>
           </table>
         </div>
       )}
-      {contratoFor && <GerarContratoModal token={token} conta={contratoFor} onClose={() => setContratoFor(null)} />}
+      {novo && <AnuncModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
+      {contratoFor && <GerarContratoModal token={token} conta={{ id: contratoFor.id, empresa: contratoFor.empresa }} onClose={() => setContratoFor(null)} />}
     </div>
   );
 }
-
-// ─── Planos ─────────────────────────────────────────────────────────────────
-interface PlanoAdmin { id: string; nome: string; preco: number; telas: string; destaque: boolean; recursos: string[]; ativo: boolean; ordem: number; }
-function Planos({ token }: { token: string }) {
-  const [planos, setPlanos] = useState<PlanoAdmin[]>([]);
-  const [novo, setNovo] = useState(false);
-  const load = useCallback(async () => { const r = await aapi(token, "/api/admin/planos"); const d = await r.json(); if (d.ok) setPlanos(d.planos); }, [token]);
-  useEffect(() => { load(); }, [load]);
-
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-bold">Planos</h2>
-        <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo plano</button>
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {planos.map(p => <PlanoCard key={p.id} token={token} plano={p} onChange={load} />)}
-      </div>
-      {novo && <PlanoModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
-    </div>
-  );
-}
-function PlanoCard({ token, plano, onChange }: { token: string; plano: PlanoAdmin; onChange: () => void }) {
-  const [edit, setEdit] = useState(false);
-  async function toggle() {
-    await aapi(token, `/api/admin/planos/${plano.id}`, { method: "PATCH", body: JSON.stringify({ ativo: !plano.ativo }) });
-    onChange();
-  }
-  return (
-    <div className={`rounded-2xl border p-5 ${plano.ativo ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.02] opacity-60"}`}>
-      <div className="flex items-center justify-between">
-        <h3 className="font-bold">{plano.nome}{plano.destaque && <span className="ml-2 rounded bg-brand px-1.5 py-0.5 text-[10px]">DESTAQUE</span>}</h3>
-        <span className="text-xs text-slate-500">{plano.ativo ? "ativo" : "inativo"}</span>
-      </div>
-      <p className="mt-1 text-xs text-slate-400">{plano.telas}</p>
-      <p className="mt-2 text-2xl font-black text-brand-light">{brl(plano.preco)}<span className="text-xs text-slate-400">/tela</span></p>
-      <ul className="mt-3 space-y-1 text-xs text-slate-400">{plano.recursos.slice(0, 4).map((r, i) => <li key={i}>· {r}</li>)}</ul>
-      <div className="mt-4 flex gap-2">
-        <button onClick={() => setEdit(true)} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">Editar</button>
-        <button onClick={toggle} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">{plano.ativo ? "Desativar" : "Ativar"}</button>
-      </div>
-      {edit && <PlanoModal token={token} plano={plano} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); onChange(); }} />}
-    </div>
-  );
-}
-function PlanoModal({ token, plano, onClose, onSaved }: { token: string; plano?: PlanoAdmin; onClose: () => void; onSaved: () => void }) {
-  const editing = Boolean(plano);
-  const [id, setId] = useState(plano?.id ?? "");
-  const [nome, setNome] = useState(plano?.nome ?? "");
-  const [preco, setPreco] = useState(String(plano?.preco ?? ""));
-  const [telas, setTelas] = useState(plano?.telas ?? "");
-  const [destaque, setDestaque] = useState(plano?.destaque ?? false);
-  const [recursos, setRecursos] = useState((plano?.recursos ?? []).join("\n"));
+function AnuncModal({ token, onClose, onSaved }: { token: string; onClose: () => void; onSaved: () => void }) {
+  const [nome, setNome] = useState(""); const [empresa, setEmpresa] = useState(""); const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState(""); const [whatsapp, setWhatsapp] = useState(""); const [cidade, setCidade] = useState("");
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
-
   async function salvar() {
     setBusy(true); setErr("");
-    const body = { id, nome, preco, telas_label: telas, destaque, recursos: recursos.split("\n").map(s => s.trim()).filter(Boolean), ordem: plano?.ordem ?? 0 };
-    const r = editing
-      ? await aapi(token, `/api/admin/planos/${plano!.id}`, { method: "PATCH", body: JSON.stringify(body) })
-      : await aapi(token, "/api/admin/planos", { method: "POST", body: JSON.stringify(body) });
-    const d = await r.json();
-    setBusy(false);
+    const r = await aapi(token, "/api/admin/anunciantes", { method: "POST", body: JSON.stringify({ nome, empresa, email, senha, whatsapp, cidade }) });
+    const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
     onSaved();
   }
   return (
-    <Modal onClose={onClose} title={editing ? `Editar ${plano!.nome}` : "Novo plano"}>
-      {!editing && <Field label="ID (slug)" value={id} onChange={setId} placeholder="ex: premium" />}
-      <Field label="Nome" value={nome} onChange={setNome} />
-      <Field label="Preço por tela (R$)" value={preco} onChange={setPreco} type="number" />
-      <Field label="Descrição de telas" value={telas} onChange={setTelas} placeholder="ex: a partir de 3 telas" />
-      <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={destaque} onChange={e => setDestaque(e.target.checked)} /> Plano em destaque</label>
-      <label className="mb-1 block text-sm text-slate-300">Recursos (um por linha)</label>
-      <textarea value={recursos} onChange={e => setRecursos(e.target.value)} rows={5} className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-brand/50" />
+    <Modal onClose={onClose} title="Novo anunciante">
+      <Field label="Empresa" value={empresa} onChange={setEmpresa} />
+      <Field label="Nome do contato" value={nome} onChange={setNome} />
+      <Field label="E-mail (login)" value={email} onChange={setEmail} type="email" />
+      <Field label="Senha de acesso" value={senha} onChange={setSenha} type="password" placeholder="mínimo 6 caracteres" />
+      <div className="grid grid-cols-2 gap-3"><Field label="WhatsApp" value={whatsapp} onChange={setWhatsapp} /><Field label="Cidade" value={cidade} onChange={setCidade} /></div>
+      {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+      <button onClick={salvar} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar</button>
+      <p className="mt-2 text-xs text-slate-500">O anunciante acessa o /painel com esse e-mail e senha pra ver campanhas e enviar arte.</p>
+    </Modal>
+  );
+}
+
+// ─── Locais ─────────────────────────────────────────────────────────────────
+function Locais({ token }: { token: string }) {
+  const [lista, setLista] = useState<Local[]>([]);
+  const [novo, setNovo] = useState(false);
+  const load = useCallback(async () => { const r = await aapi(token, "/api/admin/locais"); const d = await r.json(); if (d.ok) setLista(d.locais); }, [token]);
+  useEffect(() => { load(); }, [load]);
+  async function toggle(l: Local) { await aapi(token, "/api/admin/locais", { method: "PATCH", body: JSON.stringify({ id: l.id, ativo: !l.ativo }) }); load(); }
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-bold">Locais (inventário)</h2>
+        <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo local</button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {lista.map(l => (
+          <div key={l.id} className={`rounded-2xl border p-4 ${l.ativo ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.02] opacity-60"}`}>
+            <div className="flex items-start justify-between">
+              <div><p className="font-bold">{l.nome}</p><p className="text-xs text-slate-400">{l.cidade ?? ""}{l.endereco ? ` · ${l.endereco}` : ""}</p></div>
+              <MapPin className="h-4 w-4 text-brand-light" />
+            </div>
+            <p className="mt-2 text-xs text-slate-500">{l.largura}×{l.altura} · grupo Xibo {l.xibo_display_group_id ?? "—"}</p>
+            <button onClick={() => toggle(l)} className="mt-3 w-full rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">{l.ativo ? "Desativar" : "Ativar"}</button>
+          </div>
+        ))}
+        {!lista.length && <p className="text-sm text-slate-500">Nenhum local. Cadastre seus pontos de mídia.</p>}
+      </div>
+      {novo && <LocalModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
+    </div>
+  );
+}
+function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () => void; onSaved: () => void }) {
+  const [nome, setNome] = useState(""); const [cidade, setCidade] = useState(""); const [endereco, setEndereco] = useState("");
+  const [largura, setLargura] = useState("1080"); const [altura, setAltura] = useState("1920");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  async function salvar() {
+    setBusy(true); setErr("");
+    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, largura, altura }) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro"); return; }
+    onSaved();
+  }
+  return (
+    <Modal onClose={onClose} title="Novo local">
+      <Field label="Nome do ponto" value={nome} onChange={setNome} placeholder="ex: Shopping Centro - Praça" />
+      <div className="grid grid-cols-2 gap-3"><Field label="Cidade" value={cidade} onChange={setCidade} /><Field label="Endereço" value={endereco} onChange={setEndereco} /></div>
+      <div className="grid grid-cols-2 gap-3"><Field label="Largura (px)" value={largura} onChange={setLargura} type="number" /><Field label="Altura (px)" value={altura} onChange={setAltura} type="number" /></div>
+      <p className="mb-3 text-xs text-slate-500">Use 1080×1920 (retrato) ou 1920×1080 (paisagem) conforme as telas do local. Um Display Group é criado no Xibo automaticamente.</p>
+      {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+      <button onClick={salvar} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar local</button>
+    </Modal>
+  );
+}
+
+// ─── Pacotes ────────────────────────────────────────────────────────────────
+function Pacotes({ token }: { token: string }) {
+  const [lista, setLista] = useState<Pacote[]>([]);
+  const [novo, setNovo] = useState(false);
+  const [editar, setEditar] = useState<Pacote | null>(null);
+  const load = useCallback(async () => { const r = await aapi(token, "/api/admin/pacotes"); const d = await r.json(); if (d.ok) setLista(d.pacotes); }, [token]);
+  useEffect(() => { load(); }, [load]);
+  async function toggle(p: Pacote) { await aapi(token, "/api/admin/pacotes", { method: "PATCH", body: JSON.stringify({ id: p.id, ativo: !p.ativo }) }); load(); }
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-bold">Pacotes de venda</h2>
+        <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo pacote</button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {lista.map(p => (
+          <div key={p.id} className={`rounded-2xl border p-4 ${p.ativo ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.02] opacity-60"}`}>
+            <p className="font-bold">{p.nome}</p>
+            <p className="text-xs text-slate-400">{TIPO_LABEL[p.tipo] ?? p.tipo}</p>
+            <p className="mt-2 text-sm">{p.insercoes_dia} inserções/dia · {p.segundos}s · {p.dias} dias</p>
+            {Number(p.preco) > 0 && <p className="mt-1 text-lg font-black text-brand-light">{brl(Number(p.preco))}</p>}
+            <div className="mt-3 flex gap-2">
+              <button onClick={() => setEditar(p)} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">Editar</button>
+              <button onClick={() => toggle(p)} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">{p.ativo ? "Desativar" : "Ativar"}</button>
+            </div>
+          </div>
+        ))}
+        {!lista.length && <p className="text-sm text-slate-500">Nenhum pacote.</p>}
+      </div>
+      {novo && <PacoteModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
+      {editar && <PacoteModal token={token} pacote={editar} onClose={() => setEditar(null)} onSaved={() => { setEditar(null); load(); }} />}
+    </div>
+  );
+}
+function PacoteModal({ token, pacote, onClose, onSaved }: { token: string; pacote?: Pacote; onClose: () => void; onSaved: () => void }) {
+  const editing = Boolean(pacote);
+  const [nome, setNome] = useState(pacote?.nome ?? "");
+  const [tipo, setTipo] = useState(pacote?.tipo ?? "video");
+  const [dias, setDias] = useState(String(pacote?.dias ?? "15"));
+  const [ins, setIns] = useState(String(pacote?.insercoes_dia ?? "250"));
+  const [seg, setSeg] = useState(String(pacote?.segundos ?? "10"));
+  const [preco, setPreco] = useState(String(pacote?.preco ?? ""));
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  async function salvar() {
+    setBusy(true); setErr("");
+    const body = { nome, tipo, dias, insercoes_dia: ins, segundos: seg, preco: preco || 0 };
+    const r = editing
+      ? await aapi(token, "/api/admin/pacotes", { method: "PATCH", body: JSON.stringify({ id: pacote!.id, ...body }) })
+      : await aapi(token, "/api/admin/pacotes", { method: "POST", body: JSON.stringify(body) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro"); return; }
+    onSaved();
+  }
+  return (
+    <Modal onClose={onClose} title={editing ? "Editar pacote" : "Novo pacote"}>
+      <Field label="Nome" value={nome} onChange={setNome} placeholder="ex: 15 dias · 250 inserções/dia" />
+      <label className="mb-1 block text-sm text-slate-300">Tipo</label>
+      <select value={tipo} onChange={e => setTipo(e.target.value)} className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+        {Object.entries(TIPO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Dias" value={dias} onChange={setDias} type="number" />
+        <Field label="Inserções/dia" value={ins} onChange={setIns} type="number" />
+        <Field label="Segundos" value={seg} onChange={setSeg} type="number" />
+      </div>
+      <Field label="Preço (R$)" value={preco} onChange={setPreco} type="number" />
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
       <button onClick={salvar} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar</button>
     </Modal>
@@ -363,7 +634,7 @@ function TemplateModal({ token, tpl, modeloPadrao, onClose, onSaved }: { token: 
     </Modal>
   );
 }
-function GerarContratoModal({ token, conta, onClose }: { token: string; conta: Conta; onClose: () => void }) {
+function GerarContratoModal({ token, conta, onClose }: { token: string; conta: { id: string; empresa: string }; onClose: () => void }) {
   const [tpls, setTpls] = useState<Template[]>([]);
   const [sel, setSel] = useState(""); const [busy, setBusy] = useState(false);
   const [html, setHtml] = useState(""); const [err, setErr] = useState("");
