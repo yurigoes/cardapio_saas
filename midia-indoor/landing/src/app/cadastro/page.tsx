@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Tv, Check, ArrowLeft, Loader2, CheckCircle2 } from "lucide-react";
+import { Tv, Check, ArrowLeft, Loader2 } from "lucide-react";
 import { PLANOS, formatBRL } from "@/lib/planos";
 
 function CadastroForm() {
@@ -14,26 +14,46 @@ function CadastroForm() {
   const [nome,     setNome]     = useState("");
   const [empresa,  setEmpresa]  = useState("");
   const [email,    setEmail]    = useState("");
+  const [senha,    setSenha]    = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [telas,    setTelas]    = useState("1");
   const [cidade,   setCidade]   = useState("");
-  const [obs,      setObs]      = useState("");
   const [busy,     setBusy]     = useState(false);
-  const [ok,       setOk]       = useState(false);
+  const [etapa,    setEtapa]    = useState("");
   const [err,      setErr]      = useState("");
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr("");
     try {
-      const r = await fetch("/api/leads", {
+      // 1) Cria a conta + assinatura (pendente) e recebe o JWT
+      setEtapa("Criando sua conta…");
+      const rs = await fetch("/api/auth/signup", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ plano, nome, empresa, email, whatsapp, telas: Number(telas), cidade, obs }),
+        body:    JSON.stringify({
+          nome, empresa, email, senha, whatsapp, cidade,
+          plano, qtd_telas: Number(telas) || 1,
+        }),
       });
-      const d = await r.json();
-      if (!d.ok) { setErr(d.error || "Erro ao enviar"); return; }
-      setOk(true);
+      const ds = await rs.json();
+      if (!ds.ok) { setErr(ds.error || "Erro ao criar conta"); return; }
+
+      // Guarda o token pra área do cliente
+      localStorage.setItem("midia_token", ds.token);
+
+      // 2) Cria o pagamento recorrente no Mercado Pago
+      setEtapa("Gerando link de pagamento…");
+      const rp = await fetch("/api/pagamento/criar", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${ds.token}` },
+      });
+      const dp = await rp.json();
+      if (!dp.ok || !dp.init_point) { setErr(dp.error || "Erro ao gerar pagamento"); return; }
+
+      // 3) Redireciona pro checkout do Mercado Pago
+      setEtapa("Redirecionando pro pagamento…");
+      window.location.href = dp.init_point;
     } catch {
       setErr("Erro de conexão. Tente novamente.");
     } finally {
@@ -42,24 +62,7 @@ function CadastroForm() {
   }
 
   const planoSel = PLANOS.find(p => p.id === plano);
-
-  if (ok) {
-    return (
-      <div className="mx-auto max-w-md py-24 text-center">
-        <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-brand/15">
-          <CheckCircle2 className="h-10 w-10 text-brand-light" />
-        </div>
-        <h1 className="text-2xl font-bold">Cadastro recebido! 🎉</h1>
-        <p className="mt-3 text-slate-300">
-          Recebemos seu interesse no plano <strong>{planoSel?.nome}</strong>.
-          Nossa equipe vai te chamar no WhatsApp em breve pra ativar sua conta.
-        </p>
-        <Link href="/" className="mt-8 inline-block rounded-xl border border-white/15 px-6 py-3 font-semibold hover:bg-white/5">
-          Voltar ao início
-        </Link>
-      </div>
-    );
-  }
+  const totalMensal = planoSel ? planoSel.preco * (Number(telas) || 1) : 0;
 
   return (
     <div className="mx-auto grid max-w-4xl gap-8 px-6 py-12 md:grid-cols-[1fr_320px]">
@@ -87,16 +90,11 @@ function CadastroForm() {
           <Field label="Seu nome *"     value={nome}     onChange={setNome}     placeholder="João Silva" required />
           <Field label="Empresa *"      value={empresa}  onChange={setEmpresa}  placeholder="Restaurante XPTO" required />
           <Field label="E-mail *"       value={email}    onChange={setEmail}    placeholder="voce@email.com" type="email" required />
-          <Field label="WhatsApp *"     value={whatsapp} onChange={setWhatsapp} placeholder="(11) 99999-9999" required />
+          <Field label="Senha *"        value={senha}    onChange={setSenha}    placeholder="mínimo 6 caracteres" type="password" required />
+          <Field label="WhatsApp"       value={whatsapp} onChange={setWhatsapp} placeholder="(11) 99999-9999" />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Qtde de telas" value={telas}  onChange={setTelas}  placeholder="1" type="number" />
             <Field label="Cidade"        value={cidade} onChange={setCidade} placeholder="São Paulo" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-slate-300">Observações</label>
-            <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3}
-              placeholder="Conte um pouco sobre seu negócio…"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none focus:border-brand/50" />
           </div>
 
           {err && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">{err}</p>}
@@ -104,8 +102,11 @@ function CadastroForm() {
           <button type="submit" disabled={busy}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 font-semibold hover:bg-brand-dark disabled:opacity-50 transition">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {busy ? "Enviando…" : "Quero contratar"}
+            {busy ? (etapa || "Processando…") : "Criar conta e pagar"}
           </button>
+          <p className="text-center text-xs text-slate-500">
+            Já tem conta? <Link href="/painel" className="text-brand-light hover:underline">Entrar na área do cliente</Link>
+          </p>
         </form>
       </div>
 
@@ -126,6 +127,16 @@ function CadastroForm() {
             </li>
           ))}
         </ul>
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <div className="flex items-center justify-between text-sm text-slate-400">
+            <span>{telas || 1} tela{Number(telas) > 1 ? "s" : ""} × {planoSel ? formatBRL(planoSel.preco) : "—"}</span>
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-sm text-slate-300">Total mensal</span>
+            <span className="text-2xl font-black text-brand-light">{formatBRL(totalMensal)}</span>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">Cobrança recorrente mensal via Mercado Pago. Cancele quando quiser.</p>
+        </div>
       </aside>
     </div>
   );
