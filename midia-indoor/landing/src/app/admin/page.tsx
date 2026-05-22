@@ -369,6 +369,11 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
               <button onClick={() => acao("encerrar", "encerrar")} disabled={!!busy} className="flex items-center gap-2 rounded-xl border border-red-500/30 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50">
                 {busy === "encerrar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />} Encerrar
               </button>
+              {camp.status === "no_ar" && (
+                <button onClick={async () => { setBusy("rel-email"); setMsg(""); const r = await aapi(token, `/api/admin/campanhas/${camp.id}/relatorio-email`, { method: "POST" }); const d = await r.json(); setBusy(""); setMsg(d.ok ? "Relatório enviado por e-mail ✓" : (d.error || "Erro")); }} disabled={!!busy} className="flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5 disabled:opacity-50">
+                  {busy === "rel-email" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar relatório por e-mail
+                </button>
+              )}
               <div className="ml-auto flex items-center gap-1 text-xs">
                 <span className="text-slate-400">Pgto:</span>
                 {["pago", "pendente", "isento"].map(s => (

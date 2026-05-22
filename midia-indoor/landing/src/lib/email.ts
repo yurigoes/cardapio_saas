@@ -88,6 +88,54 @@ async function enviar(opts: { para: string; assunto: string; html: string }): Pr
   }
 }
 
+/** Notifica o anunciante quando o suporte responde um chamado. */
+export async function enviarRespostaChamado(opts: { nome: string; email: string; assunto: string; mensagem: string }): Promise<boolean> {
+  const primeiro = opts.nome.split(" ")[0] || opts.nome;
+  const trecho = opts.mensagem.length > 400 ? opts.mensagem.slice(0, 400) + "…" : opts.mensagem;
+  const conteudo = `
+    <p>Olá, <strong>${primeiro}</strong>!</p>
+    <p>Você tem uma nova resposta no seu chamado <strong>"${opts.assunto}"</strong>:</p>
+    <blockquote style="margin:14px 0;padding:12px 16px;border-left:3px solid ${ROXO};background:#f7f5ff;border-radius:6px;color:#374151;white-space:pre-wrap;">${trecho}</blockquote>
+    <p>Acesse seu painel pra ver a conversa completa e responder.</p>`;
+  return enviar({
+    para: opts.email,
+    assunto: `Resposta ao seu chamado: ${opts.assunto}`,
+    html: wrap("Você recebeu uma resposta", conteudo, { texto: "Ver chamado", url: `${APP_URL}/painel` }),
+  });
+}
+
+/** Envia o relatório (proof-of-play) de uma campanha pro anunciante. */
+export async function enviarRelatorioCampanha(opts: {
+  nome: string; email: string; campanha: string; periodo: string;
+  plays: number; duracao: number;
+  porLocal?: { local: string; plays: number }[];
+}): Promise<boolean> {
+  const primeiro = opts.nome.split(" ")[0] || opts.nome;
+  const linhas = (opts.porLocal ?? []).map(p =>
+    `<tr><td style="padding:6px 10px;border-top:1px solid #eee;">${p.local}</td><td style="padding:6px 10px;border-top:1px solid #eee;text-align:right;font-weight:600;">${p.plays}</td></tr>`
+  ).join("");
+  const tabela = linhas
+    ? `<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:14px;">
+         <thead><tr><th style="padding:6px 10px;text-align:left;color:#6b7280;">Local / Tela</th><th style="padding:6px 10px;text-align:right;color:#6b7280;">Exibições</th></tr></thead>
+         <tbody>${linhas}</tbody>
+       </table>`
+    : "";
+  const conteudo = `
+    <p>Olá, <strong>${primeiro}</strong>!</p>
+    <p>Segue o relatório de exibições da campanha <strong>"${opts.campanha}"</strong> (${opts.periodo}):</p>
+    <div style="margin:16px 0;padding:16px;background:#f7f5ff;border-radius:10px;text-align:center;">
+      <div style="font-size:30px;font-weight:800;color:${ROXO};">${opts.plays}</div>
+      <div style="font-size:13px;color:#6b7280;">inserções exibidas · ${Math.round(opts.duracao)}s no total</div>
+    </div>
+    ${tabela}
+    <p style="margin-top:16px;">Obrigado por anunciar com a ${SAAS_NOME}! 🎉</p>`;
+  return enviar({
+    para: opts.email,
+    assunto: `Relatório da campanha: ${opts.campanha}`,
+    html: wrap("Relatório de exibições", conteudo, { texto: "Ver no painel", url: `${APP_URL}/painel` }),
+  });
+}
+
 /** E-mail de boas-vindas (enviado quando a conta é ativada). */
 export async function enviarBoasVindas(opts: { nome: string; email: string; empresa: string }): Promise<boolean> {
   const primeiro = opts.nome.split(" ")[0] || opts.nome;

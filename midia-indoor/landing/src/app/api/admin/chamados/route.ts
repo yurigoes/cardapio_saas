@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db, ensureSchema } from "@/lib/db";
 import { autenticarAdmin } from "@/lib/admin-auth";
+import { enviarRespostaChamado } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,17 @@ export async function POST(req: NextRequest) {
     const p = db();
     await p.query(`INSERT INTO midia_chamado_msgs (chamado_id, autor, mensagem) VALUES ($1,'suporte',$2)`, [b.chamado_id, b.mensagem]);
     await p.query(`UPDATE midia_chamados SET status=$1, updated_at=NOW() WHERE id=$2`, [b.fechar ? "fechado" : "respondido", b.chamado_id]);
+
+    // Notifica o anunciante por e-mail (best-effort)
+    try {
+      const dados = await p.query<{ nome: string; email: string; assunto: string }>(
+        `SELECT ct.nome, ct.email, ch.assunto
+           FROM midia_chamados ch JOIN midia_contas ct ON ct.id = ch.conta_id WHERE ch.id = $1`,
+        [b.chamado_id]
+      ).then(r => r.rows[0]);
+      if (dados?.email) await enviarRespostaChamado({ nome: dados.nome, email: dados.email, assunto: dados.assunto, mensagem: b.mensagem });
+    } catch (e) { console.warn("[chamados] e-mail não enviado:", (e as Error).message); }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[admin/chamados POST]", err);

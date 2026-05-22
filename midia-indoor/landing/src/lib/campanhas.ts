@@ -116,11 +116,43 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
   }
 }
 
-/** Encerra a campanha (remove a Ad Campaign do Xibo). */
+/** Envia o relatório (proof-of-play) da campanha pro anunciante por e-mail. */
+export async function enviarRelatorioPorEmail(campanhaId: string): Promise<{ ok: boolean; erro?: string }> {
+  const camp = await carregar(campanhaId);
+  if (!camp) return { ok: false, erro: "campanha não encontrada" };
+  const p = db();
+
+  const conta = await p.query<{ nome: string; email: string }>(
+    `SELECT ct.nome, ct.email FROM midia_campanhas c JOIN midia_contas ct ON ct.id = c.conta_id WHERE c.id = $1`,
+    [campanhaId]
+  ).then(r => r.rows[0]);
+  if (!conta?.email) return { ok: false, erro: "anunciante sem e-mail" };
+
+  const det = await relatorioDetalhado(campanhaId);
+  if (!det) return { ok: false, erro: "sem dados de exibição (campanha não lançada?)" };
+
+  // Agrupa por local/tela
+  const mapa = new Map<string, number>();
+  for (const e of det.exibicoes) mapa.set(e.display, (mapa.get(e.display) ?? 0) + e.numberPlays);
+  const porLocal = Array.from(mapa.entries()).map(([local, plays]) => ({ local, plays })).sort((a, b) => b.plays - a.plays);
+
+  const { enviarRelatorioCampanha } = await import("./email");
+  const enviado = await enviarRelatorioCampanha({
+    nome: conta.nome, email: conta.email, campanha: camp.nome,
+    periodo: `${camp.data_inicio ?? "—"} a ${camp.data_fim ?? "—"}`,
+    plays: det.resumo.plays, duracao: det.resumo.duracao, porLocal,
+  });
+  return enviado ? { ok: true } : { ok: false, erro: "SMTP não configurado ou falhou" };
+}
+
+/** Encerra a campanha (envia relatório por e-mail e remove a Ad Campaign do Xibo). */
 export async function encerrarCampanha(campanhaId: string): Promise<{ ok: boolean; erro?: string }> {
   const camp = await carregar(campanhaId);
   if (!camp) return { ok: false, erro: "campanha não encontrada" };
   try {
+    // Envia o relatório final ANTES de remover a campanha do Xibo (best-effort)
+    try { await enviarRelatorioPorEmail(campanhaId); } catch (e) { console.warn("[encerrar] relatório não enviado:", (e as Error).message); }
+
     if (camp.xibo_campaign_id) await excluirCampanha(camp.xibo_campaign_id);
     await db().query(
       `UPDATE midia_campanhas SET status = 'encerrada', xibo_campaign_id = NULL, updated_at = NOW() WHERE id = $1`,
