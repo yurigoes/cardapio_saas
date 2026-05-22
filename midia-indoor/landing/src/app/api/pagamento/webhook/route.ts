@@ -12,9 +12,28 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
-import { consultarPreApproval, validarAssinaturaWebhook } from "@/lib/mercadopago";
+import { consultarPreApproval, consultarPagamento, validarAssinaturaWebhook } from "@/lib/mercadopago";
 import { provisionarConta } from "@/lib/provisionar";
 import { enviarBoasVindas } from "@/lib/email";
+
+/** Pagamento único de campanha (Checkout Pro). external_reference = pagamento_id. */
+async function processarPagamento(paymentId: string): Promise<void> {
+  const info = await consultarPagamento(paymentId);
+  if (info.status !== "approved") return;
+  const pagamentoId = info.external_reference;
+  if (!pagamentoId) return;
+
+  await ensureSchema();
+  const p = db();
+  const pag = await p.query<{ campanha_id: string }>(
+    `UPDATE midia_pagamentos SET status='pago', gateway_ref=$1, pago_em=NOW()
+      WHERE id=$2 AND status<>'pago' RETURNING campanha_id`,
+    [paymentId, pagamentoId]
+  ).then(r => r.rows[0]);
+  if (pag) {
+    await p.query(`UPDATE midia_campanhas SET status_pagamento='pago', updated_at=NOW() WHERE id=$1`, [pag.campanha_id]);
+  }
+}
 
 async function processar(preapprovalId: string): Promise<void> {
   const info = await consultarPreApproval(preapprovalId);
@@ -111,14 +130,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "assinatura inválida" }, { status: 401 });
   }
 
-  // Só nos importam eventos de preapproval (assinatura)
-  if (info.tipo.includes("preapproval") || info.tipo === "") {
-    try {
-      await processar(info.id);
-    } catch (err) {
-      console.error("[webhook] erro ao processar", err);
-      // Mesmo em erro respondemos 200 pra não floodar reenvio; reprocessável manualmente.
+  try {
+    if (info.tipo.includes("payment")) {
+      await processarPagamento(info.id);           // pagamento único de campanha
+    } else if (info.tipo.includes("preapproval") || info.tipo === "") {
+      await processar(info.id);                    // assinatura recorrente
     }
+  } catch (err) {
+    console.error("[webhook] erro ao processar", err);
+    // Mesmo em erro respondemos 200 pra não floodar reenvio; reprocessável manualmente.
   }
   return NextResponse.json({ ok: true });
 }

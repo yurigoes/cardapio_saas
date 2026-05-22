@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { autenticar } from "@/lib/auth";
-import { relatorioCampanha } from "@/lib/campanhas";
+import { relatorioDetalhado } from "@/lib/campanhas";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +17,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!dono.rows.length) return NextResponse.json({ ok: false, error: "campanha não encontrada" }, { status: 404 });
 
   try {
-    const r = await relatorioCampanha(params.id);
-    return NextResponse.json({ ok: true, relatorio: r });
+    const r = await relatorioDetalhado(params.id);
+    return NextResponse.json({ ok: true, relatorio: r?.resumo ?? null, exibicoes: r?.exibicoes ?? [] });
   } catch (err) {
     console.error("[painel/campanhas relatorio]", err);
     return NextResponse.json({ ok: false, error: "erro" }, { status: 500 });

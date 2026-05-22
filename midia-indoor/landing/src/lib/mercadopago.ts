@@ -93,6 +93,45 @@ export async function criarPreApproval(opts: {
   return { id: data.id, init_point: data.init_point };
 }
 
+/** Cria um pagamento ÚNICO (Checkout Pro / preference) — usado por campanha DOOH. */
+export async function criarPagamentoUnico(opts: {
+  referencia: string;       // external_reference (ex: pagamento_id ou campanha_id)
+  titulo: string;
+  valor: number;
+  email?: string;
+}): Promise<{ id: string; init_point: string }> {
+  if (!MP_TOKEN) throw new Error("MP_ACCESS_TOKEN não configurado");
+
+  const r = await fetch(`${MP_API}/checkout/preferences`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${MP_TOKEN}` },
+    body: JSON.stringify({
+      items: [{ title: opts.titulo, quantity: 1, unit_price: Number(opts.valor.toFixed(2)), currency_id: "BRL" }],
+      external_reference: opts.referencia,
+      payer: opts.email ? { email: opts.email } : undefined,
+      back_urls: { success: `${APP_URL}/painel?pago=1`, pending: `${APP_URL}/painel`, failure: `${APP_URL}/painel` },
+      auto_return: "approved",
+      notification_url: `${APP_URL}/api/pagamento/webhook`,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await r.json() as { id?: string; init_point?: string; message?: string };
+  if (!r.ok || !data.init_point || !data.id) {
+    throw new Error(`MP preference falhou: ${data.message ?? JSON.stringify(data).slice(0, 200)}`);
+  }
+  return { id: data.id, init_point: data.init_point };
+}
+
+/** Consulta um pagamento (payment) por id → status + external_reference. */
+export async function consultarPagamento(paymentId: string): Promise<{ status: string; external_reference?: string }> {
+  const r = await fetch(`${MP_API}/v1/payments/${paymentId}`, {
+    headers: { Authorization: `Bearer ${MP_TOKEN}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await r.json() as { status: string; external_reference?: string };
+  return data;
+}
+
 /** Consulta status de um preapproval (inclui init_point pra reaproveitar o link). */
 export async function consultarPreApproval(id: string): Promise<{
   status: string; external_reference?: string; init_point?: string;

@@ -8,7 +8,7 @@
  *   4. relatório → statsCampanha (proof-of-play)
  */
 import { db, ensureSchema } from "./db";
-import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha } from "./xibo";
+import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, type ExibicaoLinha } from "./xibo";
 
 interface CampanhaRow {
   id: string; conta_id: string; nome: string; tipo: string; dias: number; insercoes_dia: number;
@@ -133,7 +133,7 @@ export async function encerrarCampanha(campanhaId: string): Promise<{ ok: boolea
   }
 }
 
-/** Relatório de exibições (proof-of-play). */
+/** Relatório de exibições (proof-of-play) — resumo. */
 export async function relatorioCampanha(campanhaId: string): Promise<{ plays: number; duracao: number } | null> {
   const camp = await carregar(campanhaId);
   if (!camp?.xibo_campaign_id || !camp.data_inicio) return null;
@@ -141,4 +141,16 @@ export async function relatorioCampanha(campanhaId: string): Promise<{ plays: nu
   const to   = `${camp.data_fim ?? camp.data_inicio} 23:59:59`;
   const s = await statsCampanha(camp.xibo_campaign_id, from, to);
   return { plays: s.plays, duracao: s.duracao };
+}
+
+/** Relatório detalhado: cada exibição com horário + local + contagem (transparência). */
+export async function relatorioDetalhado(campanhaId: string): Promise<{ resumo: { plays: number; duracao: number }; exibicoes: ExibicaoLinha[] } | null> {
+  const camp = await carregar(campanhaId);
+  if (!camp?.xibo_campaign_id || !camp.data_inicio) return null;
+  const from = `${camp.data_inicio} 00:00:00`;
+  const to   = `${camp.data_fim ?? camp.data_inicio} 23:59:59`;
+  const exibicoes = await statsDetalhe(camp.xibo_campaign_id, from, to);
+  const plays = exibicoes.reduce((s, e) => s + e.numberPlays, 0);
+  const duracao = exibicoes.reduce((s, e) => s + e.duration, 0);
+  return { resumo: { plays, duracao }, exibicoes };
 }

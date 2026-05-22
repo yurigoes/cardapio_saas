@@ -184,6 +184,39 @@ export async function ensureSchema(): Promise<void> {
       local_id      UUID NOT NULL REFERENCES midia_locais(id) ON DELETE CASCADE,
       PRIMARY KEY (campanha_id, local_id)
     );
+
+    -- Chamados de suporte (anunciante ↔ Three).
+    CREATE TABLE IF NOT EXISTS midia_chamados (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      conta_id      UUID NOT NULL REFERENCES midia_contas(id) ON DELETE CASCADE,
+      assunto       TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'aberto',  -- aberto|respondido|fechado
+      created_at    TIMESTAMPTZ DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_chamados_conta ON midia_chamados(conta_id);
+
+    CREATE TABLE IF NOT EXISTS midia_chamado_msgs (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      chamado_id    UUID NOT NULL REFERENCES midia_chamados(id) ON DELETE CASCADE,
+      autor         TEXT NOT NULL,        -- cliente|suporte
+      mensagem      TEXT NOT NULL,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_chamado_msgs ON midia_chamado_msgs(chamado_id);
+
+    -- Pagamentos de campanha (MP Checkout Pro / pagamento único).
+    CREATE TABLE IF NOT EXISTS midia_pagamentos (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      campanha_id   UUID NOT NULL REFERENCES midia_campanhas(id) ON DELETE CASCADE,
+      valor         NUMERIC(10,2) NOT NULL,
+      gateway_ref   TEXT,                 -- preference id / payment id
+      init_point    TEXT,                 -- link de checkout
+      status        TEXT NOT NULL DEFAULT 'pendente', -- pendente|pago|cancelado
+      pago_em       TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_pag_campanha ON midia_pagamentos(campanha_id);
   `);
 
   // Coluna p/ não reenviar boas-vindas

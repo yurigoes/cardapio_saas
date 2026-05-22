@@ -298,6 +298,30 @@ export async function statsCampanha(campaignId: number, fromDt: string, toDt: st
   return { plays, duracao, linhas: linhas.length };
 }
 
+export interface ExibicaoLinha {
+  start: string;          // data/hora da exibição
+  end: string;
+  display: string;        // nome da tela/local
+  displayId: number;
+  numberPlays: number;
+  duration: number;
+}
+
+/** Proof-of-play detalhado: cada registro de exibição com horário + tela (transparência). */
+export async function statsDetalhe(campaignId: number, fromDt: string, toDt: string): Promise<ExibicaoLinha[]> {
+  const qs = new URLSearchParams({ type: "Layout", campaignId: String(campaignId), fromDt, toDt, embed: "displayName" });
+  const r = await xibo<{ data?: Record<string, unknown>[] } | Record<string, unknown>[]>(`/api/stats?${qs.toString()}`);
+  const rows = Array.isArray(r) ? r : (r.data ?? []);
+  return rows.map(row => ({
+    start:       String(row.start ?? row.statDate ?? ""),
+    end:         String(row.end ?? ""),
+    display:     String(row.display ?? row.displayName ?? `Tela ${row.displayId ?? ""}`),
+    displayId:   Number(row.displayId ?? 0),
+    numberPlays: Number(row.numberPlays ?? 0),
+    duration:    Number(row.duration ?? 0),
+  })).filter(x => x.start);
+}
+
 // ─── Health/ping (testa credenciais) ────────────────────────────────────────
 export async function pingXibo(): Promise<boolean> {
   try {

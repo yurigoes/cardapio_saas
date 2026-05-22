@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, LogOut, LayoutDashboard, Users, Package, FileText, UserCog,
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
+  LifeBuoy, Send,
 } from "lucide-react";
 
 const TOKEN_KEY = "midia_admin_token";
@@ -15,7 +16,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "pacotes" | "contratos" | "usuarios";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "pacotes" | "chamados" | "contratos" | "usuarios";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -47,6 +48,7 @@ export default function AdminPage() {
     { id: "anunciantes", label: "Anunciantes", icon: Users },
     { id: "locais",      label: "Locais",      icon: MapPin, master: true },
     { id: "pacotes",     label: "Pacotes",     icon: Package, master: true },
+    { id: "chamados",    label: "Chamados",    icon: LifeBuoy },
     { id: "contratos",   label: "Contratos",   icon: FileText, master: true },
     { id: "usuarios",    label: "Usuários",    icon: UserCog, master: true },
   ];
@@ -79,6 +81,7 @@ export default function AdminPage() {
         {aba === "anunciantes" && <Anunciantes token={token} isMaster={isMaster} />}
         {aba === "locais"      && <Locais token={token} />}
         {aba === "pacotes"     && <Pacotes token={token} />}
+        {aba === "chamados"    && <Chamados token={token} />}
         {aba === "contratos"   && <Contratos token={token} />}
         {aba === "usuarios"    && <Usuarios token={token} />}
       </div>
@@ -724,6 +727,60 @@ function UsuarioModal({ token, onClose, onSaved }: { token: string; onClose: () 
       </select>
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
       <button onClick={salvar} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar</button>
+    </Modal>
+  );
+}
+
+// ─── Chamados (suporte) ───────────────────────────────────────────────────
+interface ChamadoAdmin { id: string; assunto: string; status: string; empresa: string; contato: string; ultima_msg: string | null; updated_at: string; }
+interface MsgAdmin { autor: string; mensagem: string; created_at: string; }
+function Chamados({ token }: { token: string }) {
+  const [lista, setLista] = useState<ChamadoAdmin[]>([]);
+  const [aberto, setAberto] = useState<ChamadoAdmin | null>(null);
+  const load = useCallback(async () => { const r = await aapi(token, "/api/admin/chamados"); const d = await r.json(); if (d.ok) setLista(d.chamados); }, [token]);
+  useEffect(() => { load(); }, [load]);
+  return (
+    <div>
+      <h2 className="mb-4 text-lg font-bold">Chamados de suporte</h2>
+      <div className="space-y-2">
+        {lista.map(c => (
+          <button key={c.id} onClick={() => setAberto(c)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left hover:bg-white/10">
+            <div><p className="font-medium">{c.assunto}</p><p className="text-xs text-slate-400">{c.empresa} · {c.contato}{c.ultima_msg ? ` — ${c.ultima_msg.slice(0, 60)}` : ""}</p></div>
+            <span className={`text-xs ${c.status === "aberto" ? "text-amber-300" : c.status === "respondido" ? "text-emerald-300" : "text-slate-500"}`}>{c.status}</span>
+          </button>
+        ))}
+        {!lista.length && <p className="text-sm text-slate-500">Nenhum chamado.</p>}
+      </div>
+      {aberto && <ChatChamadoAdmin token={token} chamado={aberto} onClose={() => { setAberto(null); load(); }} />}
+    </div>
+  );
+}
+function ChatChamadoAdmin({ token, chamado, onClose }: { token: string; chamado: ChamadoAdmin; onClose: () => void }) {
+  const [msgs, setMsgs] = useState<MsgAdmin[]>([]);
+  const [txt, setTxt] = useState(""); const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => { const r = await aapi(token, `/api/admin/chamados?id=${chamado.id}`); const d = await r.json(); if (d.ok) setMsgs(d.mensagens); }, [token, chamado.id]);
+  useEffect(() => { load(); }, [load]);
+  async function responder(fechar: boolean) {
+    if (!txt.trim() && !fechar) return;
+    setBusy(true);
+    await aapi(token, "/api/admin/chamados", { method: "POST", body: JSON.stringify({ chamado_id: chamado.id, mensagem: txt || "(chamado encerrado)", fechar }) });
+    setTxt(""); setBusy(false); load();
+  }
+  return (
+    <Modal title={`${chamado.assunto} — ${chamado.empresa}`} onClose={onClose} wide>
+      <div className="mb-3 max-h-80 space-y-2 overflow-y-auto">
+        {msgs.map((m, i) => (
+          <div key={i} className={`rounded-xl px-3 py-2 text-sm ${m.autor === "suporte" ? "ml-8 bg-brand/20" : "mr-8 bg-white/5"}`}>
+            <p className="text-[11px] text-slate-400">{m.autor === "suporte" ? "Você (suporte)" : chamado.contato} · {new Date(m.created_at.replace(" ", "T")).toLocaleString("pt-BR")}</p>
+            <p className="whitespace-pre-wrap">{m.mensagem}</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input value={txt} onChange={e => setTxt(e.target.value)} onKeyDown={e => { if (e.key === "Enter") responder(false); }} placeholder="Responder…" className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-brand/50" />
+        <button onClick={() => responder(false)} disabled={busy} className="rounded-xl bg-brand px-4 hover:bg-brand-dark disabled:opacity-50"><Send className="h-4 w-4" /></button>
+      </div>
+      <button onClick={() => responder(true)} disabled={busy} className="mt-2 w-full rounded-xl border border-white/15 py-2 text-xs hover:bg-white/5">Responder e encerrar chamado</button>
     </Modal>
   );
 }
