@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { consultarPreApproval, validarAssinaturaWebhook } from "@/lib/mercadopago";
 import { provisionarConta } from "@/lib/provisionar";
+import { enviarBoasVindas } from "@/lib/email";
 
 async function processar(preapprovalId: string): Promise<void> {
   const info = await consultarPreApproval(preapprovalId);
@@ -50,7 +51,19 @@ async function processar(preapprovalId: string): Promise<void> {
     }
     // Provisiona no Xibo (cria folder + display group; idempotente)
     const r = await provisionarConta(assin.conta_id);
-    if (!r.ok) console.error("[webhook] provisionamento falhou", r.erro);
+    if (!r.ok) { console.error("[webhook] provisionamento falhou", r.erro); return; }
+
+    // Boas-vindas (uma vez só — controlado por boas_vindas_em)
+    const conta = await p.query<{ nome: string; email: string; empresa: string; boas_vindas_em: string | null }>(
+      `SELECT nome, email, empresa, boas_vindas_em FROM midia_contas WHERE id = $1`,
+      [assin.conta_id]
+    ).then(rr => rr.rows[0]);
+    if (conta && !conta.boas_vindas_em) {
+      const enviado = await enviarBoasVindas({ nome: conta.nome, email: conta.email, empresa: conta.empresa });
+      if (enviado) {
+        await p.query(`UPDATE midia_contas SET boas_vindas_em = NOW() WHERE id = $1`, [assin.conta_id]);
+      }
+    }
   } else if (info.status === "cancelled") {
     await p.query(
       `UPDATE midia_assinaturas SET status = 'cancelada', updated_at = NOW() WHERE id = $1`,

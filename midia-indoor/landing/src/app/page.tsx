@@ -3,9 +3,13 @@ import {
   MonitorPlay, Megaphone, CalendarClock, LayoutGrid, BarChart3,
   Smartphone, Check, ArrowRight, Tv,
 } from "lucide-react";
-import { PLANOS, formatBRL } from "@/lib/planos";
+import { formatBRL } from "@/lib/planos";
+import { listarPlanosAtivos } from "@/lib/planos-db";
 
-export default function LandingPage() {
+export const dynamic = "force-dynamic";
+
+export default async function LandingPage() {
+  const PLANOS = await listarPlanosAtivos();
   return (
     <main className="min-h-screen bg-[#0a0a12] text-white">
       {/* ── Header ─────────────────────────────────────────────────────── */}

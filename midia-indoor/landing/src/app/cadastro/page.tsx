@@ -1,16 +1,24 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Tv, Check, ArrowLeft, Loader2 } from "lucide-react";
-import { PLANOS, formatBRL } from "@/lib/planos";
+import { PLANOS as STATIC_PLANOS, formatBRL, type Plano } from "@/lib/planos";
 
 function CadastroForm() {
   const sp = useSearchParams();
   const planoInicial = sp.get("plano") ?? "profissional";
 
+  const [PLANOS, setPlanos]     = useState<Plano[]>(STATIC_PLANOS);
   const [plano,    setPlano]    = useState(planoInicial);
+
+  // Carrega planos atuais do banco (gerenciados pelo master)
+  useEffect(() => {
+    fetch("/api/planos").then(r => r.json()).then(d => {
+      if (d.ok && Array.isArray(d.planos) && d.planos.length) setPlanos(d.planos);
+    }).catch(() => { /* mantém static */ });
+  }, []);
   const [nome,     setNome]     = useState("");
   const [empresa,  setEmpresa]  = useState("");
   const [email,    setEmail]    = useState("");

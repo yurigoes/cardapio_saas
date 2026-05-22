@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db, ensureSchema } from "@/lib/db";
 import { hashSenha, criarToken } from "@/lib/auth";
-import { PLANOS } from "@/lib/planos";
+import { obterPlano } from "@/lib/planos-db";
 
 const schema = z.object({
   nome:      z.string().min(2).max(120),
@@ -31,12 +31,12 @@ export async function POST(req: NextRequest) {
     body = r.data;
   } catch { return NextResponse.json({ ok: false, error: "JSON inválido" }, { status: 400 }); }
 
-  const plano = PLANOS.find(p => p.id === body.plano);
-  if (!plano) return NextResponse.json({ ok: false, error: "plano inválido" }, { status: 400 });
-
   try {
     await ensureSchema();
     const p = db();
+
+    const plano = await obterPlano(body.plano);
+    if (!plano) return NextResponse.json({ ok: false, error: "plano inválido" }, { status: 400 });
 
     // Email já existe?
     const existe = await p.query(`SELECT id FROM midia_contas WHERE email = $1`, [body.email]);

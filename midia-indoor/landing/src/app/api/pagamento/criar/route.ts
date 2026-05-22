@@ -9,8 +9,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { autenticar } from "@/lib/auth";
-import { criarPreApproval } from "@/lib/mercadopago";
-import { PLANOS } from "@/lib/planos";
+import { criarPreApproval, consultarPreApproval } from "@/lib/mercadopago";
+import { obterPlano } from "@/lib/planos-db";
 
 export async function POST(req: NextRequest) {
   const auth = await autenticar(req);
@@ -37,7 +37,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "assinatura já está ativa" }, { status: 409 });
     }
 
-    const plano = PLANOS.find(p => p.id === assin.plano);
+    // Reaproveita o link se já existe um preapproval pendente (evita duplicar no MP)
+    if (assin.gateway_ref) {
+      try {
+        const ex = await consultarPreApproval(assin.gateway_ref);
+        if (ex.init_point && (ex.status === "pending" || ex.status === "authorized")) {
+          return NextResponse.json({ ok: true, init_point: ex.init_point, preapproval_id: assin.gateway_ref, reaproveitado: true });
+        }
+      } catch { /* preapproval some/expirou → cria novo abaixo */ }
+    }
+
+    const plano = await obterPlano(assin.plano);
     const valorMensal = Number(assin.preco_tela) * assin.qtd_telas;
     const descricao = `Three Digital Mídia — ${plano?.nome ?? assin.plano} (${assin.qtd_telas} tela${assin.qtd_telas > 1 ? "s" : ""})`;
 

@@ -93,12 +93,14 @@ export async function criarPreApproval(opts: {
   return { id: data.id, init_point: data.init_point };
 }
 
-/** Consulta status de um preapproval. */
-export async function consultarPreApproval(id: string): Promise<{ status: string; external_reference?: string }> {
+/** Consulta status de um preapproval (inclui init_point pra reaproveitar o link). */
+export async function consultarPreApproval(id: string): Promise<{
+  status: string; external_reference?: string; init_point?: string;
+}> {
   const r = await fetch(`${MP_API}/preapproval/${id}`, {
     headers: { Authorization: `Bearer ${MP_TOKEN}` },
     signal: AbortSignal.timeout(15000),
   });
-  const data = await r.json() as { status: string; external_reference?: string };
+  const data = await r.json() as { status: string; external_reference?: string; init_point?: string };
   return data;
 }
