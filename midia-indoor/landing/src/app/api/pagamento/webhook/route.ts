@@ -12,7 +12,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
-import { consultarPreApproval } from "@/lib/mercadopago";
+import { consultarPreApproval, validarAssinaturaWebhook } from "@/lib/mercadopago";
 import { provisionarConta } from "@/lib/provisionar";
 
 async function processar(preapprovalId: string): Promise<void> {
@@ -86,6 +86,17 @@ export async function POST(req: NextRequest) {
 
   const info = extrairId(req, body);
   if (!info) return NextResponse.json({ ok: true }); // ack sem nada pra fazer
+
+  // Valida a assinatura HMAC do MP (se MP_WEBHOOK_SECRET estiver configurado)
+  const assinaturaOk = validarAssinaturaWebhook({
+    xSignature: req.headers.get("x-signature"),
+    xRequestId: req.headers.get("x-request-id"),
+    dataId:     info.id,
+  });
+  if (!assinaturaOk) {
+    console.warn("[webhook] assinatura inválida — ignorado", { id: info.id });
+    return NextResponse.json({ ok: false, error: "assinatura inválida" }, { status: 401 });
+  }
 
   // Só nos importam eventos de preapproval (assinatura)
   if (info.tipo.includes("preapproval") || info.tipo === "") {

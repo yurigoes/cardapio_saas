@@ -20,9 +20,14 @@ export default function LandingPage() {
             <a href="#planos" className="hover:text-white">Planos</a>
             <a href="#como-funciona" className="hover:text-white">Como funciona</a>
           </nav>
-          <Link href="/cadastro" className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark transition">
-            Começar agora
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/painel" className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold hover:bg-white/5 transition">
+              Entrar
+            </Link>
+            <Link href="/cadastro" className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark transition">
+              Começar agora
+            </Link>
+          </div>
         </div>
       </header>
 

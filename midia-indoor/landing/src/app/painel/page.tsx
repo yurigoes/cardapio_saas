@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Tv, Upload, Loader2, LogOut, Image as ImageIcon, Film, MonitorPlay,
-  CheckCircle2, RefreshCw, Plus,
+  CheckCircle2, RefreshCw, Plus, CreditCard,
 } from "lucide-react";
 import { formatBRL } from "@/lib/planos";
 
@@ -79,6 +79,21 @@ function Painel() {
   }
 
   function sair() { localStorage.removeItem("midia_token"); setToken(null); setMe(null); }
+
+  // Refaz/retoma o pagamento (PIX ou cartão) — gera novo link de checkout do MP
+  const [payBusy, setPayBusy] = useState(false);
+  const [payErr, setPayErr]   = useState("");
+  async function reverPagamento() {
+    if (!token) return;
+    setPayBusy(true); setPayErr("");
+    try {
+      const r = await api(token, "/api/pagamento/criar", { method: "POST" });
+      const d = await r.json();
+      if (!d.ok || !d.init_point) { setPayErr(d.error || "Não foi possível gerar o pagamento"); return; }
+      window.location.href = d.init_point;   // checkout do MP (PIX ou cartão)
+    } catch { setPayErr("Erro de conexão"); }
+    finally { setPayBusy(false); }
+  }
 
   // ─── Telas de auth ──────────────────────────────────────────────────
   if (loading) {
@@ -154,16 +169,39 @@ function Painel() {
       </section>
 
       {!ativa ? (
-        <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 text-amber-200">
-          <p className="font-semibold">Conta aguardando ativação</p>
-          <p className="mt-1 text-sm">
-            Assim que o pagamento for confirmado, liberamos o upload de mídia e o pareamento das TVs.
-            Isso costuma levar alguns minutos.
-          </p>
-          <button onClick={() => carregar(token)} className="mt-3 flex items-center gap-2 rounded-lg border border-amber-400/30 px-3 py-2 text-sm hover:bg-amber-500/10">
-            <RefreshCw className="h-4 w-4" /> Verificar de novo
-          </button>
-        </div>
+        // Pagamento pendente/não confirmado → pedir pra concluir (PIX ou cartão).
+        // Caso já pago mas ainda provisionando, mostramos só o aviso de ativação.
+        (me.assinatura?.status !== "ativa") ? (
+          <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 text-amber-100">
+            <p className="font-semibold">Pagamento pendente</p>
+            <p className="mt-1 text-sm text-amber-200/90">
+              Sua assinatura ainda não foi confirmada. Conclua o pagamento para liberar o
+              upload de mídia e o pareamento das TVs. Você pode pagar com <strong>PIX</strong> ou
+              <strong> cartão</strong> — é só escolher na tela do Mercado Pago.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button onClick={reverPagamento} disabled={payBusy}
+                className="flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-50">
+                {payBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                {payBusy ? "Gerando…" : "Concluir pagamento (PIX ou cartão)"}
+              </button>
+              <button onClick={() => carregar(token)} className="flex items-center gap-2 rounded-lg border border-amber-400/30 px-3 py-2 text-sm hover:bg-amber-500/10">
+                <RefreshCw className="h-4 w-4" /> Já paguei, verificar
+              </button>
+            </div>
+            {payErr && <p className="mt-3 text-sm text-red-300">{payErr}</p>}
+          </div>
+        ) : (
+          <div className="mt-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-emerald-100">
+            <p className="font-semibold">Pagamento confirmado — ativando sua conta</p>
+            <p className="mt-1 text-sm text-emerald-200/90">
+              Estamos preparando seu ambiente (pastas e telas). Isso costuma levar alguns minutos.
+            </p>
+            <button onClick={() => carregar(token)} className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-400/30 px-3 py-2 text-sm hover:bg-emerald-500/10">
+              <RefreshCw className="h-4 w-4" /> Verificar de novo
+            </button>
+          </div>
+        )
       ) : (
         <>
           <Midias token={token} midias={midias} onChange={() => carregar(token)} />
