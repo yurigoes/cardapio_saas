@@ -161,6 +161,143 @@ export async function adicionarDisplayAoGrupo(displayId: number, displayGroupId:
   await xibo(`/api/displaygroup/${displayGroupId}/display/assign`, { method: "POST", body });
 }
 
+// ─── Resoluções ─────────────────────────────────────────────────────────────
+/** Acha (ou cria) uma resolução pelo tamanho e retorna o resolutionId. */
+export async function getResolution(width: number, height: number): Promise<number> {
+  const found = await xibo<Array<{ resolutionId: number }>>(`/api/resolution?width=${width}&height=${height}`);
+  if (Array.isArray(found) && found[0]?.resolutionId) return found[0].resolutionId;
+  const body = new URLSearchParams({ resolution: `${width}x${height}`, width: String(width), height: String(height) });
+  const r = await xibo<{ resolutionId?: number; data?: { resolutionId: number } }>("/api/resolution", { method: "POST", body });
+  const id = r.resolutionId ?? r.data?.resolutionId;
+  if (!id) throw new Error("Xibo: não criou resolução");
+  return id;
+}
+
+// ─── Layout a partir de uma única mídia (criativo do anunciante) ─────────────
+interface DraftLayout {
+  layoutId: number;
+  parentId?: number | null;
+  regions?: Array<{ regionPlaylist?: { playlistId: number } }>;
+}
+
+/**
+ * Cria um layout fullscreen com a mídia do anunciante e publica.
+ * Retorna o layoutId PUBLICADO (pra usar na Ad Campaign).
+ */
+export async function criarLayoutDeMidia(opts: {
+  nome: string;
+  arquivo: Buffer | Blob;
+  nomeArquivo: string;
+  folderId: number;
+  width: number;
+  height: number;
+  duracaoSeg?: number;   // segundos por inserção (imagens). Vídeo usa duração nativa.
+}): Promise<{ layoutId: number; mediaId: number }> {
+  const resolutionId = await getResolution(opts.width, opts.height);
+
+  // 1) Cria layout em rascunho
+  const draftBody = new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" });
+  const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: draftBody });
+  const publishedId = draft.parentId ?? draft.layoutId;
+  const playlistId  = draft.regions?.[0]?.regionPlaylist?.playlistId;
+  if (!playlistId) throw new Error("Xibo: layout criado sem playlist de região");
+
+  // 2) Sobe a mídia direto na playlist da região
+  const form = new FormData();
+  const blob = opts.arquivo instanceof Blob ? opts.arquivo : new Blob([new Uint8Array(opts.arquivo)]);
+  form.append("files", blob, opts.nomeArquivo);
+  form.append("folderId", String(opts.folderId));
+  form.append("playlistId", String(playlistId));
+  const up = await xibo<{ files: Array<{ mediaId: number }> }>("/api/library", { method: "POST", body: form });
+  const mediaId = up.files?.[0]?.mediaId;
+  if (!mediaId) throw new Error("Xibo: upload do criativo falhou");
+
+  // 3) Ajusta a duração do widget (segundos por inserção), se pedido
+  if (opts.duracaoSeg && opts.duracaoSeg > 0) {
+    try {
+      const widgets = await xibo<Array<{ widgetId: number }>>(`/api/playlist/widget?playlistId=${playlistId}`);
+      const widgetId = Array.isArray(widgets) ? widgets[widgets.length - 1]?.widgetId : undefined;
+      if (widgetId) {
+        const wb = new URLSearchParams({ duration: String(opts.duracaoSeg), useDuration: "1" });
+        await xibo(`/api/playlist/widget/${widgetId}`, { method: "PUT", body: wb });
+      }
+    } catch (e) { console.warn("[xibo] não setou duração do widget:", (e as Error).message); }
+  }
+
+  // 4) Publica
+  const pubBody = new URLSearchParams({ publishNow: "1" });
+  await xibo(`/api/layout/publish/${publishedId}`, { method: "PUT", body: pubBody });
+
+  return { layoutId: publishedId, mediaId };
+}
+
+// ─── Ad Campaigns (inserções automáticas) ────────────────────────────────────
+function fmtDt(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/**
+ * Cria uma Ad Campaign que toca o layout nos locais (display groups) escolhidos,
+ * com alvo de `target` plays (inserções) entre as datas. O Xibo distribui sozinho.
+ */
+export async function criarAdCampaign(opts: {
+  nome: string;
+  layoutId: number;
+  targetPlays: number;
+  dataInicio: Date;
+  dataFim: Date;
+  displayGroupIds: number[];
+}): Promise<number> {
+  // 1) Cria a campanha já com o layout
+  const body = new URLSearchParams();
+  body.set("type", "ad");
+  body.set("name", opts.nome);
+  body.set("targetType", "plays");
+  body.set("target", String(opts.targetPlays));
+  body.append("layoutIds[]", String(opts.layoutId));
+  const created = await xibo<{ campaignId?: number; data?: { campaignId: number } }>("/api/campaign", { method: "POST", body });
+  const campaignId = created.campaignId ?? created.data?.campaignId;
+  if (!campaignId) throw new Error("Xibo: não criou ad campaign");
+
+  // 2) Define datas + locais
+  await editarAdCampaign(campaignId, {
+    nome: opts.nome, targetPlays: opts.targetPlays,
+    dataInicio: opts.dataInicio, dataFim: opts.dataFim, displayGroupIds: opts.displayGroupIds,
+  });
+  return campaignId;
+}
+
+export async function editarAdCampaign(campaignId: number, opts: {
+  nome: string; targetPlays: number; dataInicio: Date; dataFim: Date; displayGroupIds: number[];
+}): Promise<void> {
+  const body = new URLSearchParams();
+  body.set("name", opts.nome);
+  body.set("targetType", "plays");
+  body.set("target", String(opts.targetPlays));
+  body.set("startDt", fmtDt(opts.dataInicio));
+  body.set("endDt", fmtDt(opts.dataFim));
+  for (const g of opts.displayGroupIds) body.append("displayGroupIds[]", String(g));
+  await xibo(`/api/campaign/${campaignId}`, { method: "PUT", body });
+}
+
+/** Encerra a campanha (remove do ar). */
+export async function excluirCampanha(campaignId: number): Promise<void> {
+  await xibo(`/api/campaign/${campaignId}`, { method: "DELETE" });
+}
+
+export interface StatLinha { type: string; layoutId?: number; numberPlays: number; duration: number; }
+
+/** Proof-of-play: total de exibições de uma campanha num período. */
+export async function statsCampanha(campaignId: number, fromDt: string, toDt: string): Promise<{ plays: number; duracao: number; linhas: number }> {
+  const qs = new URLSearchParams({ type: "Layout", campaignId: String(campaignId), fromDt, toDt });
+  const r = await xibo<{ data?: StatLinha[] } | StatLinha[]>(`/api/stats?${qs.toString()}`);
+  const linhas = Array.isArray(r) ? r : (r.data ?? []);
+  const plays = linhas.reduce((s, l) => s + (Number(l.numberPlays) || 0), 0);
+  const duracao = linhas.reduce((s, l) => s + (Number(l.duration) || 0), 0);
+  return { plays, duracao, linhas: linhas.length };
+}
+
 // ─── Health/ping (testa credenciais) ────────────────────────────────────────
 export async function pingXibo(): Promise<boolean> {
   try {

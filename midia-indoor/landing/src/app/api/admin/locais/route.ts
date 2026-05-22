@@ -1,0 +1,95 @@
+/**
+ * GET   /api/admin/locais  — lista pontos (inventário)
+ * POST  /api/admin/locais  — cria local + display group no Xibo
+ * PATCH /api/admin/locais  — { id, ...campos, ativo? }
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { db, ensureSchema } from "@/lib/db";
+import { autenticarAdmin, exigirMaster } from "@/lib/admin-auth";
+import { criarDisplayGroup } from "@/lib/xibo";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(req: NextRequest) {
+  if (!await autenticarAdmin(req)) return NextResponse.json({ ok: false, error: "não autenticado" }, { status: 401 });
+  try {
+    await ensureSchema();
+    const rows = await db().query(
+      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, created_at
+         FROM midia_locais ORDER BY cidade NULLS LAST, nome`
+    ).then(r => r.rows);
+    return NextResponse.json({ ok: true, locais: rows });
+  } catch (err) {
+    console.error("[admin/locais GET]", err);
+    return NextResponse.json({ ok: false, error: "erro" }, { status: 500 });
+  }
+}
+
+const novo = z.object({
+  nome:      z.string().min(1).max(160),
+  cidade:    z.string().max(120).optional(),
+  endereco:  z.string().max(240).optional(),
+  descricao: z.string().max(500).optional(),
+  largura:   z.coerce.number().int().min(120).max(8000).default(1080),
+  altura:    z.coerce.number().int().min(120).max(8000).default(1920),
+});
+
+export async function POST(req: NextRequest) {
+  if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
+  const parsed = novo.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ ok: false, error: parsed.error.errors.map(e => e.message).join("; ") }, { status: 400 });
+  const b = parsed.data;
+
+  try {
+    await ensureSchema();
+    // Cria o display group do local no Xibo (best-effort; se falhar, salva sem)
+    let dgId: number | null = null;
+    try { dgId = await criarDisplayGroup(`Local — ${b.nome}`, b.cidade ?? ""); }
+    catch (e) { console.warn("[locais] não criou display group:", (e as Error).message); }
+
+    const id = await db().query<{ id: string }>(
+      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, b.largura, b.altura, dgId]
+    ).then(r => r.rows[0].id);
+    return NextResponse.json({ ok: true, id, xibo_display_group_id: dgId });
+  } catch (err) {
+    console.error("[admin/locais POST]", err);
+    return NextResponse.json({ ok: false, error: "erro ao criar" }, { status: 500 });
+  }
+}
+
+const patch = z.object({
+  id: z.string().uuid(),
+  nome: z.string().min(1).max(160).optional(),
+  cidade: z.string().max(120).optional(),
+  endereco: z.string().max(240).optional(),
+  descricao: z.string().max(500).optional(),
+  largura: z.coerce.number().int().optional(),
+  altura: z.coerce.number().int().optional(),
+  ativo: z.boolean().optional(),
+});
+
+export async function PATCH(req: NextRequest) {
+  if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
+  const parsed = patch.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ ok: false, error: "dados inválidos" }, { status: 400 });
+  const b = parsed.data;
+
+  const sets: string[] = []; const vals: unknown[] = [];
+  const add = (c: string, v: unknown) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
+  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "ativo"] as const)
+    if (b[k] !== undefined) add(k, b[k]);
+  if (!sets.length) return NextResponse.json({ ok: false, error: "nada para atualizar" }, { status: 400 });
+
+  try {
+    await ensureSchema();
+    vals.push(b.id);
+    await db().query(`UPDATE midia_locais SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $${vals.length}`, vals);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[admin/locais PATCH]", err);
+    return NextResponse.json({ ok: false, error: "erro" }, { status: 500 });
+  }
+}
