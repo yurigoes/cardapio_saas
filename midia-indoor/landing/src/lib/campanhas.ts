@@ -27,18 +27,27 @@ async function carregar(campanhaId: string): Promise<CampanhaRow | null> {
   return r.rows[0] ?? null;
 }
 
-/** Folder do anunciante (cria/garante via provisionamento da conta). */
+// Pasta raiz do Xibo (fallback quando o recurso Folders está off / sem permissão)
+const ROOT_FOLDER = Number(process.env.XIBO_ROOT_FOLDER_ID ?? 1);
+
+/** Folder do anunciante. Tenta criar uma pasta própria; se falhar, usa a raiz. */
 async function folderDoAnunciante(contaId: string): Promise<number> {
   const p = db();
-  const conta = await p.query<{ xibo_folder_id: number | null }>(
-    `SELECT xibo_folder_id FROM midia_contas WHERE id = $1`, [contaId]
+  const conta = await p.query<{ xibo_folder_id: number | null; empresa: string }>(
+    `SELECT xibo_folder_id, empresa FROM midia_contas WHERE id = $1`, [contaId]
   ).then(r => r.rows[0]);
   if (conta?.xibo_folder_id) return conta.xibo_folder_id;
-  // Provisiona se ainda não tem
-  const { provisionarConta } = await import("./provisionar");
-  const r = await provisionarConta(contaId);
-  if (!r.ok || !r.folderId) throw new Error("não foi possível criar a pasta do anunciante no Xibo");
-  return r.folderId;
+
+  // Tenta criar só a pasta (não precisa de display group p/ anunciante)
+  try {
+    const { criarFolder } = await import("./xibo");
+    const folderId = await criarFolder(`Anunciante — ${conta?.empresa ?? contaId.slice(0, 8)}`);
+    await p.query(`UPDATE midia_contas SET xibo_folder_id = $1, updated_at = NOW() WHERE id = $2`, [folderId, contaId]);
+    return folderId;
+  } catch (e) {
+    console.warn("[campanhas] criar pasta do anunciante falhou, usando raiz:", (e as Error).message);
+    return ROOT_FOLDER;
+  }
 }
 
 /**
