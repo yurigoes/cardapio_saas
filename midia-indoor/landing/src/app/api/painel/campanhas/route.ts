@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     await ensureSchema();
     const rows = await db().query(
       `SELECT c.id, c.nome, c.tipo, c.dias, c.insercoes_dia, c.segundos, c.data_inicio, c.data_fim,
-              c.status, c.status_pagamento, c.arte_nome, c.valor,
+              c.status, c.status_pagamento, c.arte_nome, c.arte_tipo, c.valor,
               (SELECT COUNT(*) FROM midia_campanha_locais cl WHERE cl.campanha_id = c.id) AS locais
          FROM midia_campanhas c WHERE c.conta_id = $1 ORDER BY c.created_at DESC`,
       [auth.sub]

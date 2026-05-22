@@ -14,7 +14,7 @@ interface Me { conta: { nome: string; empresa: string; email: string } }
 interface Camp {
   id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number;
   data_inicio: string | null; data_fim: string | null; status: string; status_pagamento: string;
-  arte_nome: string | null; valor: string; locais: number;
+  arte_nome: string | null; arte_tipo: string | null; valor: string; locais: number;
 }
 interface Exibicao { start: string; display: string; numberPlays: number; duration: number; }
 
@@ -163,6 +163,8 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
         </div>
       </div>
 
+      {camp.arte_nome && <ArtePreview token={token} campId={camp.id} tipo={camp.arte_tipo} nome={camp.arte_nome} />}
+
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <Stat icon={Clock}    label="Inserções/dia" v={`${camp.insercoes_dia}`} />
         <Stat icon={Clock}    label="Duração" v={`${camp.segundos}s`} />
@@ -221,6 +223,35 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
 
 function Stat({ icon: Icon, label, v }: { icon: typeof Clock; label: string; v: string }) {
   return <div className="rounded-xl bg-white/5 p-3"><p className="flex items-center gap-1 text-xs text-slate-500"><Icon className="h-3 w-3" /> {label}</p><p className="mt-0.5 font-semibold">{v}</p></div>;
+}
+
+function ArtePreview({ token, campId, tipo, nome }: { token: string; campId: string; tipo: string | null; nome: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [erro, setErro] = useState(false);
+  useEffect(() => {
+    let revoked = false; let objUrl = "";
+    api(token, `/api/painel/campanhas/${campId}/arte`).then(async r => {
+      if (!r.ok) { setErro(true); return; }
+      const blob = await r.blob(); objUrl = URL.createObjectURL(blob);
+      if (!revoked) setUrl(objUrl);
+    }).catch(() => setErro(true));
+    return () => { revoked = true; if (objUrl) URL.revokeObjectURL(objUrl); };
+  }, [token, campId]);
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+      {erro ? (
+        <div className="flex h-40 items-center justify-center text-xs text-slate-500">Não foi possível carregar a prévia ({nome})</div>
+      ) : !url ? (
+        <div className="flex h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+      ) : tipo === "video" ? (
+        <video src={url} controls className="max-h-72 w-full bg-black object-contain" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={nome} className="max-h-72 w-full object-contain" />
+      )}
+    </div>
+  );
 }
 
 // ─── Suporte (chamados) ─────────────────────────────────────────────────────

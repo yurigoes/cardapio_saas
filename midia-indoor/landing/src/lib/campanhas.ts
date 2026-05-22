@@ -8,7 +8,7 @@
  *   4. relatório → statsCampanha (proof-of-play)
  */
 import { db, ensureSchema } from "./db";
-import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, type ExibicaoLinha } from "./xibo";
+import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, type ExibicaoLinha } from "./xibo";
 
 interface CampanhaRow {
   id: string; conta_id: string; nome: string; tipo: string; dias: number; insercoes_dia: number;
@@ -54,10 +54,11 @@ async function folderDoAnunciante(contaId: string): Promise<number> {
  * Recebe a arte da campanha, cria o Layout no Xibo e guarda as refs.
  * width/height vêm do(s) local(is); usamos o tamanho do primeiro local da campanha.
  */
-export async function anexarArte(campanhaId: string, arquivo: Buffer | Blob, nomeArquivo: string): Promise<void> {
+export async function anexarArte(campanhaId: string, arquivo: Buffer | Blob, nomeArquivo: string, mime?: string): Promise<void> {
   const camp = await carregar(campanhaId);
   if (!camp) throw new Error("campanha não encontrada");
   const p = db();
+  const arteTipo = (mime ?? "").startsWith("video") ? "video" : "image";
 
   const folderId = await folderDoAnunciante(camp.conta_id);
 
@@ -78,11 +79,11 @@ export async function anexarArte(campanhaId: string, arquivo: Buffer | Blob, nom
 
   await p.query(
     `UPDATE midia_campanhas
-        SET xibo_layout_id = $1, xibo_media_id = $2, arte_nome = $3,
+        SET xibo_layout_id = $1, xibo_media_id = $2, arte_nome = $3, arte_tipo = $4,
             status = CASE WHEN status = 'rascunho' THEN 'aguardando_arte' ELSE status END,
             updated_at = NOW()
-      WHERE id = $4`,
-    [layoutId, mediaId, nomeArquivo, campanhaId]
+      WHERE id = $5`,
+    [layoutId, mediaId, nomeArquivo, arteTipo, campanhaId]
   );
 }
 
@@ -94,13 +95,25 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
   if (!camp.data_inicio || !camp.data_fim) return { ok: false, erro: "defina o período (início/fim)" };
 
   const p = db();
-  // Display groups dos locais
-  const locais = await p.query<{ xibo_display_group_id: number | null }>(
-    `SELECT l.xibo_display_group_id FROM midia_campanha_locais cl
+  // Display groups dos locais — cria na hora os que ainda não têm (ex: local
+  // cadastrado quando a auth do Xibo estava off).
+  const locais = await p.query<{ id: string; nome: string; cidade: string | null; xibo_display_group_id: number | null }>(
+    `SELECT l.id, l.nome, l.cidade, l.xibo_display_group_id FROM midia_campanha_locais cl
        JOIN midia_locais l ON l.id = cl.local_id WHERE cl.campanha_id = $1`, [campanhaId]
   ).then(r => r.rows);
-  const groups = locais.map(l => l.xibo_display_group_id).filter((x): x is number => !!x);
-  if (!groups.length) return { ok: false, erro: "nenhum local válido (sem display group no Xibo)" };
+
+  const groups: number[] = [];
+  for (const l of locais) {
+    let dg = l.xibo_display_group_id;
+    if (!dg) {
+      try {
+        dg = await criarDisplayGroup(`Local — ${l.nome}`, l.cidade ?? "");
+        await p.query(`UPDATE midia_locais SET xibo_display_group_id = $1, updated_at = NOW() WHERE id = $2`, [dg, l.id]);
+      } catch (e) { console.warn(`[lancar] display group do local ${l.nome} falhou:`, (e as Error).message); }
+    }
+    if (dg) groups.push(dg);
+  }
+  if (!groups.length) return { ok: false, erro: "nenhum local válido (não foi possível criar display group no Xibo)" };
 
   // Alvo total de inserções = inserções/dia × dias × nº de locais
   const targetPlays = camp.insercoes_dia * camp.dias * groups.length;

@@ -322,6 +322,17 @@ export async function statsDetalhe(campaignId: number, fromDt: string, toDt: str
   })).filter(x => x.start);
 }
 
+/** Baixa o binário de uma mídia da biblioteca (pra preview/proxy). */
+export async function baixarMidia(mediaId: number, tipo: "image" | "video"): Promise<{ buffer: ArrayBuffer; contentType: string }> {
+  const token = await getToken();
+  const r = await fetch(`${XIBO_URL}/api/library/download/${mediaId}/${tipo}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!r.ok) throw new Error(`Xibo download ${mediaId} → ${r.status}`);
+  return { buffer: await r.arrayBuffer(), contentType: r.headers.get("content-type") ?? (tipo === "video" ? "video/mp4" : "image/jpeg") };
+}
+
 // ─── Health/ping (testa credenciais) ────────────────────────────────────────
 export async function pingXibo(): Promise<boolean> {
   try {
