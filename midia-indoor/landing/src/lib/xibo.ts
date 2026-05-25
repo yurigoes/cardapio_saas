@@ -259,9 +259,12 @@ export async function criarLayoutDeMidia(opts: {
   form.append("files", blob, opts.nomeArquivo);
   form.append("folderId", String(opts.folderId));
   form.append("playlistId", String(playlistId));
-  const up = await xibo<{ files: Array<{ mediaId: number }> }>("/api/library", { method: "POST", body: form });
+  const up = await xibo<{ files: Array<{ mediaId?: number; error?: string; name?: string }> }>("/api/library", { method: "POST", body: form });
   const mediaId = up.files?.[0]?.mediaId;
-  if (!mediaId) throw new Error("Xibo: upload do criativo falhou");
+  if (!mediaId) {
+    const motivo = up.files?.[0]?.error ?? JSON.stringify(up).slice(0, 300);
+    throw new Error(`Xibo: upload do criativo falhou — ${motivo}`);
+  }
 
   // 3) Ajusta a duração do widget (segundos por inserção), se pedido
   if (opts.duracaoSeg && opts.duracaoSeg > 0) {
