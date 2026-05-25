@@ -4,6 +4,7 @@ import {
   Check, ArrowRight, Tv, Clock,
 } from "lucide-react";
 import { locaisVitrine, pacotesVitrine } from "@/lib/vitrine";
+import { getBranding } from "@/lib/branding";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 const TIPO_LABEL: Record<string, string> = { video: "Vídeo", banner_estatico: "Banner estático", banner_eletronico: "Banner eletrônico", peca: "Peça publicitária" };
 
 export default async function LandingPage() {
-  const [locais, pacotes] = await Promise.all([locaisVitrine(), pacotesVitrine()]);
+  const [locais, pacotes, marca] = await Promise.all([locaisVitrine(), pacotesVitrine(), getBranding()]);
   const cidades = Array.from(new Set(locais.map(l => l.cidade).filter(Boolean))) as string[];
 
   return (
@@ -20,8 +21,10 @@ export default async function LandingPage() {
       <header className="sticky top-0 z-50 border-b border-white/5 bg-[#0a0a12]/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2">
-            <Tv className="h-6 w-6 text-brand-light" />
-            <span className="text-lg font-bold">Three Digital <span className="text-brand-light">Mídia</span></span>
+            {marca.logo_url
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={marca.logo_url} alt={marca.nome} className="h-8 max-w-[180px] object-contain" />
+              : <><Tv className="h-6 w-6 text-brand-light" /><span className="text-lg font-bold">{marca.nome}</span></>}
           </div>
           <nav className="hidden items-center gap-6 text-sm text-slate-300 md:flex">
             <a href="#como-funciona" className="hover:text-white">Como funciona</a>
@@ -158,8 +161,8 @@ export default async function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-white/5 py-8 text-center text-sm text-slate-500">
-        <p>© {new Date().getFullYear()} Three Digital — Mídia Indoor. Todos os direitos reservados.</p>
-        <p className="mt-1">tthreedigital.com.br · <Link href="/guia" className="text-brand-light hover:underline">Guia de instalação</Link></p>
+        <p>© {new Date().getFullYear()} {marca.nome}. Todos os direitos reservados.</p>
+        <p className="mt-1">{(marca.site ?? "").replace("https://", "")} · <Link href="/guia" className="text-brand-light hover:underline">Guia de instalação</Link></p>
       </footer>
     </main>
   );

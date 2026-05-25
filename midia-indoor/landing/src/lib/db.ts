@@ -217,6 +217,24 @@ export async function ensureSchema(): Promise<void> {
       created_at    TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_midia_pag_campanha ON midia_pagamentos(campanha_id);
+
+    -- Branding do SaaS (singleton id=1) — aplica em landing, admin, painel, e-mails, contratos.
+    CREATE TABLE IF NOT EXISTS midia_branding (
+      id            INTEGER PRIMARY KEY DEFAULT 1,
+      nome          TEXT NOT NULL DEFAULT 'Three Digital Mídia',
+      logo_url      TEXT,
+      cor           TEXT NOT NULL DEFAULT '#7c3aed',
+      cor_dark      TEXT NOT NULL DEFAULT '#5b21b6',
+      cor_light     TEXT NOT NULL DEFAULT '#a78bfa',
+      site          TEXT DEFAULT 'https://tthreedigital.com.br',
+      email         TEXT,
+      whatsapp      TEXT,
+      cnpj          TEXT,
+      razao_social  TEXT,
+      updated_at    TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT midia_branding_single CHECK (id = 1)
+    );
+    INSERT INTO midia_branding (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
   `);
 
   // Coluna p/ não reenviar boas-vindas

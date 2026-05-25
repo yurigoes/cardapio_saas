@@ -2,5 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Cores da marca (sobrescritas em runtime pelo branding do master) */
+:root {
+  --brand: #7c3aed;
+  --brand-dark: #5b21b6;
+  --brand-light: #a78bfa;
+}
+
 html { scroll-behavior: smooth; }
 body { background: #0a0a12; color: #fff; }
+
+/* Listas suspensas no tema escuro */
+select { color-scheme: dark; }
+select option, select optgroup {
+  background-color: #12121c;
+  color: #e5e7eb;
+}
+
+/* Painel deslizante (drawer) pela direita */
+@keyframes drawerIn { from { transform: translateX(100%); opacity: .6; } to { transform: translateX(0); opacity: 1; } }
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+.drawer-in { animation: drawerIn .28s cubic-bezier(.22, 1, .36, 1); }
+.overlay-in { animation: overlayIn .2s ease-out; }

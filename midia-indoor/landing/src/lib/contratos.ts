@@ -16,14 +16,18 @@ export interface DadosContrato {
   plano?: string; qtd_telas?: number; preco_tela?: number; total_mensal?: number;
 }
 
-const CONTRATADA = {
+export interface Contratada {
+  contratada_nome: string; contratada_cnpj: string; contratada_email: string; contratada_site: string;
+}
+const CONTRATADA_ENV: Contratada = {
   contratada_nome:  process.env.CONTRATADA_NOME  ?? "Three Digital",
   contratada_cnpj:  process.env.CONTRATADA_CNPJ  ?? "",
   contratada_email: process.env.CONTRATADA_EMAIL ?? "contato@tthreedigital.com.br",
   contratada_site:  process.env.CONTRATADA_SITE  ?? "https://tthreedigital.com.br",
 };
 
-export function renderContrato(html: string, d: DadosContrato): string {
+export function renderContrato(html: string, d: DadosContrato, contratada?: Partial<Contratada>): string {
+  const CONTRATADA = { ...CONTRATADA_ENV, ...(contratada ?? {}) };
   const hoje = new Date();
   const vars: Record<string, string> = {
     cliente_nome:     d.cliente_nome ?? "",

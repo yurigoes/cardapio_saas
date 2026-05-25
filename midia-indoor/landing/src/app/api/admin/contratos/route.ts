@@ -8,6 +8,7 @@ import { z } from "zod";
 import { db, ensureSchema } from "@/lib/db";
 import { exigirMaster, autenticarAdmin } from "@/lib/admin-auth";
 import { renderContrato, hashConteudo, type DadosContrato } from "@/lib/contratos";
+import { getBranding } from "@/lib/branding";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,13 @@ export async function POST(req: NextRequest) {
       total_mensal:     Number((preco * qtd).toFixed(2)),
     };
 
-    const html = renderContrato(tpl.conteudo_html, dados);
+    const br = await getBranding();
+    const html = renderContrato(tpl.conteudo_html, dados, {
+      contratada_nome:  br.razao_social ?? br.nome,
+      contratada_cnpj:  br.cnpj ?? "",
+      contratada_email: br.email ?? "",
+      contratada_site:  br.site ?? "",
+    });
     const hash = hashConteudo(html);
 
     const id = await p.query<{ id: string }>(

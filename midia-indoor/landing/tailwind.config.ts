@@ -6,9 +6,9 @@ export default {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#7c3aed",   // roxo — diferencia do verde do restaurante
-          dark:    "#5b21b6",
-          light:   "#a78bfa",
+          DEFAULT: "var(--brand, #7c3aed)",   // dinâmico via branding do master
+          dark:    "var(--brand-dark, #5b21b6)",
+          light:   "var(--brand-light, #a78bfa)",
         },
       },
     },

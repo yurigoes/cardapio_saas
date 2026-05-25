@@ -11,14 +11,9 @@
  * quebra o fluxo de provisionamento.
  */
 import nodemailer, { type Transporter } from "nodemailer";
+import { getBranding } from "./branding";
 
-const ROXO       = "#7c3aed";
-const ROXO_DARK  = "#5b21b6";
-const APP_URL    = (process.env.APP_URL ?? "https://midiaindoor.tthreedigital.com.br").replace(/\/+$/, "");
-const LOGO_URL   = process.env.BRAND_LOGO_URL
-  ?? "https://minio.tthreedigital.com.br/cardapio/saas/LOGO%20BRANCA%20THREE.png";
-const SAAS_NOME  = "Three Digital Mídia";
-const SAAS_SITE  = "https://tthreedigital.com.br";
+const APP_URL = (process.env.APP_URL ?? "https://midiaindoor.tthreedigital.com.br").replace(/\/+$/, "");
 
 let _tx: Transporter | null = null;
 function transporter(): Transporter | null {
@@ -40,21 +35,24 @@ export function smtpConfigurado(): boolean {
   return Boolean(process.env.SMTP_HOST);
 }
 
-/** Wrapper HTML com a marca (header roxo + logo). */
-function wrap(titulo: string, conteudoHtml: string, botao?: { texto: string; url: string }): string {
-  const logo = LOGO_URL
-    ? `<img src="${LOGO_URL}" alt="${SAAS_NOME}" style="max-height:46px;max-width:200px;margin-bottom:6px;">`
-    : `<div style="color:#fff;font-size:20px;font-weight:800;">${SAAS_NOME}</div>`;
+/** Wrapper HTML com a marca (header com a cor + logo do branding). */
+async function wrap(titulo: string, conteudoHtml: string, botao?: { texto: string; url: string }): Promise<string> {
+  const b = await getBranding();
+  const cor = b.cor, corDark = b.cor_dark, nome = b.nome;
+  const site = b.site ?? "https://tthreedigital.com.br";
+  const logo = b.logo_url
+    ? `<img src="${b.logo_url}" alt="${nome}" style="max-height:46px;max-width:200px;margin-bottom:6px;">`
+    : `<div style="color:#fff;font-size:20px;font-weight:800;">${nome}</div>`;
   const btn = botao
     ? `<p style="text-align:center;margin:26px 0;">
-         <a href="${botao.url}" style="display:inline-block;background:${ROXO};color:#fff;padding:13px 30px;border-radius:10px;text-decoration:none;font-weight:700;">${botao.texto}</a>
+         <a href="${botao.url}" style="display:inline-block;background:${cor};color:#fff;padding:13px 30px;border-radius:10px;text-decoration:none;font-weight:700;">${botao.texto}</a>
        </p>`
     : "";
   return `<!doctype html><html><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif;background:#0a0a12;color:#1a1f2e;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a12;padding:24px 0;">
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.3);">
-        <tr><td style="background:linear-gradient(135deg,${ROXO},${ROXO_DARK});padding:30px 32px;text-align:center;">
+        <tr><td style="background:linear-gradient(135deg,${cor},${corDark});padding:30px 32px;text-align:center;">
           ${logo}
           <h1 style="color:#fff;font-size:21px;margin:8px 0 0;font-weight:700;">${titulo}</h1>
         </td></tr>
@@ -63,7 +61,7 @@ function wrap(titulo: string, conteudoHtml: string, botao?: { texto: string; url
           ${btn}
         </td></tr>
         <tr><td style="background:#f4f6f8;padding:16px 32px;text-align:center;font-size:12px;color:#888;">
-          © ${new Date().getFullYear()} ${SAAS_NOME} · <a href="${SAAS_SITE}" style="color:${ROXO};text-decoration:none;">${SAAS_SITE.replace("https://","")}</a>
+          © ${new Date().getFullYear()} ${nome} · <a href="${site}" style="color:${cor};text-decoration:none;">${site.replace("https://","")}</a>
         </td></tr>
       </table>
     </td></tr>
@@ -76,7 +74,7 @@ async function enviar(opts: { para: string; assunto: string; html: string }): Pr
   if (!tx) { console.warn("[email] SMTP não configurado — pulando", opts.assunto); return false; }
   try {
     await tx.sendMail({
-      from: process.env.SMTP_FROM ?? `${SAAS_NOME} <noreply@tthreedigital.com.br>`,
+      from: process.env.SMTP_FROM ?? `Mídia Indoor <noreply@tthreedigital.com.br>`,
       to: opts.para,
       subject: opts.assunto,
       html: opts.html,
@@ -90,17 +88,18 @@ async function enviar(opts: { para: string; assunto: string; html: string }): Pr
 
 /** Notifica o anunciante quando o suporte responde um chamado. */
 export async function enviarRespostaChamado(opts: { nome: string; email: string; assunto: string; mensagem: string }): Promise<boolean> {
+  const b = await getBranding();
   const primeiro = opts.nome.split(" ")[0] || opts.nome;
   const trecho = opts.mensagem.length > 400 ? opts.mensagem.slice(0, 400) + "…" : opts.mensagem;
   const conteudo = `
     <p>Olá, <strong>${primeiro}</strong>!</p>
     <p>Você tem uma nova resposta no seu chamado <strong>"${opts.assunto}"</strong>:</p>
-    <blockquote style="margin:14px 0;padding:12px 16px;border-left:3px solid ${ROXO};background:#f7f5ff;border-radius:6px;color:#374151;white-space:pre-wrap;">${trecho}</blockquote>
+    <blockquote style="margin:14px 0;padding:12px 16px;border-left:3px solid ${b.cor};background:#f7f5ff;border-radius:6px;color:#374151;white-space:pre-wrap;">${trecho}</blockquote>
     <p>Acesse seu painel pra ver a conversa completa e responder.</p>`;
   return enviar({
     para: opts.email,
     assunto: `Resposta ao seu chamado: ${opts.assunto}`,
-    html: wrap("Você recebeu uma resposta", conteudo, { texto: "Ver chamado", url: `${APP_URL}/painel` }),
+    html: await wrap("Você recebeu uma resposta", conteudo, { texto: "Ver chamado", url: `${APP_URL}/painel` }),
   });
 }
 
@@ -110,6 +109,7 @@ export async function enviarRelatorioCampanha(opts: {
   plays: number; duracao: number;
   porLocal?: { local: string; plays: number }[];
 }): Promise<boolean> {
+  const b = await getBranding();
   const primeiro = opts.nome.split(" ")[0] || opts.nome;
   const linhas = (opts.porLocal ?? []).map(p =>
     `<tr><td style="padding:6px 10px;border-top:1px solid #eee;">${p.local}</td><td style="padding:6px 10px;border-top:1px solid #eee;text-align:right;font-weight:600;">${p.plays}</td></tr>`
@@ -124,25 +124,26 @@ export async function enviarRelatorioCampanha(opts: {
     <p>Olá, <strong>${primeiro}</strong>!</p>
     <p>Segue o relatório de exibições da campanha <strong>"${opts.campanha}"</strong> (${opts.periodo}):</p>
     <div style="margin:16px 0;padding:16px;background:#f7f5ff;border-radius:10px;text-align:center;">
-      <div style="font-size:30px;font-weight:800;color:${ROXO};">${opts.plays}</div>
+      <div style="font-size:30px;font-weight:800;color:${b.cor};">${opts.plays}</div>
       <div style="font-size:13px;color:#6b7280;">inserções exibidas · ${Math.round(opts.duracao)}s no total</div>
     </div>
     ${tabela}
-    <p style="margin-top:16px;">Obrigado por anunciar com a ${SAAS_NOME}! 🎉</p>`;
+    <p style="margin-top:16px;">Obrigado por anunciar com a ${b.nome}! 🎉</p>`;
   return enviar({
     para: opts.email,
     assunto: `Relatório da campanha: ${opts.campanha}`,
-    html: wrap("Relatório de exibições", conteudo, { texto: "Ver no painel", url: `${APP_URL}/painel` }),
+    html: await wrap("Relatório de exibições", conteudo, { texto: "Ver no painel", url: `${APP_URL}/painel` }),
   });
 }
 
 /** E-mail de boas-vindas (enviado quando a conta é ativada). */
 export async function enviarBoasVindas(opts: { nome: string; email: string; empresa: string }): Promise<boolean> {
+  const b = await getBranding();
   const primeiro = opts.nome.split(" ")[0] || opts.nome;
   const conteudo = `
     <p>Olá, <strong>${primeiro}</strong>! 🎉</p>
-    <p>Sua conta da <strong>${SAAS_NOME}</strong> para <strong>${opts.empresa}</strong> está
-       <strong style="color:${ROXO};">ativa</strong>. Já pode subir suas mídias e parear suas TVs.</p>
+    <p>Sua conta da <strong>${b.nome}</strong> para <strong>${opts.empresa}</strong> está
+       <strong style="color:${b.cor};">ativa</strong>. Já pode subir suas mídias e parear suas TVs.</p>
     <p style="margin-top:18px;font-weight:600;">Próximos passos:</p>
     <ol style="padding-left:18px;color:#374151;">
       <li>Acesse seu painel e faça login.</li>
@@ -152,7 +153,7 @@ export async function enviarBoasVindas(opts: { nome: string; email: string; empr
     <p style="margin-top:18px;">Qualquer dúvida, é só responder este e-mail ou chamar no WhatsApp.</p>`;
   return enviar({
     para: opts.email,
-    assunto: `Bem-vindo à ${SAAS_NOME}! Sua conta está ativa 🚀`,
-    html: wrap("Sua conta está ativa!", conteudo, { texto: "Acessar meu painel", url: `${APP_URL}/painel` }),
+    assunto: `Bem-vindo à ${b.nome}! Sua conta está ativa 🚀`,
+    html: await wrap("Sua conta está ativa!", conteudo, { texto: "Acessar meu painel", url: `${APP_URL}/painel` }),
   });
 }

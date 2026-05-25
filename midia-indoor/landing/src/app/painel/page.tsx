@@ -339,8 +339,9 @@ function ChatChamado({ token, chamado, onClose }: { token: string; chamado: Cham
 
 function Modal({ children, title, onClose, wide }: { children: React.ReactNode; title: string; onClose: () => void; wide?: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className={`max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-white/10 bg-[#12121c] p-6 ${wide ? "max-w-xl" : "max-w-md"}`}>
+    <div className="overlay-in fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+        className={`drawer-in absolute right-0 top-0 flex h-full w-full flex-col overflow-y-auto border-l border-white/10 bg-[#12121c] p-6 shadow-2xl sm:w-[70%] ${wide ? "max-w-3xl" : "max-w-xl"}`}>
         <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-bold">{title}</h3><button onClick={onClose} className="text-slate-400 hover:text-white"><X className="h-5 w-5" /></button></div>
         {children}
       </div>

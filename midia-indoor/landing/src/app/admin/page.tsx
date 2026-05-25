@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, LogOut, LayoutDashboard, Users, Package, FileText, UserCog,
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
-  LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff,
+  LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette,
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
+import { aplicarCorBranding } from "@/components/Branding";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -17,7 +18,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -53,6 +54,7 @@ export default function AdminPage() {
     { id: "chamados",    label: "Chamados",    icon: LifeBuoy },
     { id: "contratos",   label: "Contratos",   icon: FileText, master: true },
     { id: "usuarios",    label: "Usuários",    icon: UserCog, master: true },
+    { id: "marca",       label: "Marca",       icon: Palette, master: true },
   ];
 
   return (
@@ -89,6 +91,7 @@ export default function AdminPage() {
         {aba === "chamados"    && <Chamados token={token} />}
         {aba === "contratos"   && <Contratos token={token} />}
         {aba === "usuarios"    && <Usuarios token={token} />}
+        {aba === "marca"       && <Marca token={token} />}
       </div>
     </main>
   );
@@ -918,11 +921,86 @@ function ChatChamadoAdmin({ token, chamado, onClose }: { token: string; chamado:
   );
 }
 
+// ─── Marca (branding) ───────────────────────────────────────────────────────
+interface BrandingData { nome: string; logo_url: string | null; cor: string; cor_dark: string; cor_light: string; site: string | null; email: string | null; whatsapp: string | null; cnpj: string | null; razao_social: string | null; }
+function Marca({ token }: { token: string }) {
+  const [b, setB] = useState<BrandingData | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { aapi(token, "/api/admin/branding").then(r => r.json()).then(d => d.ok && setB(d.branding)); }, [token]);
+  function set<K extends keyof BrandingData>(k: K, v: BrandingData[K]) { setB(p => p ? { ...p, [k]: v } : p); }
+  // preview de cor ao vivo
+  useEffect(() => { if (b) aplicarCorBranding(b.cor, b.cor_dark, b.cor_light); }, [b?.cor, b?.cor_dark, b?.cor_light]);
+
+  async function salvar() {
+    if (!b) return;
+    setBusy(true);
+    const r = await aapi(token, "/api/admin/branding", { method: "PUT", body: JSON.stringify(b) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify("Marca atualizada — aplicada em todo o sistema", "success");
+    aplicarCorBranding(d.branding.cor, d.branding.cor_dark, d.branding.cor_light);
+  }
+  if (!b) return <Loader2 className="h-6 w-6 animate-spin text-slate-500" />;
+  return (
+    <div className="max-w-2xl">
+      <h2 className="mb-1 text-lg font-bold">Marca do sistema</h2>
+      <p className="mb-5 text-sm text-slate-400">O que você alterar aqui vale pra landing, painel admin, portal do cliente, e-mails e contratos.</p>
+
+      <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-6">
+        <Field label="Nome do sistema" value={b.nome} onChange={v => set("nome", v)} />
+        <Field label="URL da logo (PNG transparente)" value={b.logo_url ?? ""} onChange={v => set("logo_url", v)} placeholder="https://..." />
+        {b.logo_url && (
+          <div className="rounded-xl p-3" style={{ background: b.cor }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={b.logo_url} alt="logo" className="mx-auto h-12 object-contain" />
+          </div>
+        )}
+        <div>
+          <label className="mb-1 block text-sm text-slate-300">Cores</label>
+          <div className="flex flex-wrap gap-4">
+            <CorField label="Principal" value={b.cor} onChange={v => set("cor", v)} />
+            <CorField label="Escura (hover)" value={b.cor_dark} onChange={v => set("cor_dark", v)} />
+            <CorField label="Clara (destaques)" value={b.cor_light} onChange={v => set("cor_light", v)} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Razão social" value={b.razao_social ?? ""} onChange={v => set("razao_social", v)} />
+          <Field label="CNPJ" value={b.cnpj ?? ""} onChange={v => set("cnpj", v)} />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Site" value={b.site ?? ""} onChange={v => set("site", v)} />
+          <Field label="E-mail" value={b.email ?? ""} onChange={v => set("email", v)} />
+          <Field label="WhatsApp" value={b.whatsapp ?? ""} onChange={v => set("whatsapp", v)} />
+        </div>
+
+        <div className="flex items-center gap-3 pt-2">
+          <button onClick={salvar} disabled={busy} className="flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar
+          </button>
+          <span className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white">amostra da cor</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+function CorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <span className="mb-1 block text-xs text-slate-400">{label}</span>
+      <div className="flex items-center gap-2">
+        <input type="color" value={value} onChange={e => onChange(e.target.value)} className="h-9 w-12 cursor-pointer rounded border border-white/10 bg-transparent" />
+        <input value={value} onChange={e => onChange(e.target.value)} className="w-24 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 font-mono text-xs outline-none focus:border-brand/50" />
+      </div>
+    </div>
+  );
+}
+
 // ─── UI helpers ──────────────────────────────────────────────────────────────
 function Modal({ children, title, onClose, wide }: { children: React.ReactNode; title: string; onClose: () => void; wide?: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className={`max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-white/10 bg-[#12121c] p-6 ${wide ? "max-w-2xl" : "max-w-md"}`}>
+    <div className="overlay-in fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+        className={`drawer-in absolute right-0 top-0 flex h-full w-full flex-col overflow-y-auto border-l border-white/10 bg-[#12121c] p-6 shadow-2xl sm:w-[70%] ${wide ? "max-w-4xl" : "max-w-xl"}`}>
         <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-bold">{title}</h3><button onClick={onClose} className="text-slate-400 hover:text-white"><X className="h-5 w-5" /></button></div>
         {children}
       </div>
