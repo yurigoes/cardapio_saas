@@ -323,6 +323,58 @@ export async function excluirEvento(eventId: number): Promise<void> {
   await xibo(`/api/schedule/${eventId}`, { method: "DELETE" });
 }
 
+/**
+ * Cria um layout com VÁRIAS mídias em loop numa única região (conteúdo base).
+ * Retorna o layoutId publicado + campaignId.
+ */
+export async function criarLayoutLoop(opts: {
+  nome: string;
+  arquivos: { arquivo: Buffer | Blob; nomeArquivo: string }[];
+  folderId: number;
+  width: number;
+  height: number;
+}): Promise<{ layoutId: number; campaignId?: number; enviados: number }> {
+  if (!opts.arquivos.length) throw new Error("nenhum arquivo");
+  const resolutionId = await getResolution(opts.width, opts.height);
+
+  const draftBody = new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" });
+  const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: draftBody });
+  const publishId = draft.parentId ?? draft.layoutId;
+  const playlistId = draft.regions?.[0]?.regionPlaylist?.playlistId;
+  if (!playlistId) throw new Error("Xibo: layout sem playlist de região");
+
+  let enviados = 0;
+  for (const f of opts.arquivos) {
+    const form = new FormData();
+    const blob = f.arquivo instanceof Blob ? f.arquivo : new Blob([new Uint8Array(f.arquivo)]);
+    const nomeUnico = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}-${f.nomeArquivo}`;
+    form.append("files", blob, nomeUnico);
+    form.append("name", nomeUnico);
+    form.append("folderId", String(opts.folderId));
+    form.append("playlistId", String(playlistId));
+    try {
+      const up = await xibo<{ files: Array<{ mediaId?: number; error?: string }> }>("/api/library", { method: "POST", body: form });
+      if (up.files?.[0]?.mediaId) enviados++;
+      else console.warn("[loop] arquivo falhou:", up.files?.[0]?.error);
+    } catch (e) { console.warn("[loop] upload falhou:", (e as Error).message); }
+  }
+  if (!enviados) throw new Error("nenhum arquivo subiu pro Xibo");
+
+  await xibo(`/api/layout/publish/${publishId}`, { method: "PUT", body: new URLSearchParams({ publishNow: "1" }) });
+
+  let layoutId = publishId; let campaignId = draft.campaignId;
+  try {
+    const arr = await xibo<Array<{ layoutId: number; campaignId?: number; publishedStatusId?: number; layout?: string }>>(
+      `/api/layout?layout=${encodeURIComponent(opts.nome)}&embed=campaigns&retired=0`
+    );
+    const lista = Array.isArray(arr) ? arr : [];
+    const pub = lista.find(l => l.publishedStatusId === 1 && l.layout === opts.nome) ?? lista.find(l => l.layout === opts.nome) ?? lista[0];
+    if (pub) { layoutId = pub.layoutId; campaignId = pub.campaignId ?? campaignId; }
+  } catch (e) { console.warn("[loop] não resolveu publicado:", (e as Error).message); }
+
+  return { layoutId, campaignId, enviados };
+}
+
 // ─── Ad Campaigns (inserções automáticas) ────────────────────────────────────
 function fmtDt(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");

@@ -14,7 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     await ensureSchema();
     const p = db();
 
-    const local = await p.query<{ nome: string }>(`SELECT nome FROM midia_locais WHERE id = $1`, [params.id]).then(r => r.rows[0]);
+    const local = await p.query<{ nome: string; capacidade_dia: number }>(`SELECT nome, capacidade_dia FROM midia_locais WHERE id = $1`, [params.id]).then(r => r.rows[0]);
     if (!local) return NextResponse.json({ ok: false, error: "local não encontrado" }, { status: 404 });
 
     const campanhas = await p.query(
@@ -32,6 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const insercoesDia = noAr.reduce((s, c) => s + Number(c.insercoes_dia || 0), 0);
     const segundosDia  = noAr.reduce((s, c) => s + Number(c.insercoes_dia || 0) * Number(c.segundos || 0), 0);
 
+    const capacidade = Number(local.capacidade_dia || 0);
     return NextResponse.json({
       ok: true,
       local: local.nome,
@@ -40,6 +41,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         insercoes_dia: insercoesDia,
         segundos_dia: segundosDia,           // tempo total de anúncio por dia (s)
         minutos_dia: Math.round(segundosDia / 60),
+        capacidade_dia: capacidade,          // 0 = ilimitado
+        ocupacao_pct: capacidade > 0 ? Math.round((insercoesDia / capacidade) * 100) : null,
       },
       campanhas,
     });

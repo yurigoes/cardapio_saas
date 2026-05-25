@@ -136,6 +136,23 @@ export async function enviarRelatorioCampanha(opts: {
   });
 }
 
+/** Avisa o anunciante que a campanha entrou no ar. */
+export async function enviarCampanhaNoAr(opts: { nome: string; email: string; campanha: string; periodo: string; locais: string[] }): Promise<boolean> {
+  const b = await getBranding();
+  const primeiro = opts.nome.split(" ")[0] || opts.nome;
+  const conteudo = `
+    <p>Olá, <strong>${primeiro}</strong>! 🎬</p>
+    <p>Sua campanha <strong>"${opts.campanha}"</strong> está <strong style="color:${b.cor};">no ar</strong>!</p>
+    <p style="margin-top:12px;"><strong>Período:</strong> ${opts.periodo}<br>
+       <strong>Locais:</strong> ${opts.locais.join(", ") || "—"}</p>
+    <p style="margin-top:14px;">Acompanhe as exibições em tempo real no seu painel.</p>`;
+  return enviar({
+    para: opts.email,
+    assunto: `Sua campanha "${opts.campanha}" está no ar 🎬`,
+    html: await wrap("Campanha no ar!", conteudo, { texto: "Ver no painel", url: `${APP_URL}/painel` }),
+  });
+}
+
 /** E-mail de boas-vindas (enviado quando a conta é ativada). */
 export async function enviarBoasVindas(opts: { nome: string; email: string; empresa: string }): Promise<boolean> {
   const b = await getBranding();

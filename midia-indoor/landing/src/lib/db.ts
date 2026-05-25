@@ -245,6 +245,8 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS conteudo_layout_id INTEGER;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS conteudo_nome TEXT;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS conteudo_event_id INTEGER;`);
+  // Capacidade da grade do local (inserções/dia recomendadas; 0 = ilimitado)
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS capacidade_dia INTEGER NOT NULL DEFAULT 0;`);
 
   await seedPlanos();
   await seedPacotes();

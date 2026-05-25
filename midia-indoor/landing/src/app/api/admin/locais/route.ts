@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   try {
     await ensureSchema();
     const rows = await db().query(
-      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, created_at
+      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, capacidade_dia, created_at
          FROM midia_locais ORDER BY cidade NULLS LAST, nome`
     ).then(r => r.rows);
     return NextResponse.json({ ok: true, locais: rows });
@@ -33,6 +33,7 @@ const novo = z.object({
   descricao: z.string().max(500).optional(),
   largura:   z.coerce.number().int().min(120).max(8000).default(1080),
   altura:    z.coerce.number().int().min(120).max(8000).default(1920),
+  capacidade_dia: z.coerce.number().int().min(0).default(0),
 });
 
 export async function POST(req: NextRequest) {
@@ -49,9 +50,9 @@ export async function POST(req: NextRequest) {
     catch (e) { console.warn("[locais] não criou display group:", (e as Error).message); }
 
     const id = await db().query<{ id: string }>(
-      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, b.largura, b.altura, dgId]
+      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, capacidade_dia, xibo_display_group_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, b.largura, b.altura, b.capacidade_dia, dgId]
     ).then(r => r.rows[0].id);
     return NextResponse.json({ ok: true, id, xibo_display_group_id: dgId });
   } catch (err) {
@@ -68,6 +69,7 @@ const patch = z.object({
   descricao: z.string().max(500).optional(),
   largura: z.coerce.number().int().optional(),
   altura: z.coerce.number().int().optional(),
+  capacidade_dia: z.coerce.number().int().min(0).optional(),
   ativo: z.boolean().optional(),
 });
 
@@ -79,7 +81,7 @@ export async function PATCH(req: NextRequest) {
 
   const sets: string[] = []; const vals: unknown[] = [];
   const add = (c: string, v: unknown) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
-  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "ativo"] as const)
+  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "ativo"] as const)
     if (b[k] !== undefined) add(k, b[k]);
   if (!sets.length) return NextResponse.json({ ok: false, error: "nada para atualizar" }, { status: 400 });
 

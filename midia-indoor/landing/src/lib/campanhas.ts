@@ -134,10 +134,26 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
     } else {
       xiboCampaignId = await criarAdCampaign({ nome: camp.nome, layoutId: camp.xibo_layout_id, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups });
     }
+    const jaEstavaNoAr = camp.status === "no_ar";
     await p.query(
       `UPDATE midia_campanhas SET xibo_campaign_id = $1, status = 'no_ar', lancada_em = NOW(), updated_at = NOW() WHERE id = $2`,
       [xiboCampaignId, campanhaId]
     );
+    // E-mail "no ar" só na 1ª vez (não em reaplicações)
+    if (!jaEstavaNoAr) {
+      try {
+        const conta = await p.query<{ nome: string; email: string }>(
+          `SELECT ct.nome, ct.email FROM midia_campanhas c JOIN midia_contas ct ON ct.id = c.conta_id WHERE c.id = $1`, [campanhaId]
+        ).then(r => r.rows[0]);
+        const nomesLocais = await p.query<{ nome: string }>(
+          `SELECT l.nome FROM midia_campanha_locais cl JOIN midia_locais l ON l.id = cl.local_id WHERE cl.campanha_id = $1`, [campanhaId]
+        ).then(r => r.rows.map(x => x.nome));
+        if (conta?.email) {
+          const { enviarCampanhaNoAr } = await import("./email");
+          await enviarCampanhaNoAr({ nome: conta.nome, email: conta.email, campanha: camp.nome, periodo: `${ymd(camp.data_inicio)} a ${ymd(camp.data_fim)}`, locais: nomesLocais });
+        }
+      } catch (e) { console.warn("[lancar] e-mail no ar falhou:", (e as Error).message); }
+    }
     return { ok: true, xiboCampaignId };
   } catch (err) {
     console.error("[lancarCampanha]", err);

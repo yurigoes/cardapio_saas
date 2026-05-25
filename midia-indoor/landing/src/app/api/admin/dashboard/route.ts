@@ -14,28 +14,31 @@ export async function GET(req: NextRequest) {
     await ensureSchema();
     const p = db();
 
-    const [contas, assinAtivas, mrr, telas, ultimas] = await Promise.all([
+    const [anunc, noAr, receita, aReceber, locais, aVencer, ultimas] = await Promise.all([
       p.query<{ n: string }>(`SELECT COUNT(*)::text n FROM midia_contas`),
-      p.query<{ n: string }>(`SELECT COUNT(*)::text n FROM midia_assinaturas WHERE status='ativa'`),
-      p.query<{ v: string }>(`SELECT COALESCE(SUM(preco_tela*qtd_telas),0)::text v FROM midia_assinaturas WHERE status='ativa'`),
-      p.query<{ n: string }>(`SELECT COUNT(*)::text n FROM midia_telas`),
-      p.query(`SELECT c.empresa, c.nome, c.email, c.status, c.created_at
-                 FROM midia_contas c ORDER BY c.created_at DESC LIMIT 8`),
+      p.query<{ n: string }>(`SELECT COUNT(*)::text n FROM midia_campanhas WHERE status='no_ar'`),
+      p.query<{ v: string }>(`SELECT COALESCE(SUM(valor),0)::text v FROM midia_campanhas WHERE status_pagamento='pago'`),
+      p.query<{ v: string }>(`SELECT COALESCE(SUM(valor),0)::text v FROM midia_campanhas WHERE status_pagamento='pendente' AND status IN ('no_ar','rascunho','aguardando_arte')`),
+      p.query<{ n: string }>(`SELECT COUNT(*)::text n FROM midia_locais WHERE ativo=true`),
+      p.query(`SELECT c.nome, ct.empresa, c.data_fim
+                 FROM midia_campanhas c JOIN midia_contas ct ON ct.id=c.conta_id
+                WHERE c.status='no_ar' AND c.data_fim IS NOT NULL AND c.data_fim BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+                ORDER BY c.data_fim LIMIT 10`),
+      p.query(`SELECT c.nome, ct.empresa, c.status, c.status_pagamento, c.valor, c.created_at
+                 FROM midia_campanhas c JOIN midia_contas ct ON ct.id=c.conta_id
+                ORDER BY c.created_at DESC LIMIT 8`),
     ]);
-
-    const porStatus = await p.query<{ status: string; n: string }>(
-      `SELECT status, COUNT(*)::text n FROM midia_contas GROUP BY status`
-    );
 
     return NextResponse.json({
       ok: true,
       kpis: {
-        contas:        Number(contas.rows[0].n),
-        assinaturas_ativas: Number(assinAtivas.rows[0].n),
-        mrr:           Number(mrr.rows[0].v),
-        telas:         Number(telas.rows[0].n),
+        anunciantes:    Number(anunc.rows[0].n),
+        campanhas_no_ar: Number(noAr.rows[0].n),
+        receita_paga:   Number(receita.rows[0].v),
+        a_receber:      Number(aReceber.rows[0].v),
+        locais:         Number(locais.rows[0].n),
       },
-      por_status: Object.fromEntries(porStatus.rows.map(r => [r.status, Number(r.n)])),
+      a_vencer: aVencer.rows,
       ultimas: ultimas.rows,
     });
   } catch (err) {

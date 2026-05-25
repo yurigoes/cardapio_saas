@@ -4,11 +4,12 @@
  * agenda no display group do local.
  */
 import { db, ensureSchema } from "./db";
-import { criarLayoutDeMidia, agendarLayoutNoGrupo, criarDisplayGroup, excluirLayout, excluirEvento } from "./xibo";
+import { criarLayoutLoop, agendarLayoutNoGrupo, criarDisplayGroup, excluirLayout, excluirEvento } from "./xibo";
 
 const ROOT_FOLDER = Number(process.env.XIBO_ROOT_FOLDER_ID ?? 1);
 
-export async function definirConteudoBase(localId: string, arquivo: Buffer | Blob, nomeArquivo: string, mime?: string): Promise<{ ok: boolean; erro?: string }> {
+/** Define o conteúdo base do local com 1+ arquivos em loop. */
+export async function definirConteudoBase(localId: string, arquivos: { arquivo: Buffer | Blob; nomeArquivo: string }[]): Promise<{ ok: boolean; erro?: string; enviados?: number }> {
   await ensureSchema();
   const p = db();
   const local = await p.query<{ nome: string; cidade: string | null; largura: number; altura: number; xibo_display_group_id: number | null; conteudo_layout_id: number | null; conteudo_event_id: number | null }>(
@@ -32,22 +33,22 @@ export async function definirConteudoBase(localId: string, arquivo: Buffer | Blo
       try { await excluirLayout(local.conteudo_layout_id); } catch (e) { console.warn("[conteudo] não apagou layout antigo:", (e as Error).message); }
     }
 
-    const { layoutId, campaignId } = await criarLayoutDeMidia({
+    const { layoutId, campaignId, enviados } = await criarLayoutLoop({
       nome: `Conteúdo — ${local.nome} ${Date.now().toString(36)}`,
-      arquivo, nomeArquivo, folderId: ROOT_FOLDER,
+      arquivos, folderId: ROOT_FOLDER,
       width: local.largura, height: local.altura,
-      duracaoSeg: (mime ?? "").startsWith("video") ? undefined : 10,
     });
 
     // Agenda o layout no grupo do local (sempre ativo). Os anúncios interleiam por cima.
     let eventId: number | undefined;
     if (campaignId) eventId = await agendarLayoutNoGrupo(campaignId, dg);
 
+    const nomeResumo = arquivos.length === 1 ? arquivos[0].nomeArquivo : `${arquivos.length} arquivos`;
     await p.query(
       `UPDATE midia_locais SET conteudo_layout_id = $1, conteudo_nome = $2, conteudo_event_id = $3, updated_at = NOW() WHERE id = $4`,
-      [layoutId, nomeArquivo, eventId ?? null, localId]
+      [layoutId, nomeResumo, eventId ?? null, localId]
     );
-    return { ok: true };
+    return { ok: true, enviados };
   } catch (err) {
     console.error("[definirConteudoBase]", err);
     return { ok: false, erro: err instanceof Error ? err.message : "erro" };

@@ -137,29 +137,46 @@ function Login({ onLogin }: { onLogin: (t: string, role: string, nome: string) =
 
 // ─── Dashboard ────────────────────────────────────────────────────────────
 function Dashboard({ token }: { token: string }) {
-  const [d, setD] = useState<{ kpis: Record<string, number>; por_status: Record<string, number>; ultimas: { empresa: string; nome: string; email: string; status: string; created_at: string }[] } | null>(null);
+  const [d, setD] = useState<{
+    kpis: Record<string, number>;
+    a_vencer: { nome: string; empresa: string; data_fim: string }[];
+    ultimas: { empresa: string; nome: string; status: string; status_pagamento: string; valor: string; created_at: string }[];
+  } | null>(null);
   useEffect(() => { aapi(token, "/api/admin/dashboard").then(r => r.json()).then(x => x.ok && setD(x)); }, [token]);
   if (!d) return <Loader2 className="h-6 w-6 animate-spin text-slate-500" />;
   return (
     <div>
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Kpi label="Clientes" value={String(d.kpis.contas)} />
-        <Kpi label="Assinaturas ativas" value={String(d.kpis.assinaturas_ativas)} />
-        <Kpi label="MRR (receita/mês)" value={brl(d.kpis.mrr)} />
-        <Kpi label="Telas" value={String(d.kpis.telas)} />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        <Kpi label="Anunciantes" value={String(d.kpis.anunciantes)} />
+        <Kpi label="Campanhas no ar" value={String(d.kpis.campanhas_no_ar)} />
+        <Kpi label="Receita recebida" value={brl(d.kpis.receita_paga)} />
+        <Kpi label="A receber" value={brl(d.kpis.a_receber)} />
+        <Kpi label="Locais ativos" value={String(d.kpis.locais)} />
       </div>
-      <h2 className="mt-8 mb-3 text-lg font-bold">Últimos cadastros</h2>
+
+      {d.a_vencer.length > 0 && (
+        <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+          <p className="mb-2 text-sm font-semibold text-amber-300">Campanhas a vencer (7 dias)</p>
+          <div className="flex flex-wrap gap-2">
+            {d.a_vencer.map((c, i) => <span key={i} className="rounded bg-white/5 px-2 py-1 text-xs">{c.empresa}: {c.nome} <span className="text-amber-300">→ {String(c.data_fim).slice(0, 10)}</span></span>)}
+          </div>
+        </div>
+      )}
+
+      <h2 className="mt-8 mb-3 text-lg font-bold">Últimas campanhas</h2>
       <div className="overflow-hidden rounded-xl border border-white/10">
         <table className="w-full text-sm">
-          <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Empresa</th><th className="p-3">Contato</th><th className="p-3">Status</th></tr></thead>
+          <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Anunciante / Campanha</th><th className="p-3">Valor</th><th className="p-3">Status</th><th className="p-3">Pgto</th></tr></thead>
           <tbody>
             {d.ultimas.map((c, i) => (
               <tr key={i} className="border-t border-white/5">
-                <td className="p-3 font-medium">{c.empresa}</td>
-                <td className="p-3 text-slate-400">{c.nome}<br /><span className="text-xs">{c.email}</span></td>
+                <td className="p-3"><div className="font-medium">{c.empresa}</div><div className="text-xs text-slate-400">{c.nome}</div></td>
+                <td className="p-3">{brl(Number(c.valor))}</td>
                 <td className="p-3"><Badge s={c.status} /></td>
+                <td className="p-3"><span className={`text-xs ${c.status_pagamento === "pago" ? "text-emerald-300" : c.status_pagamento === "isento" ? "text-slate-400" : "text-amber-300"}`}>{c.status_pagamento}</span></td>
               </tr>
             ))}
+            {!d.ultimas.length && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhuma campanha ainda.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -558,13 +575,14 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const [ocup, setOcup] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  async function enviarConteudo(file: File) {
+  async function enviarConteudo(files: FileList) {
     setBusy(true); setErr("");
-    const fd = new FormData(); fd.append("file", file);
+    const fd = new FormData(); Array.from(files).forEach(f => fd.append("file", f));
     const r = await fetch(`/api/admin/locais/${local.id}/conteudo`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
     const d = await r.json(); setBusy(false);
     if (inputRef.current) inputRef.current.value = "";
-    if (!d.ok) { setErr(d.error || "erro"); return; }
+    if (!d.ok) { notify(d.error || "erro", "error"); return; }
+    notify(`Conteúdo base atualizado (${d.enviados ?? 1} arquivo${(d.enviados ?? 1) > 1 ? "s" : ""})`, "success");
     onChange();
   }
   return (
@@ -579,7 +597,7 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
       <div className="mt-3 flex gap-2">
         <label className="flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {local.conteudo_nome ? "Trocar conteúdo" : "Conteúdo base"}
-          <input ref={inputRef} type="file" accept="image/*,video/*" className="hidden" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) enviarConteudo(f); }} />
+          <input ref={inputRef} type="file" accept="image/*,video/*" multiple className="hidden" disabled={busy} onChange={e => { const f = e.target.files; if (f && f.length) enviarConteudo(f); }} />
         </label>
         <button onClick={onToggle} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">{local.ativo ? "Desativar" : "Ativar"}</button>
       </div>
@@ -590,8 +608,10 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
 }
 interface OcupCamp { id: string; nome: string; status: string; status_pagamento: string; insercoes_dia: number; segundos: number; tipo: string; empresa: string; anunciante: string; }
 function OcupacaoModal({ token, local, onClose }: { token: string; local: Local; onClose: () => void }) {
-  const [d, setD] = useState<{ resumo: { anunciantes_no_ar: number; insercoes_dia: number; minutos_dia: number }; campanhas: OcupCamp[] } | null>(null);
+  const [d, setD] = useState<{ resumo: { anunciantes_no_ar: number; insercoes_dia: number; minutos_dia: number; capacidade_dia: number; ocupacao_pct: number | null }; campanhas: OcupCamp[] } | null>(null);
   useEffect(() => { aapi(token, `/api/admin/locais/${local.id}/ocupacao`).then(r => r.json()).then(x => x.ok && setD(x)); }, [token, local.id]);
+  const pct = d?.resumo.ocupacao_pct ?? null;
+  const cheio = pct != null && pct >= 100;
   return (
     <Modal title={`Ocupação — ${local.nome}`} onClose={onClose} wide>
       {!d ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
@@ -601,6 +621,18 @@ function OcupacaoModal({ token, local, onClose }: { token: string; local: Local;
             <Kpi label="Inserções/dia (total)" value={String(d.resumo.insercoes_dia)} />
             <Kpi label="Tempo de anúncio/dia" value={`${d.resumo.minutos_dia} min`} />
           </div>
+          {d.resumo.capacidade_dia > 0 && (
+            <div className="mb-4">
+              <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
+                <span>Ocupação da grade</span>
+                <span className={cheio ? "text-red-300" : pct! >= 80 ? "text-amber-300" : "text-emerald-300"}>{d.resumo.insercoes_dia} / {d.resumo.capacidade_dia} inserções/dia ({pct}%)</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div className={`h-full ${cheio ? "bg-red-500" : pct! >= 80 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(pct!, 100)}%` }} />
+              </div>
+              {cheio && <p className="mt-2 text-xs text-red-300">⚠ Grade no limite — evite vender mais inserções neste local sem aumentar a capacidade.</p>}
+            </div>
+          )}
           <div className="overflow-hidden rounded-xl border border-white/10">
             <table className="w-full text-sm">
               <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Anunciante</th><th className="p-3">Inserções/dia</th><th className="p-3">Status</th><th className="p-3">Pgto</th></tr></thead>
@@ -626,10 +658,11 @@ function OcupacaoModal({ token, local, onClose }: { token: string; local: Local;
 function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () => void; onSaved: () => void }) {
   const [nome, setNome] = useState(""); const [cidade, setCidade] = useState(""); const [endereco, setEndereco] = useState("");
   const [largura, setLargura] = useState("1080"); const [altura, setAltura] = useState("1920");
+  const [capacidade, setCapacidade] = useState("0");
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   async function salvar() {
     setBusy(true); setErr("");
-    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, largura, altura }) });
+    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, largura, altura, capacidade_dia: capacidade }) });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
     onSaved();
@@ -638,8 +671,8 @@ function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () =>
     <Modal onClose={onClose} title="Novo local">
       <Field label="Nome do ponto" value={nome} onChange={setNome} placeholder="ex: Shopping Centro - Praça" />
       <div className="grid grid-cols-2 gap-3"><Field label="Cidade" value={cidade} onChange={setCidade} /><Field label="Endereço" value={endereco} onChange={setEndereco} /></div>
-      <div className="grid grid-cols-2 gap-3"><Field label="Largura (px)" value={largura} onChange={setLargura} type="number" /><Field label="Altura (px)" value={altura} onChange={setAltura} type="number" /></div>
-      <p className="mb-3 text-xs text-slate-500">Use 1080×1920 (retrato) ou 1920×1080 (paisagem) conforme as telas do local. Um Display Group é criado no Xibo automaticamente.</p>
+      <div className="grid grid-cols-3 gap-3"><Field label="Largura (px)" value={largura} onChange={setLargura} type="number" /><Field label="Altura (px)" value={altura} onChange={setAltura} type="number" /><Field label="Capacidade/dia" value={capacidade} onChange={setCapacidade} type="number" /></div>
+      <p className="mb-3 text-xs text-slate-500">Resolução: 1080×1920 (retrato) ou 1920×1080 (paisagem). Capacidade/dia = limite recomendado de inserções (0 = ilimitado), usado pra alertar quando a grade satura.</p>
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
       <button onClick={salvar} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar local</button>
     </Modal>
