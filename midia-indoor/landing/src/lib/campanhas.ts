@@ -122,8 +122,10 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
 
   // Alvo total de inserções = inserções/dia × dias × nº de locais
   const targetPlays = camp.insercoes_dia * camp.dias * groups.length;
-  const inicio = new Date(camp.data_inicio + "T00:00:00");
-  const fim    = new Date(camp.data_fim + "T23:59:59");
+  // data_inicio/fim podem vir como Date (pg) ou string — normaliza com segurança
+  const inicio = new Date(camp.data_inicio); inicio.setHours(0, 0, 0, 0);
+  const fim    = new Date(camp.data_fim);    fim.setHours(23, 59, 59, 0);
+  if (isNaN(+inicio) || isNaN(+fim)) return { ok: false, erro: "período inválido — edite as datas da campanha" };
 
   try {
     let xiboCampaignId = camp.xibo_campaign_id ?? undefined;
@@ -192,12 +194,19 @@ export async function encerrarCampanha(campanhaId: string): Promise<{ ok: boolea
   }
 }
 
+/** Normaliza Date|string pra "YYYY-MM-DD". */
+function ymd(v: unknown): string {
+  const d = new Date(v as string | number | Date);
+  if (isNaN(+d)) return new Date().toISOString().slice(0, 10);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Relatório de exibições (proof-of-play) — resumo. */
 export async function relatorioCampanha(campanhaId: string): Promise<{ plays: number; duracao: number } | null> {
   const camp = await carregar(campanhaId);
   if (!camp?.xibo_campaign_id || !camp.data_inicio) return null;
-  const from = `${camp.data_inicio} 00:00:00`;
-  const to   = `${camp.data_fim ?? camp.data_inicio} 23:59:59`;
+  const from = `${ymd(camp.data_inicio)} 00:00:00`;
+  const to   = `${ymd(camp.data_fim ?? camp.data_inicio)} 23:59:59`;
   const s = await statsCampanha(camp.xibo_campaign_id, from, to);
   return { plays: s.plays, duracao: s.duracao };
 }
@@ -206,8 +215,8 @@ export async function relatorioCampanha(campanhaId: string): Promise<{ plays: nu
 export async function relatorioDetalhado(campanhaId: string): Promise<{ resumo: { plays: number; duracao: number }; exibicoes: ExibicaoLinha[] } | null> {
   const camp = await carregar(campanhaId);
   if (!camp?.xibo_campaign_id || !camp.data_inicio) return null;
-  const from = `${camp.data_inicio} 00:00:00`;
-  const to   = `${camp.data_fim ?? camp.data_inicio} 23:59:59`;
+  const from = `${ymd(camp.data_inicio)} 00:00:00`;
+  const to   = `${ymd(camp.data_fim ?? camp.data_inicio)} 23:59:59`;
   const exibicoes = await statsDetalhe(camp.xibo_campaign_id, from, to);
   const plays = exibicoes.reduce((s, e) => s + e.numberPlays, 0);
   const duracao = exibicoes.reduce((s, e) => s + e.duration, 0);
