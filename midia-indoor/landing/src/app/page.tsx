@@ -159,7 +159,7 @@ export default async function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-white/5 py-8 text-center text-sm text-slate-500">
         <p>© {new Date().getFullYear()} Three Digital — Mídia Indoor. Todos os direitos reservados.</p>
-        <p className="mt-1">tthreedigital.com.br</p>
+        <p className="mt-1">tthreedigital.com.br · <Link href="/guia" className="text-brand-light hover:underline">Guia de instalação</Link></p>
       </footer>
     </main>
   );

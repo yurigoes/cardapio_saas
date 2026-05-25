@@ -62,6 +62,7 @@ export default function AdminPage() {
             <Tv className="h-5 w-5" /><span className="font-bold">Admin · Three Digital Mídia</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
+            <a href="/guia" target="_blank" rel="noopener" className="flex items-center gap-1 text-slate-400 hover:text-white"><LifeBuoy className="h-4 w-4" /> Guia</a>
             <span className="text-slate-400">{nome} · <span className="capitalize">{role}</span></span>
             <button onClick={sair} className="flex items-center gap-1 text-slate-400 hover:text-white"><LogOut className="h-4 w-4" /> Sair</button>
           </div>
