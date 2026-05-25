@@ -161,6 +161,50 @@ export async function adicionarDisplayAoGrupo(displayId: number, displayGroupId:
   await xibo(`/api/displaygroup/${displayGroupId}/display/assign`, { method: "POST", body });
 }
 
+export async function removerDisplayDoGrupo(displayId: number, displayGroupId: number): Promise<void> {
+  const body = new URLSearchParams();
+  body.append("displayId[]", String(displayId));
+  await xibo(`/api/displaygroup/${displayGroupId}/display/unassign`, { method: "POST", body });
+}
+
+export interface XiboDisplayFull extends XiboDisplay {
+  description?: string;
+  defaultLayoutId?: number;
+  licensed?: number;
+  license?: string;
+  incSchedule?: number;
+  emailAlert?: number;
+  wakeOnLanEnabled?: number;
+  clientType?: string;
+  displayGroups?: { displayGroupId: number; displayGroup: string }[];
+}
+
+/** Lista displays com dados completos (status + grupos). */
+export async function listarDisplaysFull(filtro?: { authorised?: number }): Promise<XiboDisplayFull[]> {
+  const qs = new URLSearchParams({ embed: "displaygroups" });
+  if (filtro?.authorised !== undefined) qs.set("authorised", String(filtro.authorised));
+  return xibo<XiboDisplayFull[]>(`/api/display?${qs.toString()}`);
+}
+
+/** Renomeia um display (reenvia os campos obrigatórios do Xibo). */
+export async function renomearDisplay(displayId: number, novoNome: string): Promise<void> {
+  const atual = (await xibo<XiboDisplayFull[]>(`/api/display?displayId=${displayId}`))[0];
+  if (!atual) throw new Error("display não encontrado");
+  const body = new URLSearchParams();
+  body.set("display", novoNome);
+  body.set("defaultLayoutId", String(atual.defaultLayoutId ?? 0));
+  body.set("licensed", String(atual.licensed ?? 1));
+  body.set("license", String(atual.license ?? ""));
+  body.set("incSchedule", String(atual.incSchedule ?? 0));
+  body.set("emailAlert", String(atual.emailAlert ?? 0));
+  body.set("wakeOnLanEnabled", String(atual.wakeOnLanEnabled ?? 0));
+  await xibo(`/api/display/${displayId}`, { method: "PUT", body });
+}
+
+export async function excluirDisplay(displayId: number): Promise<void> {
+  await xibo(`/api/display/${displayId}`, { method: "DELETE" });
+}
+
 // ─── Resoluções ─────────────────────────────────────────────────────────────
 /** Acha (ou cria) uma resolução pelo tamanho e retorna o resolutionId. */
 export async function getResolution(width: number, height: number): Promise<number> {

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, LogOut, LayoutDashboard, Users, Package, FileText, UserCog,
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
-  LifeBuoy, Send,
+  LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff,
 } from "lucide-react";
 
 const TOKEN_KEY = "midia_admin_token";
@@ -16,7 +16,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "pacotes" | "chamados" | "contratos" | "usuarios";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -47,6 +47,7 @@ export default function AdminPage() {
     { id: "campanhas",   label: "Campanhas",   icon: Megaphone },
     { id: "anunciantes", label: "Anunciantes", icon: Users },
     { id: "locais",      label: "Locais",      icon: MapPin, master: true },
+    { id: "telas",       label: "Telas",       icon: MonitorPlay, master: true },
     { id: "pacotes",     label: "Pacotes",     icon: Package, master: true },
     { id: "chamados",    label: "Chamados",    icon: LifeBuoy },
     { id: "contratos",   label: "Contratos",   icon: FileText, master: true },
@@ -80,6 +81,7 @@ export default function AdminPage() {
         {aba === "campanhas"   && <Campanhas token={token} isMaster={isMaster} />}
         {aba === "anunciantes" && <Anunciantes token={token} isMaster={isMaster} />}
         {aba === "locais"      && <Locais token={token} />}
+        {aba === "telas"       && <Telas token={token} />}
         {aba === "pacotes"     && <Pacotes token={token} />}
         {aba === "chamados"    && <Chamados token={token} />}
         {aba === "contratos"   && <Contratos token={token} />}
@@ -733,6 +735,104 @@ function UsuarioModal({ token, onClose, onSaved }: { token: string; onClose: () 
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
       <button onClick={salvar} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar</button>
     </Modal>
+  );
+}
+
+// ─── Telas (players Xibo) ───────────────────────────────────────────────────
+interface DisplayItem { displayId: number; nome: string; autorizado: boolean; online: boolean; ultimoAcesso: string; clientType: string; local: { id: string; nome: string } | null; }
+function Telas({ token }: { token: string }) {
+  const [displays, setDisplays] = useState<DisplayItem[]>([]);
+  const [locais, setLocais] = useState<{ id: string; nome: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState("");
+  const [busy, setBusy] = useState<number | null>(null);
+  const [sel, setSel] = useState<Record<number, string>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true); setErro("");
+    const r = await aapi(token, "/api/admin/displays"); const d = await r.json();
+    if (d.ok) { setDisplays(d.displays); setLocais(d.locais); } else setErro(d.error || "erro");
+    setLoading(false);
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  async function acao(displayId: number, acao: string, extra: Record<string, unknown> = {}) {
+    setBusy(displayId); setErro("");
+    const r = await aapi(token, "/api/admin/displays", { method: "POST", body: JSON.stringify({ acao, displayId, ...extra }) });
+    const d = await r.json(); setBusy(null);
+    if (!d.ok) { setErro(d.error || "erro"); return; }
+    load();
+  }
+  async function renomear(displayId: number, atual: string) {
+    const nome = prompt("Novo nome da tela:", atual); if (!nome) return;
+    acao(displayId, "renomear", { nome });
+  }
+
+  const pendentes = displays.filter(d => !d.autorizado);
+  const ativos = displays.filter(d => d.autorizado);
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-bold">Telas (players)</h2>
+        <button onClick={load} className="rounded-xl border border-white/10 p-2 hover:bg-white/5"><RefreshCw className="h-4 w-4" /></button>
+      </div>
+      <p className="mb-4 text-xs text-slate-500">Instale o app Xibo Player na TV apontando pra <strong>midia.tthreedigital.com.br</strong>. A tela aparece aqui como pendente — vincule a um local com 1 clique.</p>
+      {erro && <p className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400">{erro}</p>}
+      {loading ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
+        <>
+          {pendentes.length > 0 && (
+            <div className="mb-6">
+              <h3 className="mb-2 text-sm font-semibold text-amber-300">Aguardando vínculo ({pendentes.length})</h3>
+              <div className="space-y-2">
+                {pendentes.map(d => (
+                  <div key={d.displayId} className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+                    <div className="flex-1"><p className="font-medium">{d.nome}</p><p className="text-xs text-slate-400">{d.clientType} · visto {d.ultimoAcesso || "—"}</p></div>
+                    <select value={sel[d.displayId] ?? ""} onChange={e => setSel(s => ({ ...s, [d.displayId]: e.target.value }))} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-sm outline-none">
+                      <option value="">Escolher local…</option>
+                      {locais.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                    </select>
+                    <button disabled={busy === d.displayId || !sel[d.displayId]} onClick={() => acao(d.displayId, "vincular", { local_id: sel[d.displayId] })}
+                      className="flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold hover:bg-brand-dark disabled:opacity-50">
+                      {busy === d.displayId ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Vincular
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <h3 className="mb-2 text-sm font-semibold text-slate-300">Telas ativas ({ativos.length})</h3>
+          <div className="overflow-x-auto rounded-xl border border-white/10">
+            <table className="w-full text-sm">
+              <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Tela</th><th className="p-3">Status</th><th className="p-3">Local</th><th className="p-3 text-right">Ações</th></tr></thead>
+              <tbody>
+                {ativos.map(d => (
+                  <tr key={d.displayId} className="border-t border-white/5">
+                    <td className="p-3 font-medium">{d.nome}</td>
+                    <td className="p-3">{d.online ? <span className="flex items-center gap-1 text-emerald-300"><Wifi className="h-3.5 w-3.5" /> online</span> : <span className="flex items-center gap-1 text-slate-500"><WifiOff className="h-3.5 w-3.5" /> offline</span>}</td>
+                    <td className="p-3">
+                      <select value={d.local?.id ?? ""} onChange={e => { const lid = e.target.value; if (lid) acao(d.displayId, "vincular", { local_id: lid }); else if (d.local) acao(d.displayId, "desvincular", { local_id: d.local.id }); }}
+                        className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs outline-none">
+                        <option value="">— sem local —</option>
+                        {locais.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                      </select>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => renomear(d.displayId, d.nome)} className="rounded border border-white/15 p-1.5 hover:bg-white/5" title="Renomear"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => { if (confirm(`Excluir a tela "${d.nome}"?`)) acao(d.displayId, "excluir"); }} className="rounded border border-red-500/30 p-1.5 text-red-300 hover:bg-red-500/10" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!ativos.length && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhuma tela ativa ainda.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
