@@ -495,6 +495,7 @@ function Locais({ token }: { token: string }) {
 }
 function LocalCard({ token, local, onChange, onToggle }: { token: string; local: Local; onChange: () => void; onToggle: () => void }) {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const [ocup, setOcup] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   async function enviarConteudo(file: File) {
     setBusy(true); setErr("");
@@ -521,7 +522,44 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
         </label>
         <button onClick={onToggle} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">{local.ativo ? "Desativar" : "Ativar"}</button>
       </div>
+      <button onClick={() => setOcup(true)} className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg bg-brand/15 py-1.5 text-xs font-medium text-brand-light hover:bg-brand/25"><BarChart3 className="h-3.5 w-3.5" /> Ver ocupação</button>
+      {ocup && <OcupacaoModal token={token} local={local} onClose={() => setOcup(false)} />}
     </div>
+  );
+}
+interface OcupCamp { id: string; nome: string; status: string; status_pagamento: string; insercoes_dia: number; segundos: number; tipo: string; empresa: string; anunciante: string; }
+function OcupacaoModal({ token, local, onClose }: { token: string; local: Local; onClose: () => void }) {
+  const [d, setD] = useState<{ resumo: { anunciantes_no_ar: number; insercoes_dia: number; minutos_dia: number }; campanhas: OcupCamp[] } | null>(null);
+  useEffect(() => { aapi(token, `/api/admin/locais/${local.id}/ocupacao`).then(r => r.json()).then(x => x.ok && setD(x)); }, [token, local.id]);
+  return (
+    <Modal title={`Ocupação — ${local.nome}`} onClose={onClose} wide>
+      {!d ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
+        <div>
+          <div className="mb-4 grid grid-cols-3 gap-3">
+            <Kpi label="Anunciantes no ar" value={String(d.resumo.anunciantes_no_ar)} />
+            <Kpi label="Inserções/dia (total)" value={String(d.resumo.insercoes_dia)} />
+            <Kpi label="Tempo de anúncio/dia" value={`${d.resumo.minutos_dia} min`} />
+          </div>
+          <div className="overflow-hidden rounded-xl border border-white/10">
+            <table className="w-full text-sm">
+              <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Anunciante</th><th className="p-3">Inserções/dia</th><th className="p-3">Status</th><th className="p-3">Pgto</th></tr></thead>
+              <tbody>
+                {d.campanhas.map(c => (
+                  <tr key={c.id} className="border-t border-white/5">
+                    <td className="p-3"><div className="font-medium">{c.empresa}</div><div className="text-xs text-slate-500">{c.nome} · {TIPO_LABEL[c.tipo] ?? c.tipo}</div></td>
+                    <td className="p-3">{c.insercoes_dia} <span className="text-xs text-slate-500">· {c.segundos}s</span></td>
+                    <td className="p-3"><span className={`text-xs capitalize ${STATUS_CAMP[c.status] ?? ""}`}>{c.status.replace("_", " ")}</span></td>
+                    <td className="p-3"><span className={`text-xs ${c.status_pagamento === "pago" ? "text-emerald-300" : c.status_pagamento === "isento" ? "text-slate-400" : "text-amber-300"}`}>{c.status_pagamento}</span></td>
+                  </tr>
+                ))}
+                {!d.campanhas.length && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhuma campanha neste local.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-slate-500">Soma das inserções/dia de todas as campanhas no ar neste ponto. Use pra dimensionar a grade e não saturar o loop.</p>
+        </div>
+      )}
+    </Modal>
   );
 }
 function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () => void; onSaved: () => void }) {
