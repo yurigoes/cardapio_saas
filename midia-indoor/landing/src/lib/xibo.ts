@@ -248,8 +248,7 @@ export async function criarLayoutDeMidia(opts: {
   //    campaignId já vem pronto, regions[0].regionPlaylist.playlistId p/ subir a mídia.
   const draftBody = new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" });
   const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: draftBody });
-  const publishedId = draft.parentId ?? draft.layoutId;  // layout PUBLICADO (usar em campanha/agenda)
-  const campaignId  = draft.campaignId;
+  const editId      = draft.layoutId;                    // rascunho (onde editamos e que publicamos)
   const playlistId  = draft.regions?.[0]?.regionPlaylist?.playlistId;
   if (!playlistId) throw new Error("Xibo: layout criado sem playlist de região");
 
@@ -281,11 +280,25 @@ export async function criarLayoutDeMidia(opts: {
     } catch (e) { console.warn("[xibo] não setou duração do widget:", (e as Error).message); }
   }
 
-  // 4) Publica o layout (pelo id publicado/pai)
+  // 4) Publica o rascunho que criamos
   const pubBody = new URLSearchParams({ publishNow: "1" });
-  await xibo(`/api/layout/publish/${publishedId}`, { method: "PUT", body: pubBody });
+  await xibo(`/api/layout/publish/${editId}`, { method: "PUT", body: pubBody });
 
-  return { layoutId: publishedId, mediaId, campaignId };
+  // 5) Resolve o layout PUBLICADO pelo nome único (id + campaignId corretos pós-publish).
+  let layoutId = editId;
+  let campaignId = draft.campaignId;
+  try {
+    const arr = await xibo<Array<{ layoutId: number; campaignId?: number; publishedStatusId?: number; layout?: string }>>(
+      `/api/layout?layout=${encodeURIComponent(opts.nome)}&embed=campaigns&retired=0`
+    );
+    const lista = Array.isArray(arr) ? arr : [];
+    const pub = lista.find(l => l.publishedStatusId === 1 && l.layout === opts.nome)
+            ?? lista.find(l => l.layout === opts.nome) ?? lista[0];
+    if (pub) { layoutId = pub.layoutId; campaignId = pub.campaignId ?? campaignId; }
+  } catch (e) { console.warn("[xibo] não resolveu layout publicado:", (e as Error).message); }
+
+  if (!campaignId) throw new Error("Xibo: layout publicado sem campaignId (não dá pra agendar)");
+  return { layoutId, mediaId, campaignId };
 }
 
 /** Agenda um layout (via campaignId do layout) num display group, sempre ativo. */
