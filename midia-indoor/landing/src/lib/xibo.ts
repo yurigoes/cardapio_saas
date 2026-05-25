@@ -246,7 +246,7 @@ export async function criarLayoutDeMidia(opts: {
   // 1) Cria layout em rascunho
   const draftBody = new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" });
   const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: draftBody });
-  const publishedId = draft.parentId ?? draft.layoutId;
+  const editId = draft.layoutId;                       // id do rascunho (onde editamos)
   const playlistId  = draft.regions?.[0]?.regionPlaylist?.playlistId;
   if (!playlistId) throw new Error("Xibo: layout criado sem playlist de região");
 
@@ -272,18 +272,24 @@ export async function criarLayoutDeMidia(opts: {
     } catch (e) { console.warn("[xibo] não setou duração do widget:", (e as Error).message); }
   }
 
-  // 4) Publica
+  // 4) Publica o rascunho
   const pubBody = new URLSearchParams({ publishNow: "1" });
-  await xibo(`/api/layout/publish/${publishedId}`, { method: "PUT", body: pubBody });
+  await xibo(`/api/layout/publish/${editId}`, { method: "PUT", body: pubBody });
 
-  // campaignId do layout (necessário pra agendar)
+  // 5) Resolve o layout PUBLICADO pelo nome (o id/campaignId corretos pós-publish).
+  //    O nome é único (sufixo timestamp), então o match é seguro.
+  let layoutId = editId;
   let campaignId: number | undefined;
   try {
-    const pub = await xibo<Array<{ campaignId?: number }>>(`/api/layout?layoutId=${publishedId}`);
-    campaignId = pub?.[0]?.campaignId;
-  } catch { /* opcional */ }
+    const arr = await xibo<Array<{ layoutId: number; campaignId?: number; publishedStatusId?: number; parentId?: number | null; layout?: string }>>(
+      `/api/layout?layout=${encodeURIComponent(opts.nome)}&embed=campaigns&retired=0`
+    );
+    const lista = Array.isArray(arr) ? arr : [];
+    const pub = lista.find(l => l.publishedStatusId === 1 && l.parentId == null && l.layout === opts.nome) ?? lista[0];
+    if (pub) { layoutId = pub.layoutId; campaignId = pub.campaignId; }
+  } catch (e) { console.warn("[xibo] não resolveu layout publicado:", (e as Error).message); }
 
-  return { layoutId: publishedId, mediaId, campaignId };
+  return { layoutId, mediaId, campaignId };
 }
 
 /** Agenda um layout (via campaignId do layout) num display group, sempre ativo. */
