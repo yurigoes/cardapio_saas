@@ -325,18 +325,22 @@ export async function criarAdCampaign(opts: {
   dataFim: Date;
   displayGroupIds: number[];
 }): Promise<number> {
-  // 1) Cria a campanha já com o layout
+  // 1) Cria a campanha (ad campaign NÃO aceita layoutIds na criação)
   const body = new URLSearchParams();
   body.set("type", "ad");
   body.set("name", opts.nome);
   body.set("targetType", "plays");
   body.set("target", String(opts.targetPlays));
-  body.append("layoutIds[]", String(opts.layoutId));
   const created = await xibo<{ campaignId?: number; data?: { campaignId: number } }>("/api/campaign", { method: "POST", body });
   const campaignId = created.campaignId ?? created.data?.campaignId;
   if (!campaignId) throw new Error("Xibo: não criou ad campaign");
 
-  // 2) Define datas + locais
+  // 2) Anexa o layout (criativo)
+  const assign = new URLSearchParams();
+  assign.set("layoutId", String(opts.layoutId));
+  await xibo(`/api/campaign/layout/assign/${campaignId}`, { method: "POST", body: assign });
+
+  // 3) Define datas + locais
   await editarAdCampaign(campaignId, {
     nome: opts.nome, targetPlays: opts.targetPlays,
     dataInicio: opts.dataInicio, dataFim: opts.dataFim, displayGroupIds: opts.displayGroupIds,
