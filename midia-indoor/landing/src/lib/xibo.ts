@@ -225,6 +225,7 @@ export async function getResolution(width: number, height: number): Promise<numb
 interface DraftLayout {
   layoutId: number;
   parentId?: number | null;
+  campaignId?: number;
   regions?: Array<{ regionPlaylist?: { playlistId: number } }>;
 }
 
@@ -243,10 +244,12 @@ export async function criarLayoutDeMidia(opts: {
 }): Promise<{ layoutId: number; mediaId: number; campaignId?: number }> {
   const resolutionId = await getResolution(opts.width, opts.height);
 
-  // 1) Cria layout em rascunho
+  // 1) Cria layout em rascunho. Resposta: layoutId=rascunho, parentId=publicado,
+  //    campaignId já vem pronto, regions[0].regionPlaylist.playlistId p/ subir a mídia.
   const draftBody = new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" });
   const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: draftBody });
-  const publishId = draft.parentId ?? draft.layoutId;  // publica pelo layout pai (publicado)
+  const publishedId = draft.parentId ?? draft.layoutId;  // layout PUBLICADO (usar em campanha/agenda)
+  const campaignId  = draft.campaignId;
   const playlistId  = draft.regions?.[0]?.regionPlaylist?.playlistId;
   if (!playlistId) throw new Error("Xibo: layout criado sem playlist de região");
 
@@ -272,24 +275,11 @@ export async function criarLayoutDeMidia(opts: {
     } catch (e) { console.warn("[xibo] não setou duração do widget:", (e as Error).message); }
   }
 
-  // 4) Publica
+  // 4) Publica o layout (pelo id publicado/pai)
   const pubBody = new URLSearchParams({ publishNow: "1" });
-  await xibo(`/api/layout/publish/${publishId}`, { method: "PUT", body: pubBody });
+  await xibo(`/api/layout/publish/${publishedId}`, { method: "PUT", body: pubBody });
 
-  // 5) Resolve o layout PUBLICADO pelo nome (o id/campaignId corretos pós-publish).
-  //    O nome é único (sufixo timestamp), então o match é seguro.
-  let layoutId = publishId;
-  let campaignId: number | undefined;
-  try {
-    const arr = await xibo<Array<{ layoutId: number; campaignId?: number; publishedStatusId?: number; parentId?: number | null; layout?: string }>>(
-      `/api/layout?layout=${encodeURIComponent(opts.nome)}&embed=campaigns&retired=0`
-    );
-    const lista = Array.isArray(arr) ? arr : [];
-    const pub = lista.find(l => l.publishedStatusId === 1 && l.parentId == null && l.layout === opts.nome) ?? lista[0];
-    if (pub) { layoutId = pub.layoutId; campaignId = pub.campaignId; }
-  } catch (e) { console.warn("[xibo] não resolveu layout publicado:", (e as Error).message); }
-
-  return { layoutId, mediaId, campaignId };
+  return { layoutId: publishedId, mediaId, campaignId };
 }
 
 /** Agenda um layout (via campaignId do layout) num display group, sempre ativo. */
