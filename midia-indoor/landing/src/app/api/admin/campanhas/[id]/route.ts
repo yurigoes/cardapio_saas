@@ -44,21 +44,37 @@ const patch = z.object({
   status_pagamento: z.enum(["pendente", "pago", "isento"]).optional(),
   status: z.enum(["rascunho", "aguardando_arte", "no_ar", "pausada", "encerrada"]).optional(),
   locais: z.array(z.string().uuid()).optional(),
+  // specs editáveis (trocar pacote/parâmetros sem recriar a campanha)
+  pacote_id: z.string().uuid().optional(),
+  tipo: z.string().max(40).optional(),
+  dias: z.coerce.number().int().min(1).optional(),
+  insercoes_dia: z.coerce.number().int().min(1).optional(),
+  segundos: z.coerce.number().int().min(1).max(300).optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
   const parsed = patch.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ ok: false, error: "dados inválidos" }, { status: 400 });
-  const b = parsed.data;
+  const b = { ...parsed.data };
 
   try {
     await ensureSchema();
     const p = db();
 
+    // Se trocou de pacote, herda as specs dele (a menos que venham sobrescritas no body)
+    if (b.pacote_id) {
+      const pac = await p.query<{ tipo: string; dias: number; insercoes_dia: number; segundos: number }>(
+        `SELECT tipo, dias, insercoes_dia, segundos FROM midia_pacotes WHERE id = $1`, [b.pacote_id]
+      ).then(r => r.rows[0]);
+      if (pac) {
+        b.tipo ??= pac.tipo; b.dias ??= pac.dias; b.insercoes_dia ??= pac.insercoes_dia; b.segundos ??= pac.segundos;
+      }
+    }
+
     const sets: string[] = []; const vals: unknown[] = [];
     const add = (c: string, v: unknown) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
-    for (const k of ["nome", "data_inicio", "data_fim", "valor", "status_pagamento", "status"] as const)
+    for (const k of ["nome", "data_inicio", "data_fim", "valor", "status_pagamento", "status", "pacote_id", "tipo", "dias", "insercoes_dia", "segundos"] as const)
       if (b[k] !== undefined) add(k, b[k]);
     if (sets.length) {
       vals.push(params.id);

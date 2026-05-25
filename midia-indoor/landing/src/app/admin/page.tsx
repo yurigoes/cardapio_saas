@@ -306,8 +306,10 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
 }
 
 function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: string; camp: Camp; isMaster: boolean; onClose: () => void; onChange: () => void }) {
-  const [det, setDet] = useState<{ campanha: Camp & { data_inicio: string | null; data_fim: string | null; valor: string }; locais: Local[]; relatorio: { plays: number; duracao: number } | null } | null>(null);
+  const [det, setDet] = useState<{ campanha: Camp & { data_inicio: string | null; data_fim: string | null; valor: string; pacote_id?: string | null }; locais: Local[]; relatorio: { plays: number; duracao: number } | null } | null>(null);
   const [busy, setBusy] = useState(""); const [msg, setMsg] = useState("");
+  const [editar, setEditar] = useState(false);
+  const [pacotes, setPacotes] = useState<Pacote[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -315,6 +317,7 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
     if (d.ok) setDet(d);
   }, [token, camp.id]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (editar && !pacotes.length) aapi(token, "/api/admin/pacotes").then(r => r.json()).then(d => d.ok && setPacotes(d.pacotes.filter((p: Pacote) => p.ativo))); }, [editar, token, pacotes.length]);
 
   async function acao(path: string, label: string) {
     setBusy(label); setMsg("");
@@ -351,6 +354,13 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
             <Info label="Valor" v={brl(Number(c.valor))} />
             <Info label="Status" v={c.status.replace("_", " ")} />
           </div>
+
+          {isMaster && (
+            <div className="rounded-xl border border-white/10 p-3">
+              <button onClick={() => setEditar(e => !e)} className="flex items-center gap-2 text-sm font-medium text-brand-light"><Pencil className="h-4 w-4" /> {editar ? "Fechar edição" : "Editar pacote / período / valor"}</button>
+              {editar && <EditCampanha token={token} campId={camp.id} det={det.campanha} pacotes={pacotes} onSaved={() => { load(); onChange(); }} />}
+            </div>
+          )}
 
           <div>
             <p className="mb-1 text-slate-400">Locais ({det.locais.length})</p>
@@ -400,6 +410,57 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
 }
 function Info({ label, v }: { label: string; v: string }) {
   return <div><p className="text-xs text-slate-500">{label}</p><p className="font-medium capitalize">{v}</p></div>;
+}
+function EditCampanha({ token, campId, det, pacotes, onSaved }: { token: string; campId: string; det: { data_inicio: string | null; data_fim: string | null; valor: string; insercoes_dia: number; segundos: number; dias: number; pacote_id?: string | null }; pacotes: Pacote[]; onSaved: () => void }) {
+  const fmt = (d: string | null) => (d ? String(d).slice(0, 10) : "");
+  const [pacoteId, setPacoteId] = useState(det.pacote_id ?? "");
+  const [ins, setIns] = useState(String(det.insercoes_dia));
+  const [dias, setDias] = useState(String(det.dias));
+  const [seg, setSeg] = useState(String(det.segundos));
+  const [ini, setIni] = useState(fmt(det.data_inicio));
+  const [fim, setFim] = useState(fmt(det.data_fim));
+  const [valor, setValor] = useState(String(Number(det.valor)));
+  const [busy, setBusy] = useState(false);
+
+  function aplicarPacote(id: string) {
+    setPacoteId(id);
+    const p = pacotes.find(x => x.id === id);
+    if (p) { setIns(String(p.insercoes_dia)); setDias(String(p.dias)); setSeg(String(p.segundos)); }
+  }
+  async function salvar() {
+    setBusy(true);
+    const body = { pacote_id: pacoteId || undefined, insercoes_dia: ins, dias, segundos: seg, data_inicio: ini || undefined, data_fim: fim || undefined, valor };
+    const r = await aapi(token, `/api/admin/campanhas/${campId}`, { method: "PATCH", body: JSON.stringify(body) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify("Campanha atualizada — clique em 'Reaplicar' pra atualizar no ar", "success");
+    onSaved();
+  }
+  return (
+    <div className="mt-3 space-y-3">
+      <div>
+        <label className="mb-1 block text-xs text-slate-400">Pacote (preenche os campos abaixo)</label>
+        <select value={pacoteId} onChange={e => aplicarPacote(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-sm outline-none">
+          <option value="">Personalizado</option>
+          {pacotes.map(p => <option key={p.id} value={p.id}>{p.nome} · {p.insercoes_dia}/dia · {p.segundos}s</option>)}
+        </select>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <Field label="Inserções/dia" value={ins} onChange={setIns} type="number" />
+        <Field label="Dias" value={dias} onChange={setDias} type="number" />
+        <Field label="Segundos" value={seg} onChange={setSeg} type="number" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <Field label="Início" value={ini} onChange={setIni} type="date" />
+        <Field label="Fim" value={fim} onChange={setFim} type="date" />
+        <Field label="Valor (R$)" value={valor} onChange={setValor} type="number" />
+      </div>
+      <button onClick={salvar} disabled={busy} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark disabled:opacity-50">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar alterações
+      </button>
+      <p className="text-xs text-slate-500">Depois de salvar, use <strong>Reaplicar</strong> (Lançar no ar) pra atualizar a campanha no Xibo com os novos números.</p>
+    </div>
+  );
 }
 
 // ─── Anunciantes ────────────────────────────────────────────────────────────
