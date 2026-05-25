@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       return {
         displayId: d.displayId,
         nome: d.display,
-        autorizado: d.authorised === 1,
+        autorizado: (d.licensed ?? d.authorised) === 1,
         online: d.loggedIn === 1,
         ultimoAcesso: d.lastAccessed,
         clientType: d.clientType ?? "",
@@ -74,9 +74,10 @@ export async function POST(req: NextRequest) {
         if (!b.local_id) return NextResponse.json({ ok: false, error: "local_id obrigatório" }, { status: 400 });
         const dg = await dgDoLocal(b.local_id);
         if (!dg) return NextResponse.json({ ok: false, error: "local inválido" }, { status: 400 });
-        // authorise é TOGGLE — só autoriza se ainda não estiver autorizada
+        // authorise é TOGGLE — só autoriza se ainda não estiver licenciada (autorizada)
         const atual = (await listarDisplaysFull()).find(d => d.displayId === b.displayId);
-        if (atual && atual.authorised !== 1) await autorizarDisplay(b.displayId);
+        const jaAutorizada = ((atual?.licensed ?? atual?.authorised) === 1);
+        if (atual && !jaAutorizada) await autorizarDisplay(b.displayId);
         await adicionarDisplayAoGrupo(b.displayId, dg);
         break;
       }
