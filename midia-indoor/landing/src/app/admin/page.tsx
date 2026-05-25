@@ -169,7 +169,7 @@ function Badge({ s }: { s: string }) {
 }
 
 // ─── Tipos compartilhados ────────────────────────────────────────────────────
-interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; }
+interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; }
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
 interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; }
@@ -478,19 +478,41 @@ function Locais({ token }: { token: string }) {
         <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo local</button>
       </div>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {lista.map(l => (
-          <div key={l.id} className={`rounded-2xl border p-4 ${l.ativo ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.02] opacity-60"}`}>
-            <div className="flex items-start justify-between">
-              <div><p className="font-bold">{l.nome}</p><p className="text-xs text-slate-400">{l.cidade ?? ""}{l.endereco ? ` · ${l.endereco}` : ""}</p></div>
-              <MapPin className="h-4 w-4 text-brand-light" />
-            </div>
-            <p className="mt-2 text-xs text-slate-500">{l.largura}×{l.altura} · grupo Xibo {l.xibo_display_group_id ?? "—"}</p>
-            <button onClick={() => toggle(l)} className="mt-3 w-full rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">{l.ativo ? "Desativar" : "Ativar"}</button>
-          </div>
-        ))}
+        {lista.map(l => <LocalCard key={l.id} token={token} local={l} onChange={load} onToggle={() => toggle(l)} />)}
         {!lista.length && <p className="text-sm text-slate-500">Nenhum local. Cadastre seus pontos de mídia.</p>}
       </div>
       {novo && <LocalModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
+    </div>
+  );
+}
+function LocalCard({ token, local, onChange, onToggle }: { token: string; local: Local; onChange: () => void; onToggle: () => void }) {
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  async function enviarConteudo(file: File) {
+    setBusy(true); setErr("");
+    const fd = new FormData(); fd.append("file", file);
+    const r = await fetch(`/api/admin/locais/${local.id}/conteudo`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    const d = await r.json(); setBusy(false);
+    if (inputRef.current) inputRef.current.value = "";
+    if (!d.ok) { setErr(d.error || "erro"); return; }
+    onChange();
+  }
+  return (
+    <div className={`rounded-2xl border p-4 ${local.ativo ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.02] opacity-60"}`}>
+      <div className="flex items-start justify-between">
+        <div><p className="font-bold">{local.nome}</p><p className="text-xs text-slate-400">{local.cidade ?? ""}{local.endereco ? ` · ${local.endereco}` : ""}</p></div>
+        <MapPin className="h-4 w-4 text-brand-light" />
+      </div>
+      <p className="mt-2 text-xs text-slate-500">{local.largura}×{local.altura} · grupo Xibo {local.xibo_display_group_id ?? "—"}</p>
+      <p className="mt-1 text-xs text-slate-500">Conteúdo base: {local.conteudo_nome ? <span className="text-emerald-300">{local.conteudo_nome}</span> : "nenhum"}</p>
+      {err && <p className="mt-1 text-xs text-red-400">{err}</p>}
+      <div className="mt-3 flex gap-2">
+        <label className="flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {local.conteudo_nome ? "Trocar conteúdo" : "Conteúdo base"}
+          <input ref={inputRef} type="file" accept="image/*,video/*" className="hidden" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) enviarConteudo(f); }} />
+        </label>
+        <button onClick={onToggle} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">{local.ativo ? "Desativar" : "Ativar"}</button>
+      </div>
     </div>
   );
 }

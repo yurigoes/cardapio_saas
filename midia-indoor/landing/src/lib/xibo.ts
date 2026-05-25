@@ -236,7 +236,7 @@ export async function criarLayoutDeMidia(opts: {
   width: number;
   height: number;
   duracaoSeg?: number;   // segundos por inserção (imagens). Vídeo usa duração nativa.
-}): Promise<{ layoutId: number; mediaId: number }> {
+}): Promise<{ layoutId: number; mediaId: number; campaignId?: number }> {
   const resolutionId = await getResolution(opts.width, opts.height);
 
   // 1) Cria layout em rascunho
@@ -272,7 +272,29 @@ export async function criarLayoutDeMidia(opts: {
   const pubBody = new URLSearchParams({ publishNow: "1" });
   await xibo(`/api/layout/publish/${publishedId}`, { method: "PUT", body: pubBody });
 
-  return { layoutId: publishedId, mediaId };
+  // campaignId do layout (necessário pra agendar)
+  let campaignId: number | undefined;
+  try {
+    const pub = await xibo<Array<{ campaignId?: number }>>(`/api/layout?layoutId=${publishedId}`);
+    campaignId = pub?.[0]?.campaignId;
+  } catch { /* opcional */ }
+
+  return { layoutId: publishedId, mediaId, campaignId };
+}
+
+/** Agenda um layout (via campaignId do layout) num display group, sempre ativo. */
+export async function agendarLayoutNoGrupo(campaignId: number, displayGroupId: number): Promise<void> {
+  const agora = new Date();
+  const fim = new Date(agora.getTime()); fim.setFullYear(fim.getFullYear() + 5);
+  const body = new URLSearchParams();
+  body.set("eventTypeId", "1");                 // 1 = Layout
+  body.set("campaignId", String(campaignId));
+  body.append("displayGroupIds[]", String(displayGroupId));
+  body.set("displayOrder", "1");
+  body.set("isPriority", "0");
+  body.set("fromDt", fmtDt(agora));
+  body.set("toDt", fmtDt(fim));
+  await xibo(`/api/schedule`, { method: "POST", body });
 }
 
 // ─── Ad Campaigns (inserções automáticas) ────────────────────────────────────

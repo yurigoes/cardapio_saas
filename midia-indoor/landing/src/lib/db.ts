@@ -223,6 +223,9 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_contas ADD COLUMN IF NOT EXISTS boas_vindas_em TIMESTAMPTZ;`);
   // Tipo da arte (image|video) p/ preview no painel
   await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS arte_tipo TEXT;`);
+  // Conteúdo base do local (layout de preenchimento entre os anúncios)
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS conteudo_layout_id INTEGER;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS conteudo_nome TEXT;`);
 
   await seedPlanos();
   await seedPacotes();
