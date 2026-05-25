@@ -253,10 +253,13 @@ export async function criarLayoutDeMidia(opts: {
   const playlistId  = draft.regions?.[0]?.regionPlaylist?.playlistId;
   if (!playlistId) throw new Error("Xibo: layout criado sem playlist de região");
 
-  // 2) Sobe a mídia direto na playlist da região
+  // 2) Sobe a mídia direto na playlist da região.
+  //    Nome único na biblioteca (Xibo recusa nomes duplicados).
   const form = new FormData();
   const blob = opts.arquivo instanceof Blob ? opts.arquivo : new Blob([new Uint8Array(opts.arquivo)]);
-  form.append("files", blob, opts.nomeArquivo);
+  const nomeUnico = `${Date.now().toString(36)}-${opts.nomeArquivo}`;
+  form.append("files", blob, nomeUnico);
+  form.append("name", nomeUnico);
   form.append("folderId", String(opts.folderId));
   form.append("playlistId", String(playlistId));
   const up = await xibo<{ files: Array<{ mediaId?: number; error?: string; name?: string }> }>("/api/library", { method: "POST", body: form });
