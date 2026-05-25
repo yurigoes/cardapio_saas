@@ -302,8 +302,8 @@ export async function criarLayoutDeMidia(opts: {
   return { layoutId, mediaId, campaignId };
 }
 
-/** Agenda um layout (via campaignId do layout) num display group, sempre ativo. */
-export async function agendarLayoutNoGrupo(campaignId: number, displayGroupId: number): Promise<void> {
+/** Agenda um layout (via campaignId do layout) num display group, sempre ativo. Retorna o eventId. */
+export async function agendarLayoutNoGrupo(campaignId: number, displayGroupId: number): Promise<number | undefined> {
   const agora = new Date();
   const fim = new Date(agora.getTime()); fim.setFullYear(fim.getFullYear() + 5);
   const body = new URLSearchParams();
@@ -314,7 +314,13 @@ export async function agendarLayoutNoGrupo(campaignId: number, displayGroupId: n
   body.set("isPriority", "0");
   body.set("fromDt", fmtDt(agora));
   body.set("toDt", fmtDt(fim));
-  await xibo(`/api/schedule`, { method: "POST", body });
+  const r = await xibo<{ eventId?: number; data?: { eventId: number } }>(`/api/schedule`, { method: "POST", body });
+  return r.eventId ?? r.data?.eventId;
+}
+
+/** Remove um evento de agenda. */
+export async function excluirEvento(eventId: number): Promise<void> {
+  await xibo(`/api/schedule/${eventId}`, { method: "DELETE" });
 }
 
 // ─── Ad Campaigns (inserções automáticas) ────────────────────────────────────

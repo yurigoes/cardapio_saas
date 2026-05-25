@@ -74,10 +74,19 @@ export async function POST(req: NextRequest) {
         if (!b.local_id) return NextResponse.json({ ok: false, error: "local_id obrigatório" }, { status: 400 });
         const dg = await dgDoLocal(b.local_id);
         if (!dg) return NextResponse.json({ ok: false, error: "local inválido" }, { status: 400 });
-        // authorise é TOGGLE — só autoriza se ainda não estiver licenciada (autorizada)
         const atual = (await listarDisplaysFull()).find(d => d.displayId === b.displayId);
+        // authorise é TOGGLE — só autoriza se ainda não estiver licenciada
         const jaAutorizada = ((atual?.licensed ?? atual?.authorised) === 1);
         if (atual && !jaAutorizada) await autorizarDisplay(b.displayId);
+        // 1 tela = 1 local: remove de outros grupos de LOCAL antes de vincular
+        const gruposDeLocais = new Set(
+          (await db().query<{ dg: number }>(`SELECT xibo_display_group_id dg FROM midia_locais WHERE xibo_display_group_id IS NOT NULL`)).rows.map(r => r.dg)
+        );
+        for (const g of atual?.displayGroups ?? []) {
+          if (g.displayGroupId !== dg && gruposDeLocais.has(g.displayGroupId)) {
+            try { await removerDisplayDoGrupo(b.displayId, g.displayGroupId); } catch (e) { console.warn("[vincular] não removeu de grupo antigo:", (e as Error).message); }
+          }
+        }
         await adicionarDisplayAoGrupo(b.displayId, dg);
         break;
       }

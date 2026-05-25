@@ -244,6 +244,7 @@ export async function ensureSchema(): Promise<void> {
   // Conteúdo base do local (layout de preenchimento entre os anúncios)
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS conteudo_layout_id INTEGER;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS conteudo_nome TEXT;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS conteudo_event_id INTEGER;`);
 
   await seedPlanos();
   await seedPacotes();

@@ -4,15 +4,15 @@
  * agenda no display group do local.
  */
 import { db, ensureSchema } from "./db";
-import { criarLayoutDeMidia, agendarLayoutNoGrupo, criarDisplayGroup, excluirLayout } from "./xibo";
+import { criarLayoutDeMidia, agendarLayoutNoGrupo, criarDisplayGroup, excluirLayout, excluirEvento } from "./xibo";
 
 const ROOT_FOLDER = Number(process.env.XIBO_ROOT_FOLDER_ID ?? 1);
 
 export async function definirConteudoBase(localId: string, arquivo: Buffer | Blob, nomeArquivo: string, mime?: string): Promise<{ ok: boolean; erro?: string }> {
   await ensureSchema();
   const p = db();
-  const local = await p.query<{ nome: string; cidade: string | null; largura: number; altura: number; xibo_display_group_id: number | null; conteudo_layout_id: number | null }>(
-    `SELECT nome, cidade, largura, altura, xibo_display_group_id, conteudo_layout_id FROM midia_locais WHERE id = $1`, [localId]
+  const local = await p.query<{ nome: string; cidade: string | null; largura: number; altura: number; xibo_display_group_id: number | null; conteudo_layout_id: number | null; conteudo_event_id: number | null }>(
+    `SELECT nome, cidade, largura, altura, xibo_display_group_id, conteudo_layout_id, conteudo_event_id FROM midia_locais WHERE id = $1`, [localId]
   ).then(r => r.rows[0]);
   if (!local) return { ok: false, erro: "local não encontrado" };
 
@@ -24,7 +24,10 @@ export async function definirConteudoBase(localId: string, arquivo: Buffer | Blo
       await p.query(`UPDATE midia_locais SET xibo_display_group_id = $1 WHERE id = $2`, [dg, localId]);
     }
 
-    // Remove o conteúdo anterior (apaga layout antigo + seu agendamento)
+    // Remove o conteúdo anterior: agendamento + layout (evita conteúdo velho persistir)
+    if (local.conteudo_event_id) {
+      try { await excluirEvento(local.conteudo_event_id); } catch (e) { console.warn("[conteudo] não apagou evento antigo:", (e as Error).message); }
+    }
     if (local.conteudo_layout_id) {
       try { await excluirLayout(local.conteudo_layout_id); } catch (e) { console.warn("[conteudo] não apagou layout antigo:", (e as Error).message); }
     }
@@ -37,11 +40,12 @@ export async function definirConteudoBase(localId: string, arquivo: Buffer | Blo
     });
 
     // Agenda o layout no grupo do local (sempre ativo). Os anúncios interleiam por cima.
-    if (campaignId) await agendarLayoutNoGrupo(campaignId, dg);
+    let eventId: number | undefined;
+    if (campaignId) eventId = await agendarLayoutNoGrupo(campaignId, dg);
 
     await p.query(
-      `UPDATE midia_locais SET conteudo_layout_id = $1, conteudo_nome = $2, updated_at = NOW() WHERE id = $3`,
-      [layoutId, nomeArquivo, localId]
+      `UPDATE midia_locais SET conteudo_layout_id = $1, conteudo_nome = $2, conteudo_event_id = $3, updated_at = NOW() WHERE id = $4`,
+      [layoutId, nomeArquivo, eventId ?? null, localId]
     );
     return { ok: true };
   } catch (err) {
