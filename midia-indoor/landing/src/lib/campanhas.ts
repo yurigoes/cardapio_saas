@@ -8,7 +8,7 @@
  *   4. relatório → statsCampanha (proof-of-play)
  */
 import { db, ensureSchema } from "./db";
-import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, type ExibicaoLinha } from "./xibo";
+import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, type ExibicaoLinha } from "./xibo";
 
 interface CampanhaRow {
   id: string; conta_id: string; nome: string; tipo: string; dias: number; insercoes_dia: number;
@@ -71,8 +71,13 @@ export async function anexarArte(campanhaId: string, arquivo: Buffer | Blob, nom
   const width  = local?.largura ?? 1080;
   const height = local?.altura ?? 1920;
 
+  // Remove o layout anterior da campanha, se houver (evita colisão de nome)
+  if (camp.xibo_layout_id) {
+    try { await excluirLayout(camp.xibo_layout_id); } catch (e) { console.warn("[anexarArte] não apagou layout antigo:", (e as Error).message); }
+  }
+
   const { layoutId, mediaId } = await criarLayoutDeMidia({
-    nome: `${camp.nome} [${campanhaId.slice(0, 8)}]`,
+    nome: `${camp.nome} [${campanhaId.slice(0, 8)}] ${Date.now().toString(36)}`,
     arquivo, nomeArquivo, folderId, width, height,
     duracaoSeg: camp.segundos,
   });

@@ -205,6 +205,10 @@ export async function excluirDisplay(displayId: number): Promise<void> {
   await xibo(`/api/display/${displayId}`, { method: "DELETE" });
 }
 
+export async function excluirLayout(layoutId: number): Promise<void> {
+  await xibo(`/api/layout/${layoutId}`, { method: "DELETE" });
+}
+
 // ─── Resoluções ─────────────────────────────────────────────────────────────
 /** Acha (ou cria) uma resolução pelo tamanho e retorna o resolutionId. */
 export async function getResolution(width: number, height: number): Promise<number> {
