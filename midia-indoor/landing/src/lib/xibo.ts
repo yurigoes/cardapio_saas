@@ -246,7 +246,7 @@ export async function criarLayoutDeMidia(opts: {
   // 1) Cria layout em rascunho
   const draftBody = new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" });
   const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: draftBody });
-  const editId = draft.layoutId;                       // id do rascunho (onde editamos)
+  const publishId = draft.parentId ?? draft.layoutId;  // publica pelo layout pai (publicado)
   const playlistId  = draft.regions?.[0]?.regionPlaylist?.playlistId;
   if (!playlistId) throw new Error("Xibo: layout criado sem playlist de região");
 
@@ -272,13 +272,13 @@ export async function criarLayoutDeMidia(opts: {
     } catch (e) { console.warn("[xibo] não setou duração do widget:", (e as Error).message); }
   }
 
-  // 4) Publica o rascunho
+  // 4) Publica
   const pubBody = new URLSearchParams({ publishNow: "1" });
-  await xibo(`/api/layout/publish/${editId}`, { method: "PUT", body: pubBody });
+  await xibo(`/api/layout/publish/${publishId}`, { method: "PUT", body: pubBody });
 
   // 5) Resolve o layout PUBLICADO pelo nome (o id/campaignId corretos pós-publish).
   //    O nome é único (sufixo timestamp), então o match é seguro.
-  let layoutId = editId;
+  let layoutId = publishId;
   let campaignId: number | undefined;
   try {
     const arr = await xibo<Array<{ layoutId: number; campaignId?: number; publishedStatusId?: number; parentId?: number | null; layout?: string }>>(

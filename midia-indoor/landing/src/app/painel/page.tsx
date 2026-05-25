@@ -6,6 +6,7 @@ import {
   Tv, Upload, Loader2, LogOut, Megaphone, BarChart3, RefreshCw, Calendar, MapPin, Clock,
   CreditCard, LifeBuoy, Plus, Send, X,
 } from "lucide-react";
+import { NotifyHost, notify } from "@/components/Notify";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dataHora = (s: string) => { const d = new Date(s.replace(" ", "T")); return isNaN(+d) ? s : d.toLocaleString("pt-BR"); };
@@ -86,6 +87,7 @@ function Painel() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
+      <NotifyHost />
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-brand-light"><Tv className="h-6 w-6" /><span className="font-bold">Three Digital Mídia</span></div>
         <button onClick={sair} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white"><LogOut className="h-4 w-4" /> Sair</button>
@@ -137,14 +139,15 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
     const r = await fetch(`/api/painel/campanhas/${camp.id}/arte`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
     const d = await r.json(); setBusy(false);
     if (inputRef.current) inputRef.current.value = "";
-    if (!d.ok) { setErr(d.error || "Erro no upload"); return; }
+    if (!d.ok) { notify(d.error || "Erro no upload", "error"); return; }
+    notify("Arte enviada com sucesso", "success");
     onChange();
   }
   async function pagar() {
-    setPayBusy(true); setErr("");
+    setPayBusy(true);
     const r = await api(token, `/api/painel/campanhas/${camp.id}/pagar`, { method: "POST" });
     const d = await r.json(); setPayBusy(false);
-    if (!d.ok || !d.init_point) { setErr(d.error || "Erro ao gerar pagamento"); return; }
+    if (!d.ok || !d.init_point) { notify(d.error || "Erro ao gerar pagamento", "error"); return; }
     window.location.href = d.init_point;
   }
   async function carregarRel() {

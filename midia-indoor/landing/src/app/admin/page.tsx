@@ -6,6 +6,7 @@ import {
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
   LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff,
 } from "lucide-react";
+import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -56,6 +57,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-[#0a0a12] text-white">
+      <NotifyHost />
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0a0a12]/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-2 text-brand-light">
@@ -315,7 +317,8 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
     setBusy(label); setMsg("");
     const r = await aapi(token, `/api/admin/campanhas/${camp.id}/${path}`, { method: "POST" });
     const d = await r.json(); setBusy("");
-    if (!d.ok) { setMsg(d.error || "Erro"); return; }
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify(label === "lancar" ? "Campanha no ar!" : label === "encerrar" ? "Campanha encerrada" : "Pronto", "success");
     load(); onChange();
   }
   async function enviarArte(file: File) {
@@ -323,7 +326,8 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
     const fd = new FormData(); fd.append("file", file);
     const r = await fetch(`/api/admin/campanhas/${camp.id}/arte`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
     const d = await r.json(); setBusy("");
-    if (!d.ok) { setMsg(d.error || "Erro no upload"); return; }
+    if (!d.ok) { notify(d.error || "Erro no upload", "error"); return; }
+    notify("Arte enviada", "success");
     load(); onChange();
   }
   async function marcarPgto(status: string) {
@@ -373,7 +377,7 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
                 {busy === "encerrar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />} Encerrar
               </button>
               {camp.status === "no_ar" && (
-                <button onClick={async () => { setBusy("rel-email"); setMsg(""); const r = await aapi(token, `/api/admin/campanhas/${camp.id}/relatorio-email`, { method: "POST" }); const d = await r.json(); setBusy(""); setMsg(d.ok ? "Relatório enviado por e-mail ✓" : (d.error || "Erro")); }} disabled={!!busy} className="flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5 disabled:opacity-50">
+                <button onClick={async () => { setBusy("rel-email"); const r = await aapi(token, `/api/admin/campanhas/${camp.id}/relatorio-email`, { method: "POST" }); const d = await r.json(); setBusy(""); notify(d.ok ? "Relatório enviado por e-mail" : (d.error || "Erro"), d.ok ? "success" : "error"); }} disabled={!!busy} className="flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5 disabled:opacity-50">
                   {busy === "rel-email" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar relatório por e-mail
                 </button>
               )}
@@ -783,11 +787,12 @@ function Telas({ token }: { token: string }) {
     setBusy(displayId); setErro("");
     const r = await aapi(token, "/api/admin/displays", { method: "POST", body: JSON.stringify({ acao, displayId, ...extra }) });
     const d = await r.json(); setBusy(null);
-    if (!d.ok) { setErro(d.error || "erro"); return; }
+    if (!d.ok) { notify(d.error || "Erro na operação", "error"); return; }
+    notify("Tela atualizada com sucesso", "success");
     load();
   }
   async function renomear(displayId: number, atual: string) {
-    const nome = prompt("Novo nome da tela:", atual); if (!nome) return;
+    const nome = await promptModal("Novo nome da tela:", atual); if (!nome) return;
     acao(displayId, "renomear", { nome });
   }
 
@@ -844,7 +849,7 @@ function Telas({ token }: { token: string }) {
                     <td className="p-3">
                       <div className="flex justify-end gap-1">
                         <button onClick={() => renomear(d.displayId, d.nome)} className="rounded border border-white/15 p-1.5 hover:bg-white/5" title="Renomear"><Pencil className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => { if (confirm(`Excluir a tela "${d.nome}"?`)) acao(d.displayId, "excluir"); }} className="rounded border border-red-500/30 p-1.5 text-red-300 hover:bg-red-500/10" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
+                        <button onClick={async () => { if (await confirmModal(`Excluir a tela "${d.nome}"?`)) acao(d.displayId, "excluir"); }} className="rounded border border-red-500/30 p-1.5 text-red-300 hover:bg-red-500/10" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
                     </td>
                   </tr>
