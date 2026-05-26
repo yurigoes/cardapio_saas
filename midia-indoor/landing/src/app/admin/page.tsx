@@ -903,7 +903,7 @@ function UsuarioModal({ token, onClose, onSaved }: { token: string; onClose: () 
 }
 
 // ─── Telas (players Xibo) ───────────────────────────────────────────────────
-interface DisplayItem { displayId: number; nome: string; autorizado: boolean; online: boolean; ultimoAcesso: string; clientType: string; local: { id: string; nome: string } | null; }
+interface DisplayItem { displayId: number; nome: string; autorizado: boolean; online: boolean; ultimoAcesso: string; clientType: string; hardwareKey?: string; local: { id: string; nome: string } | null; }
 function Telas({ token }: { token: string }) {
   const [displays, setDisplays] = useState<DisplayItem[]>([]);
   const [locais, setLocais] = useState<{ id: string; nome: string }[]>([]);
@@ -952,7 +952,7 @@ function Telas({ token }: { token: string }) {
               <div className="space-y-2">
                 {pendentes.map(d => (
                   <div key={d.displayId} className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-                    <div className="flex-1"><p className="font-medium">{d.nome}</p><p className="text-xs text-slate-400">{d.clientType} · visto {d.ultimoAcesso || "—"}</p></div>
+                    <div className="flex-1"><p className="font-medium">{d.nome}</p><p className="text-xs text-slate-400">{d.clientType} · visto {d.ultimoAcesso || "—"}{d.hardwareKey ? ` · cód: ${d.hardwareKey.slice(0, 10)}` : ""}</p></div>
                     <select value={sel[d.displayId] ?? ""} onChange={e => setSel(s => ({ ...s, [d.displayId]: e.target.value }))} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-sm outline-none">
                       <option value="">Escolher local…</option>
                       {locais.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
@@ -985,6 +985,7 @@ function Telas({ token }: { token: string }) {
                     </td>
                     <td className="p-3">
                       <div className="flex justify-end gap-1">
+                        <button onClick={() => acao(d.displayId, "collect")} disabled={busy === d.displayId} className="rounded border border-brand/40 p-1.5 text-brand-light hover:bg-brand/10 disabled:opacity-50" title="Forçar atualização agora">{busy === d.displayId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}</button>
                         <button onClick={() => renomear(d.displayId, d.nome)} className="rounded border border-white/15 p-1.5 hover:bg-white/5" title="Renomear"><Pencil className="h-3.5 w-3.5" /></button>
                         <button onClick={async () => { if (await confirmModal(`Excluir a tela "${d.nome}"?`)) acao(d.displayId, "excluir"); }} className="rounded border border-red-500/30 p-1.5 text-red-300 hover:bg-red-500/10" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>

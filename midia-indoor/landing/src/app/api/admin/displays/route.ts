@@ -12,7 +12,7 @@ import { db, ensureSchema } from "@/lib/db";
 import { autenticarAdmin, exigirMaster } from "@/lib/admin-auth";
 import {
   listarDisplaysFull, autorizarDisplay, adicionarDisplayAoGrupo, removerDisplayDoGrupo,
-  renomearDisplay, excluirDisplay, criarDisplayGroup,
+  renomearDisplay, excluirDisplay, criarDisplayGroup, collectNow,
 } from "@/lib/xibo";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
         online: d.loggedIn === 1,
         ultimoAcesso: d.lastAccessed,
         clientType: d.clientType ?? "",
+        hardwareKey: d.license ?? "",
         local: local ? { id: local.id, nome: local.nome } : null,
       };
     });
@@ -100,6 +101,14 @@ export async function POST(req: NextRequest) {
         if (!b.nome) return NextResponse.json({ ok: false, error: "nome obrigatório" }, { status: 400 });
         await renomearDisplay(b.displayId, b.nome);
         break;
+      case "collect": {
+        // força a coleta: usa o grupo display-specific da própria tela
+        const disp = (await listarDisplaysFull()).find(d => d.displayId === b.displayId);
+        const proprio = disp?.displayGroups?.find(g => g.isDisplaySpecific === 1) ?? disp?.displayGroups?.[0];
+        if (!proprio) return NextResponse.json({ ok: false, error: "tela sem grupo" }, { status: 400 });
+        await collectNow(proprio.displayGroupId);
+        break;
+      }
       case "excluir":
         await excluirDisplay(b.displayId);
         break;

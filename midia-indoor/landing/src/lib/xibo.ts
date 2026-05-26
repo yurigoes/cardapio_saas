@@ -176,7 +176,12 @@ export interface XiboDisplayFull extends XiboDisplay {
   emailAlert?: number;
   wakeOnLanEnabled?: number;
   clientType?: string;
-  displayGroups?: { displayGroupId: number; displayGroup: string }[];
+  displayGroups?: { displayGroupId: number; displayGroup: string; isDisplaySpecific?: number }[];
+}
+
+/** Manda o(s) display(s) do grupo coletarem o conteúdo agora (push via XMR). */
+export async function collectNow(displayGroupId: number): Promise<void> {
+  await xibo(`/api/displaygroup/${displayGroupId}/action/collectNow`, { method: "POST" });
 }
 
 /** Lista displays com dados completos (status + grupos). */
