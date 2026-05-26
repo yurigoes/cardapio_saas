@@ -25,6 +25,12 @@ const CSP = [
 
 const nextConfig = {
   output: "standalone",
+  // Garante que o script de migração seja empacotado no standalone (servido pela rota protegida)
+  experimental: {
+    outputFileTracingIncludes: {
+      "/api/admin/migracao-hd/script": ["./scripts/migrate-disk.sh"],
+    },
+  },
   // Pula type-check e lint no build Docker — acelera de ~400s para ~90s
   typescript: { ignoreBuildErrors: isDockerBuild },
   eslint:     { ignoreDuringBuilds: isDockerBuild },

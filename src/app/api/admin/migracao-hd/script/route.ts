@@ -21,9 +21,13 @@ function check(provided: string): boolean {
 }
 
 async function serveScript(): Promise<NextResponse> {
+  const cwd = process.cwd();
   const candidates = [
-    path.resolve(process.cwd(), "scripts/migrate-disk.sh"),
+    path.resolve(cwd, "scripts/migrate-disk.sh"),
     "/app/scripts/migrate-disk.sh",
+    path.resolve(cwd, "../scripts/migrate-disk.sh"),
+    path.resolve(cwd, "public/migrate-disk.sh"),
+    "/app/public/migrate-disk.sh",
   ];
   for (const p of candidates) {
     try {
@@ -38,7 +42,13 @@ async function serveScript(): Promise<NextResponse> {
       });
     } catch { /* tenta próximo */ }
   }
-  return NextResponse.json({ ok: false, error: "script não encontrado no servidor" }, { status: 404 });
+  // master-only — pode expor os caminhos tentados pra diagnóstico
+  return NextResponse.json({
+    ok: false,
+    error: "script não encontrado no servidor. Rebuild a imagem (o Dockerfile copia scripts/). Caminhos tentados:",
+    cwd,
+    tentados: candidates,
+  }, { status: 404 });
 }
 
 export async function POST(req: NextRequest) {
