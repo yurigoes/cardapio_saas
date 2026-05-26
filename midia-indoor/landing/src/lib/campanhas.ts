@@ -8,7 +8,7 @@
  *   4. relatório → statsCampanha (proof-of-play)
  */
 import { db, ensureSchema } from "./db";
-import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, type ExibicaoLinha } from "./xibo";
+import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, excluirMidia, type ExibicaoLinha } from "./xibo";
 
 interface CampanhaRow {
   id: string; conta_id: string; nome: string; tipo: string; dias: number; insercoes_dia: number;
@@ -198,9 +198,13 @@ export async function encerrarCampanha(campanhaId: string): Promise<{ ok: boolea
     // Envia o relatório final ANTES de remover a campanha do Xibo (best-effort)
     try { await enviarRelatorioPorEmail(campanhaId); } catch (e) { console.warn("[encerrar] relatório não enviado:", (e as Error).message); }
 
-    if (camp.xibo_campaign_id) await excluirCampanha(camp.xibo_campaign_id);
+    // Limpeza completa no Xibo: campanha → layout → mídia (nessa ordem)
+    if (camp.xibo_campaign_id) { try { await excluirCampanha(camp.xibo_campaign_id); } catch (e) { console.warn("[encerrar] campanha:", (e as Error).message); } }
+    if (camp.xibo_layout_id)   { try { await excluirLayout(camp.xibo_layout_id); }   catch (e) { console.warn("[encerrar] layout:", (e as Error).message); } }
+    if (camp.xibo_media_id)    { try { await excluirMidia(camp.xibo_media_id); }      catch (e) { console.warn("[encerrar] mídia:", (e as Error).message); } }
+
     await db().query(
-      `UPDATE midia_campanhas SET status = 'encerrada', xibo_campaign_id = NULL, updated_at = NOW() WHERE id = $1`,
+      `UPDATE midia_campanhas SET status = 'encerrada', xibo_campaign_id = NULL, xibo_layout_id = NULL, xibo_media_id = NULL, updated_at = NOW() WHERE id = $1`,
       [campanhaId]
     );
     return { ok: true };
