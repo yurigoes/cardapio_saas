@@ -308,8 +308,16 @@ ok "rsync concluído"
 # ─── 8. fstab ──────────────────────────────────────────────────────────
 log "[6/7] Atualiza fstab + instala GRUB no $TARGET_DISK"
 
-NEW_ROOT_UUID=$(blkid -s UUID -o value "$ROOT_PART")
-[ -n "$NEW_ROOT_UUID" ] || fatal "não consegui ler UUID da nova partição root"
+NEW_ROOT_UUID=$(blkid -s UUID -o value "$ROOT_PART" 2>/dev/null)
+if [ -z "$NEW_ROOT_UUID" ]; then
+  if [ "$DRY_RUN" -eq 1 ]; then
+    # No dry-run a partição não foi formatada de verdade, então não há UUID ainda.
+    NEW_ROOT_UUID="<UUID-lido-no-run-real>"
+    warn "dry-run: $ROOT_PART ainda não formatada — o UUID será lido na execução real"
+  else
+    fatal "não consegui ler UUID da nova partição root ($ROOT_PART)"
+  fi
+fi
 
 if [ "$DRY_RUN" -eq 0 ]; then
   cat > /mnt/migracao/etc/fstab.new <<EOF
