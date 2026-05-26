@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, LogOut, LayoutDashboard, Users, Package, FileText, UserCog,
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
-  LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette,
+  LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette, Server,
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
@@ -18,7 +18,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -50,6 +50,7 @@ export default function AdminPage() {
     { id: "anunciantes", label: "Anunciantes", icon: Users },
     { id: "locais",      label: "Locais",      icon: MapPin, master: true },
     { id: "telas",       label: "Telas",       icon: MonitorPlay, master: true },
+    { id: "noxibo",      label: "No Xibo",     icon: Server, master: true },
     { id: "pacotes",     label: "Pacotes",     icon: Package, master: true },
     { id: "chamados",    label: "Chamados",    icon: LifeBuoy },
     { id: "contratos",   label: "Contratos",   icon: FileText, master: true },
@@ -92,6 +93,7 @@ export default function AdminPage() {
         {aba === "contratos"   && <Contratos token={token} />}
         {aba === "usuarios"    && <Usuarios token={token} />}
         {aba === "marca"       && <Marca token={token} />}
+        {aba === "noxibo"      && <NoXibo token={token} />}
       </div>
     </main>
   );
@@ -1123,6 +1125,60 @@ function CorField({ label, value, onChange }: { label: string; value: string; on
         <input type="color" value={value} onChange={e => onChange(e.target.value)} className="h-9 w-12 cursor-pointer rounded border border-white/10 bg-transparent" />
         <input value={value} onChange={e => onChange(e.target.value)} className="w-24 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 font-mono text-xs outline-none focus:border-brand/50" />
       </div>
+    </div>
+  );
+}
+
+// ─── No Xibo (o que está realmente carregado) ───────────────────────────────
+interface XiboCamp { campaignId: number; nome: string; layouts: number[]; sistema: { empresa: string; campanha: string; status: string } | null; orfa: boolean; }
+function NoXibo({ token }: { token: string }) {
+  const [lista, setLista] = useState<XiboCamp[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<number | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    const r = await aapi(token, "/api/admin/xibo-conteudo"); const d = await r.json();
+    if (d.ok) setLista(d.campanhas); else notify(d.error || "erro", "error");
+    setLoading(false);
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  async function excluir(c: XiboCamp) {
+    if (!await confirmModal(`Excluir do Xibo "${c.nome}"? Isso remove a campanha e o conteúdo da(s) tela(s).`)) return;
+    setBusy(c.campaignId);
+    const r = await aapi(token, "/api/admin/xibo-conteudo", { method: "POST", body: JSON.stringify({ campaignId: c.campaignId, layouts: c.layouts }) });
+    const d = await r.json(); setBusy(null);
+    if (!d.ok) { notify(d.error || "erro", "error"); return; }
+    notify("Removido do Xibo", "success"); load();
+  }
+
+  const orfas = lista.filter(c => c.orfa);
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-lg font-bold">Conteúdo no Xibo</h2>
+        <button onClick={load} className="rounded-xl border border-white/10 p-2 hover:bg-white/5"><RefreshCw className="h-4 w-4" /></button>
+      </div>
+      <p className="mb-4 text-xs text-slate-500">Campanhas (anúncios) que estão de fato carregadas no Xibo. As marcadas como <span className="text-amber-300">órfãs</span> não existem mais no sistema — pode excluir pra parar de tocar.</p>
+      {orfas.length > 0 && <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">{orfas.length} campanha(s) órfã(s) ainda no Xibo — limpe pra não tocar conteúdo antigo.</div>}
+      {loading ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
+        <div className="overflow-hidden rounded-xl border border-white/10">
+          <table className="w-full text-sm">
+            <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Campanha (Xibo)</th><th className="p-3">Anunciante / Sistema</th><th className="p-3">Origem</th><th className="p-3 text-right">Ação</th></tr></thead>
+            <tbody>
+              {lista.map(c => (
+                <tr key={c.campaignId} className="border-t border-white/5">
+                  <td className="p-3 font-medium">{c.nome}<div className="text-xs text-slate-500">#{c.campaignId} · {c.layouts.length} layout(s)</div></td>
+                  <td className="p-3">{c.sistema ? <><div className="font-medium">{c.sistema.empresa}</div><div className="text-xs text-slate-500">{c.sistema.campanha} · {c.sistema.status}</div></> : <span className="text-slate-500">—</span>}</td>
+                  <td className="p-3">{c.orfa ? <span className="text-xs text-amber-300">órfã</span> : <span className="text-xs text-emerald-300">do sistema</span>}</td>
+                  <td className="p-3 text-right"><button onClick={() => excluir(c)} disabled={busy === c.campaignId} className="flex items-center gap-1 rounded border border-red-500/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50">{busy === c.campaignId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Excluir</button></td>
+                </tr>
+              ))}
+              {!lista.length && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhuma campanha de anúncio no Xibo.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

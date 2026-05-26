@@ -213,6 +213,18 @@ export async function excluirMidia(mediaId: number): Promise<void> {
   await xibo(`/api/library/${mediaId}`, { method: "DELETE" });
 }
 
+export interface XiboCampaignInfo {
+  campaignId: number; campaign: string; type: string;
+  startDt?: string | number | null; endDt?: string | number | null;
+  numberLayouts?: number; layouts?: { layoutId: number }[];
+}
+
+/** Lista campanhas do Xibo (com layouts). */
+export async function listarCampanhas(): Promise<XiboCampaignInfo[]> {
+  const r = await xibo<XiboCampaignInfo[] | { data: XiboCampaignInfo[] }>(`/api/campaign?embed=layouts&retired=0`);
+  return Array.isArray(r) ? r : (r.data ?? []);
+}
+
 // ─── Resoluções ─────────────────────────────────────────────────────────────
 /** Acha (ou cria) uma resolução pelo tamanho e retorna o resolutionId. */
 export async function getResolution(width: number, height: number): Promise<number> {
