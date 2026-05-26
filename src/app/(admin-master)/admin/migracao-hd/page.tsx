@@ -71,11 +71,26 @@ export default function MigracaoHdPage() {
     finally { setBusy(false); }
   }
 
-  function baixarScript() {
-    const url = `/api/admin/migracao-hd/script?password=${encodeURIComponent(pwdSaved)}`;
-    const a = document.createElement("a");
-    a.href = url; a.download = "migrate-disk.sh";
-    document.body.appendChild(a); a.click(); a.remove();
+  async function baixarScript() {
+    setErr("");
+    try {
+      // POST autenticado (header Authorization + senha no body) → baixa o blob.
+      // Não dá pra usar <a href> direto: navegação não envia o token (JWT no localStorage).
+      const r = await fetch("/api/admin/migracao-hd/script", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body:    JSON.stringify({ password: pwdSaved }),
+      });
+      if (r.status === 401) { setErr("Sessão expirada — saia e entre de novo no sistema, depois rebloqueie/desbloqueie esta área."); return; }
+      if (r.status === 403) { setErr("Apenas master pode baixar."); return; }
+      if (!r.ok)            { const d = await r.json().catch(() => ({})); setErr(d?.error || "Erro ao baixar o script"); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "migrate-disk.sh";
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch { setErr("Erro de conexão ao baixar"); }
   }
 
   function bloquear() {
