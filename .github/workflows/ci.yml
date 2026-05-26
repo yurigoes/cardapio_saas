@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Garante leitura do repo pro GITHUB_TOKEN (corrige 403 no checkout)
+permissions:
+  contents: read
+
 jobs:
   lint-and-unit:
     name: Lint + Vitest unit
