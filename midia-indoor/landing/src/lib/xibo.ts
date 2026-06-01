@@ -48,6 +48,7 @@ interface XiboOpts {
   method?: string;
   body?: URLSearchParams | FormData | string;
   headers?: Record<string, string>;
+  timeoutMs?: number;
 }
 
 async function xibo<T = unknown>(path: string, opts: XiboOpts = {}): Promise<T> {
@@ -60,11 +61,13 @@ async function xibo<T = unknown>(path: string, opts: XiboOpts = {}): Promise<T> 
   if (opts.body instanceof URLSearchParams && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/x-www-form-urlencoded";
   }
+  // Default 30s; uploads grandes (FormData) ganham 5min
+  const timeout = opts.timeoutMs ?? (opts.body instanceof FormData ? 5 * 60_000 : 30_000);
   const r = await fetch(`${XIBO_URL}${path}`, {
     method:  opts.method ?? "GET",
     headers,
     body:    opts.body,
-    signal:  AbortSignal.timeout(30000),
+    signal:  AbortSignal.timeout(timeout),
   });
   const text = await r.text();
   if (!r.ok) {
