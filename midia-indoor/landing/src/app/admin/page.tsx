@@ -1069,7 +1069,7 @@ function ChatChamadoAdmin({ token, chamado, onClose }: { token: string; chamado:
 }
 
 // ─── Marca (branding) ───────────────────────────────────────────────────────
-interface BrandingData { nome: string; logo_url: string | null; cor: string; cor_dark: string; cor_light: string; site: string | null; email: string | null; whatsapp: string | null; cnpj: string | null; razao_social: string | null; }
+interface BrandingData { nome: string; logo_url: string | null; cor: string; cor_dark: string; cor_light: string; site: string | null; email: string | null; whatsapp: string | null; cnpj: string | null; razao_social: string | null; player_apk_url: string | null; player_versao: string | null; }
 function Marca({ token }: { token: string }) {
   const [b, setB] = useState<BrandingData | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1118,6 +1118,14 @@ function Marca({ token }: { token: string }) {
           <Field label="Site" value={b.site ?? ""} onChange={v => set("site", v)} />
           <Field label="E-mail" value={b.email ?? ""} onChange={v => set("email", v)} />
           <Field label="WhatsApp" value={b.whatsapp ?? ""} onChange={v => set("whatsapp", v)} />
+        </div>
+        <div className="border-t border-white/10 pt-4">
+          <p className="mb-1 text-sm font-semibold text-slate-300">Player Android (APK)</p>
+          <p className="mb-3 text-xs text-slate-500">Hospede o APK do Xibo Player (recomendado: no MinIO) e cole a URL. Vai aparecer um botão de download no /guia e no rodapé da landing.</p>
+          <div className="grid grid-cols-[1fr_180px] gap-3">
+            <Field label="URL do APK" value={b.player_apk_url ?? ""} onChange={v => set("player_apk_url", v)} placeholder="https://minio.tthreedigital.com.br/.../xibo-player.apk" />
+            <Field label="Versão (rótulo)" value={b.player_versao ?? ""} onChange={v => set("player_versao", v)} placeholder="ex: R301 (v3)" />
+          </div>
         </div>
 
         <div className="flex items-center gap-3 pt-2">

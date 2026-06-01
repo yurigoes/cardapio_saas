@@ -1,12 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Tv, Printer, ArrowLeft, MapPin, Smartphone, MonitorCheck, Megaphone, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Tv, Printer, ArrowLeft, MapPin, Smartphone, MonitorCheck, Megaphone, CheckCircle2, AlertTriangle, Download } from "lucide-react";
 
-const LOGO = process.env.NEXT_PUBLIC_BRAND_LOGO_URL
+const LOGO_FALLBACK = process.env.NEXT_PUBLIC_BRAND_LOGO_URL
   ?? "https://minio.tthreedigital.com.br/cardapio/saas/LOGO%20BRANCA%20THREE.png";
 
+interface MarcaGuia { nome?: string; logo_url?: string | null; player_apk_url?: string | null; player_versao?: string | null; }
+
 export default function GuiaPage() {
+  const [marca, setMarca] = useState<MarcaGuia>({});
+  useEffect(() => { fetch("/api/branding").then(r => r.json()).then(d => d.ok && setMarca(d.branding)).catch(() => {}); }, []);
+  const LOGO = marca.logo_url ?? LOGO_FALLBACK;
+  const NOME = marca.nome ?? "Three Digital Mídia";
   return (
     <main className="min-h-screen bg-white text-slate-800 print:bg-white">
       {/* Barra de ações (some na impressão) */}
@@ -20,9 +27,9 @@ export default function GuiaPage() {
       {/* Capa */}
       <header className="bg-gradient-to-br from-[#7c3aed] to-[#5b21b6] px-8 py-14 text-center text-white">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={LOGO} alt="Three Digital" className="mx-auto mb-4 h-12 object-contain" />
+        <img src={LOGO} alt={NOME} className="mx-auto mb-4 h-12 object-contain" />
         <h1 className="text-3xl font-black md:text-4xl">Guia de Instalação de Tela</h1>
-        <p className="mt-2 text-white/80">Three Digital Mídia · Rede de Mídia Indoor</p>
+        <p className="mt-2 text-white/80">{NOME} · Rede de Mídia Indoor</p>
       </header>
 
       <article className="mx-auto max-w-3xl px-6 py-10 leading-relaxed">
@@ -49,9 +56,18 @@ export default function GuiaPage() {
         </Passo>
 
         <Passo icon={Smartphone} n="2" t="Instalar o app player na TV">
+          {marca.player_apk_url && (
+            <div className="mb-3 rounded-xl border-2 border-[#7c3aed] bg-violet-50 p-4">
+              <p className="font-semibold text-[#5b21b6]">📲 Baixe o APK pré-aprovado pra nossa rede</p>
+              <p className="mt-1 text-sm">Use este APK em vez da Play Store — é a versão certa pro nosso CMS{marca.player_versao ? ` (${marca.player_versao})` : ""}.</p>
+              <a href={marca.player_apk_url} download className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#7c3aed] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5b21b6]">
+                <Download className="h-4 w-4" /> Baixar Xibo Player (APK)
+              </a>
+              <p className="mt-2 text-xs text-slate-500">Habilite "Fontes desconhecidas" no Android pra instalar APK fora da Play Store.</p>
+            </div>
+          )}
           <ol className="list-decimal space-y-1 pl-5">
-            <li>Na TV/Box, abra a <strong>Play Store</strong>.</li>
-            <li>Instale o app <strong>"Xibo for Android"</strong>.</li>
+            <li>{marca.player_apk_url ? "Instale o APK baixado acima na TV/Box" : <>Na TV/Box, abra a <strong>Play Store</strong> e instale o app <strong>&quot;Xibo for Android&quot;</strong></>}.</li>
             <li>Abra o app e preencha a configuração do CMS:</li>
           </ol>
           <table className="my-3 w-full border-collapse text-sm">

@@ -27,6 +27,8 @@ const schema = z.object({
   whatsapp:     z.string().max(40).optional().nullable(),
   cnpj:         z.string().max(40).optional().nullable(),
   razao_social: z.string().max(200).optional().nullable(),
+  player_apk_url: z.string().max(500).optional().nullable(),
+  player_versao:  z.string().max(40).optional().nullable(),
 });
 
 export async function PUT(req: NextRequest) {
@@ -37,7 +39,7 @@ export async function PUT(req: NextRequest) {
 
   const sets: string[] = []; const vals: unknown[] = [];
   const add = (c: string, v: unknown) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
-  for (const k of ["nome", "logo_url", "cor", "cor_dark", "cor_light", "site", "email", "whatsapp", "cnpj", "razao_social"] as const)
+  for (const k of ["nome", "logo_url", "cor", "cor_dark", "cor_light", "site", "email", "whatsapp", "cnpj", "razao_social", "player_apk_url", "player_versao"] as const)
     if (b[k] !== undefined) add(k, b[k]);
   if (!sets.length) return NextResponse.json({ ok: false, error: "nada para atualizar" }, { status: 400 });
 

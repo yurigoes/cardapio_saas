@@ -162,7 +162,10 @@ export default async function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-white/5 py-8 text-center text-sm text-slate-500">
         <p>© {new Date().getFullYear()} {marca.nome}. Todos os direitos reservados.</p>
-        <p className="mt-1">{(marca.site ?? "").replace("https://", "")} · <Link href="/guia" className="text-brand-light hover:underline">Guia de instalação</Link></p>
+        <p className="mt-1">
+          {(marca.site ?? "").replace("https://", "")} · <Link href="/guia" className="text-brand-light hover:underline">Guia de instalação</Link>
+          {marca.player_apk_url && <> · <a href={marca.player_apk_url} download className="text-brand-light hover:underline">Baixar Player Android</a></>}
+        </p>
       </footer>
     </main>
   );

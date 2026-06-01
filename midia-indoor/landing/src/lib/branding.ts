@@ -15,6 +15,8 @@ export interface Branding {
   whatsapp: string | null;
   cnpj: string | null;
   razao_social: string | null;
+  player_apk_url: string | null;
+  player_versao: string | null;
 }
 
 const PADRAO: Branding = {
@@ -26,13 +28,15 @@ const PADRAO: Branding = {
   whatsapp: null,
   cnpj: process.env.CONTRATADA_CNPJ ?? null,
   razao_social: process.env.CONTRATADA_NOME ?? null,
+  player_apk_url: null,
+  player_versao: null,
 };
 
 export async function getBranding(): Promise<Branding> {
   try {
     await ensureSchema();
     const { rows } = await db().query<Branding>(
-      `SELECT nome, logo_url, cor, cor_dark, cor_light, site, email, whatsapp, cnpj, razao_social
+      `SELECT nome, logo_url, cor, cor_dark, cor_light, site, email, whatsapp, cnpj, razao_social, player_apk_url, player_versao
          FROM midia_branding WHERE id = 1`
     );
     if (!rows[0]) return PADRAO;
