@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   try {
     await ensureSchema();
     const rows = await db().query(
-      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, capacidade_dia, created_at
+      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, capacidade_dia, orientacao, created_at
          FROM midia_locais ORDER BY cidade NULLS LAST, nome`
     ).then(r => r.rows);
     return NextResponse.json({ ok: true, locais: rows });
@@ -31,9 +31,10 @@ const novo = z.object({
   cidade:    z.string().max(120).optional(),
   endereco:  z.string().max(240).optional(),
   descricao: z.string().max(500).optional(),
-  largura:   z.coerce.number().int().min(120).max(8000).default(1080),
-  altura:    z.coerce.number().int().min(120).max(8000).default(1920),
+  largura:   z.coerce.number().int().min(120).max(8000).optional(),
+  altura:    z.coerce.number().int().min(120).max(8000).optional(),
   capacidade_dia: z.coerce.number().int().min(0).default(0),
+  orientacao: z.enum(["retrato", "paisagem"]).default("retrato"),
 });
 
 export async function POST(req: NextRequest) {
@@ -49,10 +50,14 @@ export async function POST(req: NextRequest) {
     try { dgId = await criarDisplayGroup(`Local — ${b.nome}`, b.cidade ?? ""); }
     catch (e) { console.warn("[locais] não criou display group:", (e as Error).message); }
 
+    // Se não vier largura/altura, usa default conforme a orientação
+    const largura = b.largura ?? (b.orientacao === "paisagem" ? 1920 : 1080);
+    const altura  = b.altura  ?? (b.orientacao === "paisagem" ? 1080 : 1920);
+
     const id = await db().query<{ id: string }>(
-      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, capacidade_dia, xibo_display_group_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, b.largura, b.altura, b.capacidade_dia, dgId]
+      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, capacidade_dia, orientacao, xibo_display_group_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, largura, altura, b.capacidade_dia, b.orientacao, dgId]
     ).then(r => r.rows[0].id);
     return NextResponse.json({ ok: true, id, xibo_display_group_id: dgId });
   } catch (err) {
@@ -70,6 +75,7 @@ const patch = z.object({
   largura: z.coerce.number().int().optional(),
   altura: z.coerce.number().int().optional(),
   capacidade_dia: z.coerce.number().int().min(0).optional(),
+  orientacao: z.enum(["retrato", "paisagem"]).optional(),
   ativo: z.boolean().optional(),
 });
 
@@ -81,7 +87,7 @@ export async function PATCH(req: NextRequest) {
 
   const sets: string[] = []; const vals: unknown[] = [];
   const add = (c: string, v: unknown) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
-  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "ativo"] as const)
+  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "orientacao", "ativo"] as const)
     if (b[k] !== undefined) add(k, b[k]);
   if (!sets.length) return NextResponse.json({ ok: false, error: "nada para atualizar" }, { status: 400 });
 

@@ -213,6 +213,22 @@ export async function excluirDisplay(displayId: number): Promise<void> {
   await xibo(`/api/display/${displayId}`, { method: "DELETE" });
 }
 
+/** Atribui um Display Profile (ex: Retrato vs Paisagem) a uma tela. */
+export async function setDisplayProfile(displayId: number, displayProfileId: number): Promise<void> {
+  const atual = (await xibo<XiboDisplayFull[]>(`/api/display?displayId=${displayId}`))[0];
+  if (!atual) throw new Error("display não encontrado");
+  const body = new URLSearchParams();
+  body.set("display", atual.display);
+  body.set("defaultLayoutId", String(atual.defaultLayoutId ?? 0));
+  body.set("licensed", String(atual.licensed ?? 1));
+  body.set("license", String(atual.license ?? ""));
+  body.set("incSchedule", String(atual.incSchedule ?? 0));
+  body.set("emailAlert", String(atual.emailAlert ?? 0));
+  body.set("wakeOnLanEnabled", String(atual.wakeOnLanEnabled ?? 0));
+  body.set("displayProfileId", String(displayProfileId));
+  await xibo(`/api/display/${displayId}`, { method: "PUT", body });
+}
+
 export async function excluirLayout(layoutId: number): Promise<void> {
   await xibo(`/api/layout/${layoutId}`, { method: "DELETE" });
 }

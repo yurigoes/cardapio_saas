@@ -659,12 +659,15 @@ function OcupacaoModal({ token, local, onClose }: { token: string; local: Local;
 }
 function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () => void; onSaved: () => void }) {
   const [nome, setNome] = useState(""); const [cidade, setCidade] = useState(""); const [endereco, setEndereco] = useState("");
-  const [largura, setLargura] = useState("1080"); const [altura, setAltura] = useState("1920");
+  const [orientacao, setOrientacao] = useState<"retrato" | "paisagem">("retrato");
   const [capacidade, setCapacidade] = useState("0");
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  // largura/altura derivados da orientação (default; backend usa esses se não vierem)
+  const largura = orientacao === "paisagem" ? "1920" : "1080";
+  const altura  = orientacao === "paisagem" ? "1080" : "1920";
   async function salvar() {
     setBusy(true); setErr("");
-    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, largura, altura, capacidade_dia: capacidade }) });
+    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, orientacao, largura, altura, capacidade_dia: capacidade }) });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
     onSaved();
@@ -673,8 +676,17 @@ function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () =>
     <Modal onClose={onClose} title="Novo local">
       <Field label="Nome do ponto" value={nome} onChange={setNome} placeholder="ex: Shopping Centro - Praça" />
       <div className="grid grid-cols-2 gap-3"><Field label="Cidade" value={cidade} onChange={setCidade} /><Field label="Endereço" value={endereco} onChange={setEndereco} /></div>
-      <div className="grid grid-cols-3 gap-3"><Field label="Largura (px)" value={largura} onChange={setLargura} type="number" /><Field label="Altura (px)" value={altura} onChange={setAltura} type="number" /><Field label="Capacidade/dia" value={capacidade} onChange={setCapacidade} type="number" /></div>
-      <p className="mb-3 text-xs text-slate-500">Resolução: 1080×1920 (retrato) ou 1920×1080 (paisagem). Capacidade/dia = limite recomendado de inserções (0 = ilimitado), usado pra alertar quando a grade satura.</p>
+      <label className="mb-1 block text-sm text-slate-300">Orientação das telas</label>
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        {(["retrato", "paisagem"] as const).map(o => (
+          <button type="button" key={o} onClick={() => setOrientacao(o)}
+            className={`rounded-xl border px-3 py-2 text-sm font-medium ${orientacao === o ? "border-brand bg-brand/15 text-brand-light" : "border-white/10 text-slate-400 hover:bg-white/5"}`}>
+            {o === "retrato" ? "Retrato (1080×1920)" : "Paisagem (1920×1080)"}
+          </button>
+        ))}
+      </div>
+      <Field label="Capacidade/dia (0 = ilimitado)" value={capacidade} onChange={setCapacidade} type="number" />
+      <p className="mb-3 text-xs text-slate-500">O sistema atribui o <strong>Display Profile</strong> certo ({orientacao}) automaticamente ao vincular telas neste local — desde que <code>XIBO_PROFILE_PORTRAIT_ID</code> e <code>XIBO_PROFILE_LANDSCAPE_ID</code> estejam configurados no <code>.env</code>.</p>
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
       <button onClick={salvar} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar local</button>
     </Modal>
