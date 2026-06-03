@@ -669,6 +669,7 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const [ocup, setOcup] = useState(false);
   const [busySplash, setBusySplash] = useState(false);
+  const [ativar, setAtivar] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const splashRef = useRef<HTMLInputElement>(null);
   async function enviarConteudo(files: FileList) {
@@ -712,9 +713,41 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
         </label>
         <button onClick={onToggle} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">{local.ativo ? "Desativar" : "Ativar"}</button>
       </div>
-      <button onClick={() => setOcup(true)} className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg bg-brand/15 py-1.5 text-xs font-medium text-brand-light hover:bg-brand/25"><BarChart3 className="h-3.5 w-3.5" /> Ver ocupação</button>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button onClick={() => setOcup(true)} className="flex items-center justify-center gap-1 rounded-lg bg-brand/15 py-1.5 text-xs font-medium text-brand-light hover:bg-brand/25"><BarChart3 className="h-3.5 w-3.5" /> Ocupação</button>
+        <button onClick={() => setAtivar(true)} className="flex items-center justify-center gap-1 rounded-lg border border-emerald-500/30 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/10"><MonitorPlay className="h-3.5 w-3.5" /> Ativar TV por código</button>
+      </div>
       {ocup && <OcupacaoModal token={token} local={local} onClose={() => setOcup(false)} />}
+      {ativar && <AtivarPorCodigoModal token={token} local={local} onClose={() => setAtivar(false)} onSaved={() => { setAtivar(false); onChange(); }} />}
     </div>
+  );
+}
+
+function AtivarPorCodigoModal({ token, local, onClose, onSaved }: { token: string; local: Local; onClose: () => void; onSaved: () => void }) {
+  const [codigo, setCodigo] = useState("");
+  const [nome, setNome] = useState(`${local.nome} — Tela`);
+  const [busy, setBusy] = useState(false); const [out, setOut] = useState<{ ok: boolean; msg?: string; error?: string } | null>(null);
+  async function ativar() {
+    setBusy(true); setOut(null);
+    const r = await aapi(token, `/api/admin/locais/${local.id}/ativar-tela`, { method: "POST", body: JSON.stringify({ codigo: codigo.trim().toUpperCase(), nome }) });
+    const d = await r.json(); setBusy(false); setOut(d);
+    if (d.ok) {
+      notify(d.msg || "Tela ativada", "success");
+      setTimeout(() => onSaved(), 1500);
+    } else notify(d.error || "Erro ao ativar", "error");
+  }
+  return (
+    <Modal title={`Ativar TV em: ${local.nome}`} onClose={onClose}>
+      <p className="mb-3 text-sm text-slate-400">Quando você abre o app Xibo na TV pela primeira vez, ele mostra um <strong>código de 6 caracteres</strong>. Digite abaixo pra vincular essa TV a este local automaticamente.</p>
+      <Field label="Código da TV" value={codigo} onChange={v => setCodigo(v.toUpperCase())} placeholder="ex: A3F7K9" />
+      <Field label="Nome desta TV (opcional)" value={nome} onChange={setNome} placeholder={`${local.nome} — Tela`} />
+      {out && !out.ok && <p className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-200">{out.error}</p>}
+      {out?.ok && <p className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2 text-xs text-emerald-200">✓ Ativada! O player deve atualizar em segundos.</p>}
+      <button onClick={ativar} disabled={busy || codigo.trim().length < 4} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MonitorPlay className="h-4 w-4" />} Ativar TV
+      </button>
+      <p className="mt-3 text-xs text-slate-500">Depois de ativada, ela será adicionada ao display group <code>{local.xibo_display_group_id ?? "(novo)"}</code> e começará a tocar o conteúdo base / campanhas deste local.</p>
+    </Modal>
   );
 }
 interface OcupCamp { id: string; nome: string; status: string; status_pagamento: string; insercoes_dia: number; segundos: number; tipo: string; empresa: string; anunciante: string; }

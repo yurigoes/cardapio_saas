@@ -88,6 +88,44 @@ export async function criarFolder(nome: string, parentId?: number): Promise<numb
   return id;
 }
 
+// ─── Ativação de display por código (Add by Code do Xibo) ──────────────────
+/**
+ * Ativa uma TV pelo código de 6 chars exibido na tela do player Xibo recém-instalado.
+ * Tenta os endpoints conhecidos do Xibo 3.x/4.x em ordem; quando um responder OK,
+ * tenta extrair o displayId retornado.
+ * Lança erro se nenhum endpoint reconhecer o código.
+ */
+export async function ativarDisplayPorCodigo(codigo: string, nome?: string): Promise<{ displayId: number }> {
+  const code = codigo.trim().toUpperCase();
+  if (!/^[A-Z0-9]{4,8}$/.test(code)) throw new Error("código inválido (4 a 8 letras/números)");
+  const tentativas: Array<{ path: string; body: Record<string, string> }> = [
+    // Xibo 3.x
+    { path: "/api/displays/addViaCode",     body: { code, displayName: nome ?? `Display ${code}` } },
+    { path: "/api/displays/addviacode",     body: { code, displayName: nome ?? `Display ${code}` } },
+    { path: "/api/display/addViaCode",      body: { code, displayName: nome ?? `Display ${code}` } },
+    // Xibo 4.x (camelCase displayCode)
+    { path: "/api/displays/registerCode",   body: { code, displayName: nome ?? `Display ${code}` } },
+    { path: "/api/display/registerByCode",  body: { code, displayName: nome ?? `Display ${code}` } },
+  ];
+  let ultimaErro = "";
+  for (const t of tentativas) {
+    try {
+      const body = new URLSearchParams(); for (const [k, v] of Object.entries(t.body)) body.set(k, v);
+      const r = await xibo<{ displayId?: number; data?: { displayId: number }; display?: { displayId: number } }>(t.path, { method: "POST", body });
+      const id = r.displayId ?? r.data?.displayId ?? r.display?.displayId;
+      if (id) return { displayId: id };
+    } catch (e) { ultimaErro = (e as Error).message; }
+  }
+  throw new Error(`Xibo: nenhum endpoint reconheceu o código (último erro: ${ultimaErro || "n/a"})`);
+}
+
+/** Adiciona um display a um display group (link). */
+export async function vincularDisplayAoGrupo(displayId: number, displayGroupId: number): Promise<void> {
+  const body = new URLSearchParams();
+  body.append("displayId[]", String(displayId));
+  await xibo(`/api/displaygroup/${displayGroupId}/display/assign`, { method: "POST", body });
+}
+
 // ─── Display Group (agrupa as TVs do cliente) ───────────────────────────────
 export async function criarDisplayGroup(nome: string, descricao = ""): Promise<number> {
   const body = new URLSearchParams({
