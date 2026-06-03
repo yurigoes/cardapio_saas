@@ -5,7 +5,7 @@ import {
   Loader2, LogOut, LayoutDashboard, Users, Package, FileText, UserCog,
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
   LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette, Server, Camera, Power, Undo2, ScrollText, Map,
-  Ticket, CalendarDays, Check, ChevronLeft, ChevronRight, History,
+  Ticket, CalendarDays, Check, ChevronLeft, ChevronRight, History, Grid3x3, Database,
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
@@ -19,7 +19,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -59,6 +59,8 @@ export default function AdminPage() {
     { id: "marca",       label: "Marca",       icon: Palette, master: true },
     { id: "mapa",        label: "Mapa",        icon: Map },
     { id: "calendario",  label: "Calendário",  icon: CalendarDays },
+    { id: "grade",       label: "Grade",       icon: Grid3x3 },
+    { id: "templates",   label: "Templates",   icon: Database, master: true },
     { id: "cupons",      label: "Cupons",      icon: Ticket, master: true },
     { id: "auditoria",   label: "Auditoria",   icon: ScrollText, master: true },
   ];
@@ -100,6 +102,8 @@ export default function AdminPage() {
         {aba === "marca"       && <Marca token={token} />}
         {aba === "mapa"        && <MapaLocais token={token} />}
         {aba === "calendario"  && <Calendario token={token} />}
+        {aba === "grade"       && <GradeLocal token={token} />}
+        {aba === "templates"   && <Templates token={token} />}
         {aba === "cupons"      && <Cupons token={token} />}
         {aba === "auditoria"   && <Auditoria token={token} />}
         {aba === "noxibo"      && <NoXibo token={token} />}
@@ -1622,6 +1626,162 @@ function Field({ label, value, onChange, type = "text", placeholder }: { label: 
       <label className="mb-1 block text-sm text-slate-300">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-brand/50" />
+    </div>
+  );
+}
+
+// ─── Pré-visualização da grade (linha do tempo por local) ───────────────────
+interface GradeCamp { id: string; nome: string; tipo: string; insercoes_dia: number; segundos: number; hora_inicio: string | null; hora_fim: string | null; data_inicio: string; data_fim: string; status: string; arte_status: string | null; empresa: string; }
+function GradeLocal({ token }: { token: string }) {
+  const [locais, setLocais] = useState<Local[]>([]);
+  const [localId, setLocalId] = useState("");
+  const [dia, setDia] = useState(new Date().toISOString().slice(0, 10));
+  const [dados, setDados] = useState<{ local: Local; campanhas: GradeCamp[]; totalInsercoes: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    aapi(token, "/api/admin/locais").then(r => r.json()).then(d => {
+      if (d.ok) { setLocais(d.locais); if (!localId && d.locais[0]) setLocalId(d.locais[0].id); }
+    });
+  }, [token, localId]);
+
+  useEffect(() => {
+    if (!localId) return;
+    setLoading(true);
+    aapi(token, `/api/admin/locais/${localId}/grade?dia=${dia}`).then(r => r.json()).then(d => {
+      if (d.ok) setDados(d); setLoading(false);
+    });
+  }, [token, localId, dia]);
+
+  // Cor consistente por anunciante
+  const cor = (s: string) => {
+    let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0xffff;
+    return `hsl(${h % 360}, 70%, 45%)`;
+  };
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h2 className="mr-auto text-lg font-semibold">Grade do local</h2>
+        <select value={localId} onChange={e => setLocalId(e.target.value)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+          {locais.map(l => <option key={l.id} value={l.id}>{l.nome}{l.cidade ? ` · ${l.cidade}` : ""}</option>)}
+        </select>
+        <input type="date" value={dia} onChange={e => setDia(e.target.value)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none" />
+      </div>
+      {loading || !dados ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Info label="Local" v={dados.local.nome} />
+            <Info label="Resolução" v={`${dados.local.largura}×${dados.local.altura}`} />
+            <Info label="Campanhas no dia" v={String(dados.campanhas.length)} />
+            <Info label="Inserções/dia" v={String(dados.totalInsercoes)} />
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+            <div className="mb-2 grid gap-px text-[10px] text-slate-500" style={{ gridTemplateColumns: "repeat(24, minmax(0,1fr))" }}>
+              {Array.from({ length: 24 }, (_, i) => <div key={i} className="text-center">{String(i).padStart(2, "0")}</div>)}
+            </div>
+            <div className="space-y-1.5">
+              {dados.campanhas.map(c => {
+                const h1 = c.hora_inicio ? parseInt(c.hora_inicio.slice(0, 2), 10) + parseInt(c.hora_inicio.slice(3, 5), 10) / 60 : 0;
+                const h2 = c.hora_fim    ? parseInt(c.hora_fim.slice(0, 2), 10) + parseInt(c.hora_fim.slice(3, 5), 10) / 60 : 24;
+                const left = (h1 / 24) * 100;
+                const width = Math.max(((h2 - h1) / 24) * 100, 2);
+                return (
+                  <div key={c.id} className="relative h-7 rounded bg-white/5">
+                    <div
+                      className="absolute top-0 h-full rounded px-2 text-[11px] font-medium leading-7 text-white overflow-hidden whitespace-nowrap"
+                      style={{ left: `${left}%`, width: `${width}%`, background: cor(c.empresa) }}
+                      title={`${c.empresa} — ${c.nome} (${c.insercoes_dia}/dia × ${c.segundos}s)`}
+                    >
+                      {c.empresa} · {c.nome} · {c.insercoes_dia}/dia
+                    </div>
+                  </div>
+                );
+              })}
+              {!dados.campanhas.length && <p className="py-6 text-center text-sm text-slate-500">Nenhuma campanha ativa neste local em {dia}.</p>}
+            </div>
+            <p className="mt-3 text-[10px] text-slate-600">Barras mostram a janela de horário (day-parting). Sem horário = dia todo. Não considera o intervalo entre exibições — só a janela.</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Templates multi-zona ────────────────────────────────────────────────────
+function Templates({ token }: { token: string }) {
+  const [template, setTemplate] = useState("video_ticker");
+  const [nome, setNome] = useState("");
+  const [w, setW] = useState("1080"); const [h, setH] = useState("1920");
+  const [rss, setRss] = useState("https://g1.globo.com/rss/g1/");
+  const [lat, setLat] = useState(""); const [lng, setLng] = useState("");
+  const [busy, setBusy] = useState(false); const [out, setOut] = useState<{ ok: boolean; layoutId?: number; error?: string } | null>(null);
+
+  async function gerar() {
+    setBusy(true); setOut(null);
+    const body: Record<string, unknown> = { template, nome, width: Number(w), height: Number(h) };
+    if (template !== "imagem_clima_relogio") body.rss_url = rss;
+    if (lat) body.latitude = Number(lat); if (lng) body.longitude = Number(lng);
+    const r = await aapi(token, "/api/admin/templates", { method: "POST", body: JSON.stringify(body) });
+    const d = await r.json(); setBusy(false); setOut(d);
+    if (d.ok) notify(`Template criado — layout #${d.layoutId}. Agende em Locais > Default Layout ou crie uma campanha que use-o.`, "success");
+    else notify(d.error || "Erro", "error");
+  }
+
+  const descs: Record<string, string> = {
+    video_ticker: "Vídeo no topo (88% da tela) + ticker RSS rodando no rodapé (12%).",
+    imagem_clima_relogio: "Imagem (80%) + previsão do tempo (40%) + relógio (40%) embaixo.",
+    rss_clima: "Notícias (70%) + previsão do tempo (30%) — sem imagem do anunciante.",
+  };
+
+  return (
+    <div>
+      <h2 className="mb-4 text-lg font-semibold">Templates multi-zona</h2>
+      <p className="mb-4 text-sm text-slate-400">Cria um layout no Xibo com várias regiões (vídeo/imagem + ticker RSS + clima + relógio). Depois é só usar como layout padrão num local ou como base de uma campanha.</p>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-3">
+        <label className="block text-sm text-slate-300">Template</label>
+        <select value={template} onChange={e => setTemplate(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+          <option value="video_ticker">Vídeo + Ticker RSS</option>
+          <option value="imagem_clima_relogio">Imagem + Clima + Relógio</option>
+          <option value="rss_clima">RSS + Clima (sem mídia)</option>
+        </select>
+        <p className="text-xs text-slate-500">{descs[template]}</p>
+
+        <Field label="Nome do layout" value={nome} onChange={setNome} placeholder="ex: Template padrão lojas SP" />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Largura" value={w} onChange={setW} type="number" />
+          <Field label="Altura" value={h} onChange={setH} type="number" />
+        </div>
+        {template !== "imagem_clima_relogio" && <Field label="URL do RSS" value={rss} onChange={setRss} placeholder="https://..." />}
+        {(template === "imagem_clima_relogio" || template === "rss_clima") && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Latitude (clima)" value={lat} onChange={setLat} placeholder="-23.55" />
+            <Field label="Longitude (clima)" value={lng} onChange={setLng} placeholder="-46.63" />
+          </div>
+        )}
+
+        <button onClick={gerar} disabled={busy || !nome} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Criar template no Xibo
+        </button>
+
+        {out && (
+          <div className={`mt-3 rounded-lg border p-3 text-sm ${out.ok ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-200" : "border-red-500/30 bg-red-500/5 text-red-200"}`}>
+            {out.ok ? `Layout #${out.layoutId} criado. Vá em Locais e defina como "Layout padrão" do local desejado, ou crie uma campanha que o utilize.` : out.error}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-5 text-sm">
+        <p className="mb-2 font-medium text-slate-200">💡 Como usar:</p>
+        <ol className="ml-4 list-decimal space-y-1 text-slate-400">
+          <li>Crie o template aqui — ele vira um <strong>Layout</strong> no Xibo.</li>
+          <li>Para usar como <em>splash</em>/padrão num local, vá em <strong>Locais → Editar → Default Layout</strong>.</li>
+          <li>Para usar como criativo de uma campanha, abra a campanha no Xibo e ajuste a região da mídia.</li>
+          <li>Quer um ticker RSS pessoal? Hospede um feed XML no <code>/landing/public</code> ou use feeds públicos (g1, lance, valor).</li>
+        </ol>
+      </div>
     </div>
   );
 }

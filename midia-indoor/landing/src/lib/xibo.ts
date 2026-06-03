@@ -483,6 +483,129 @@ export async function criarLayoutLoop(opts: {
   return { layoutId, campaignId, enviados };
 }
 
+// ─── Templates multi-zona (várias regiões) ──────────────────────────────────
+export interface RegionSpec {
+  /** porcentagens 0–100 (left/top/width/height) */
+  left: number; top: number; width: number; height: number;
+  zIndex?: number;
+  /** widgets a inserir nessa região (ordem = ordem de exibição) */
+  widgets?: Array<
+    | { tipo: "midia"; arquivo: Buffer | Blob; nomeArquivo: string; duracaoSeg?: number }
+    | { tipo: "rss"; uri: string; duracaoSeg?: number; titulo?: string }
+    | { tipo: "clima"; latitude: number; longitude: number; duracaoSeg?: number; useDisplayLocation?: boolean }
+    | { tipo: "relogio"; formato?: string; duracaoSeg?: number }
+    | { tipo: "texto"; texto: string; duracaoSeg?: number }
+  >;
+}
+
+/**
+ * Cria um layout multi-zona com regiões posicionadas e widgets já configurados.
+ * Útil para templates como "vídeo + ticker RSS" ou "imagem + clima + relógio".
+ */
+export async function criarLayoutMultiZona(opts: {
+  nome: string; folderId: number; width: number; height: number;
+  regions: RegionSpec[];
+}): Promise<{ layoutId: number; campaignId?: number }> {
+  if (!opts.regions.length) throw new Error("template precisa de pelo menos 1 região");
+  const resolutionId = await getResolution(opts.width, opts.height);
+
+  // 1) Cria layout rascunho — vem com 1 região padrão. Vamos adicionar mais conforme spec.
+  const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" }) });
+  const editId    = draft.layoutId;
+  const publishId = draft.parentId ?? draft.layoutId;
+  const firstPlaylistId = draft.regions?.[0]?.regionPlaylist?.playlistId;
+  if (!firstPlaylistId) throw new Error("Xibo: layout sem playlist inicial");
+
+  // 2) Posiciona/cria as regiões. A 1ª reaproveita a default; as demais vêm de POST /region.
+  const playlistIds: number[] = [];
+  for (let i = 0; i < opts.regions.length; i++) {
+    const r = opts.regions[i];
+    const w = Math.round(opts.width  * r.width  / 100);
+    const h = Math.round(opts.height * r.height / 100);
+    const x = Math.round(opts.width  * r.left   / 100);
+    const y = Math.round(opts.height * r.top    / 100);
+    if (i === 0) {
+      // Atualiza a região default p/ a posição/tamanho da 1ª região do template
+      try {
+        const layoutEdit = await xibo<DraftLayout & { regions?: Array<{ regionId: number; regionPlaylist?: { playlistId: number } }> }>(`/api/layout?layoutId=${editId}&embed=regions,playlists`);
+        const regionId = Array.isArray(layoutEdit) ? layoutEdit[0]?.regions?.[0]?.regionId : undefined;
+        if (regionId) {
+          await xibo(`/api/region/${regionId}`, { method: "PUT", body: new URLSearchParams({ width: String(w), height: String(h), top: String(y), left: String(x), zIndex: String(r.zIndex ?? 0) }) });
+        }
+      } catch (e) { console.warn("[multi-zona] não ajustou região 0:", (e as Error).message); }
+      playlistIds.push(firstPlaylistId);
+    } else {
+      const body = new URLSearchParams({ width: String(w), height: String(h), top: String(y), left: String(x), zIndex: String(r.zIndex ?? 0) });
+      const created = await xibo<{ regionPlaylist?: { playlistId: number }; playlists?: Array<{ playlistId: number }> }>(`/api/region/${editId}`, { method: "POST", body });
+      const pid = created.regionPlaylist?.playlistId ?? created.playlists?.[0]?.playlistId;
+      if (!pid) throw new Error("Xibo: região criada sem playlist");
+      playlistIds.push(pid);
+    }
+  }
+
+  // 3) Insere os widgets em cada região
+  for (let i = 0; i < opts.regions.length; i++) {
+    const r = opts.regions[i];
+    const playlistId = playlistIds[i];
+    for (const w of r.widgets ?? []) {
+      try {
+        if (w.tipo === "midia") {
+          const form = new FormData();
+          const blob = w.arquivo instanceof Blob ? w.arquivo : new Blob([new Uint8Array(w.arquivo)]);
+          const nomeUnico = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}-${w.nomeArquivo}`;
+          form.append("files", blob, nomeUnico); form.append("name", nomeUnico);
+          form.append("folderId", String(opts.folderId)); form.append("playlistId", String(playlistId));
+          const up = await xibo<{ files: Array<{ mediaId?: number }> }>("/api/library", { method: "POST", body: form });
+          const mid = up.files?.[0]?.mediaId;
+          if (mid && w.duracaoSeg) await ajustarUltimoWidget(playlistId, { duration: w.duracaoSeg });
+        } else if (w.tipo === "rss") {
+          await adicionarWidget(playlistId, "ticker", { sourceId: "1", uri: w.uri, duration: w.duracaoSeg ?? 60, useDuration: 1, name: w.titulo ?? "RSS" });
+        } else if (w.tipo === "clima") {
+          await adicionarWidget(playlistId, "forecastio", { useDisplayLocation: w.useDisplayLocation ? 1 : 0, latitude: w.latitude, longitude: w.longitude, duration: w.duracaoSeg ?? 30, useDuration: 1 });
+        } else if (w.tipo === "relogio") {
+          await adicionarWidget(playlistId, "clock", { clockTypeId: "1", format: w.formato ?? "HH:mm", duration: w.duracaoSeg ?? 30, useDuration: 1 });
+        } else if (w.tipo === "texto") {
+          await adicionarWidget(playlistId, "text", { text: w.texto, duration: w.duracaoSeg ?? 15, useDuration: 1 });
+        }
+      } catch (e) { console.warn(`[multi-zona] widget ${w.tipo} falhou:`, (e as Error).message); }
+    }
+  }
+
+  // 4) Publica
+  await xibo(`/api/layout/publish/${publishId}`, { method: "PUT", body: new URLSearchParams({ publishNow: "1" }) });
+
+  // 5) Resolve o id publicado
+  let layoutId = publishId; let campaignId = draft.campaignId;
+  try {
+    const arr = await xibo<Array<{ layoutId: number; campaignId?: number; publishedStatusId?: number; layout?: string }>>(
+      `/api/layout?layout=${encodeURIComponent(opts.nome)}&embed=campaigns&retired=0`
+    );
+    const lista = Array.isArray(arr) ? arr : [];
+    const pub = lista.find(l => l.publishedStatusId === 1 && l.layout === opts.nome) ?? lista.find(l => l.layout === opts.nome) ?? lista[0];
+    if (pub) { layoutId = pub.layoutId; campaignId = pub.campaignId ?? campaignId; }
+  } catch (e) { console.warn("[multi-zona] não resolveu publicado:", (e as Error).message); }
+  return { layoutId, campaignId };
+}
+
+/** Adiciona um widget novo no fim da playlist. Retorna widgetId. */
+async function adicionarWidget(playlistId: number, modulo: string, props: Record<string, string | number>): Promise<number | undefined> {
+  const body = new URLSearchParams();
+  for (const [k, v] of Object.entries(props)) body.set(k, String(v));
+  const r = await xibo<{ widgetId?: number; data?: { widgetId: number } }>(`/api/playlist/widget/${modulo}/${playlistId}`, { method: "POST", body });
+  return r.widgetId ?? r.data?.widgetId;
+}
+
+/** Ajusta props do último widget de uma playlist (útil pra setar duração de mídia recém-subida). */
+async function ajustarUltimoWidget(playlistId: number, props: Record<string, string | number>): Promise<void> {
+  const widgets = await xibo<Array<{ widgetId: number }>>(`/api/playlist/widget?playlistId=${playlistId}`);
+  const widgetId = Array.isArray(widgets) ? widgets[widgets.length - 1]?.widgetId : undefined;
+  if (!widgetId) return;
+  const body = new URLSearchParams();
+  for (const [k, v] of Object.entries(props)) body.set(k, String(v));
+  body.set("useDuration", "1");
+  await xibo(`/api/playlist/widget/${widgetId}`, { method: "PUT", body });
+}
+
 // ─── Ad Campaigns (inserções automáticas) ────────────────────────────────────
 function fmtDt(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
