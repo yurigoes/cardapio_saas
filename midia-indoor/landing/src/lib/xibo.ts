@@ -265,8 +265,21 @@ export interface XiboDisplayFull extends XiboDisplay {
 }
 
 /** Manda o(s) display(s) do grupo coletarem o conteúdo agora (push via XMR). */
-export async function collectNow(displayGroupId: number): Promise<void> {
-  await xibo(`/api/displaygroup/${displayGroupId}/action/collectNow`, { method: "POST" });
+export async function collectNow(displayGroupId: number): Promise<{ ok: boolean; mensagem: string }> {
+  const r = await xibo<{ success?: boolean; message?: string; data?: { message?: string } }>(
+    `/api/displaygroup/${displayGroupId}/action/collectNow`, { method: "POST" }
+  );
+  return { ok: r.success !== false, mensagem: r.message ?? r.data?.message ?? "Comando enviado ao XMR" };
+}
+
+/** Devolve o status do último comando enviado a um display (do banco do Xibo). */
+export async function ultimoComandoStatus(displayId: number): Promise<{ sucesso: number; ultimoAcesso?: number } | null> {
+  try {
+    const r = await xibo<Array<{ lastCommandSuccess?: number; lastAccessed?: number }>>(`/api/display?displayId=${displayId}`);
+    const d = Array.isArray(r) ? r[0] : undefined;
+    if (!d) return null;
+    return { sucesso: d.lastCommandSuccess ?? 2, ultimoAcesso: d.lastAccessed };
+  } catch { return null; }
 }
 
 /** Lista displays com dados completos (status + grupos). */

@@ -13,7 +13,7 @@ import { autenticarAdmin, exigirMaster } from "@/lib/admin-auth";
 import {
   listarDisplaysFull, autorizarDisplay, adicionarDisplayAoGrupo, removerDisplayDoGrupo,
   renomearDisplay, excluirDisplay, criarDisplayGroup, collectNow, setDisplayProfile, setDefaultLayout,
-  wolDisplay, revertToSchedule,
+  wolDisplay, revertToSchedule, ultimoComandoStatus,
 } from "@/lib/xibo";
 import { logAudit } from "@/lib/auditoria";
 
@@ -127,8 +127,27 @@ export async function POST(req: NextRequest) {
         const disp = (await listarDisplaysFull()).find(d => d.displayId === b.displayId);
         const proprio = disp?.displayGroups?.find(g => g.isDisplaySpecific === 1) ?? disp?.displayGroups?.[0];
         if (!proprio) return NextResponse.json({ ok: false, error: "tela sem grupo" }, { status: 400 });
-        await collectNow(proprio.displayGroupId);
-        break;
+        const online = disp?.loggedIn === 1;
+        if (!online) {
+          // sem XMR ativo o comando não chega no player
+          return NextResponse.json({
+            ok: false,
+            error: "Tela aparece OFFLINE no Xibo (XMR sem conexão). Comando não foi enviado — verifique o player.",
+          }, { status: 409 });
+        }
+        const ret = await collectNow(proprio.displayGroupId);
+        // aguarda 3s e olha o lastCommandSuccess pra confirmar entrega
+        await new Promise(r => setTimeout(r, 3000));
+        const st = await ultimoComandoStatus(b.displayId);
+        // lastCommandSuccess: 1=ok, 0=falha, 2=nunca tentou (default)
+        const sucesso = st?.sucesso === 1;
+        const detalhe = st?.sucesso === 0
+          ? "XMR aceitou mas o player rejeitou o comando."
+          : st?.sucesso === 1
+            ? "Player confirmou o recebimento ✓"
+            : "Comando enfileirado — confirmação ainda pendente (status no Xibo: aguardando).";
+        logAudit(req, { autor_tipo: "admin", autor_id: master.sub, autor_nome: master.nome, acao: `tela.collect`, entidade: "display", entidade_id: String(b.displayId), detalhes: { ret, lastCommandSuccess: st?.sucesso } });
+        return NextResponse.json({ ok: true, confirmado: sucesso, msg: `${ret.mensagem}. ${detalhe}` });
       }
       case "wol":
         await wolDisplay(b.displayId);

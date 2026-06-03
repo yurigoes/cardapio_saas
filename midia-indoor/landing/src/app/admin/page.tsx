@@ -1089,7 +1089,12 @@ function Telas({ token }: { token: string }) {
     const r = await aapi(token, "/api/admin/displays", { method: "POST", body: JSON.stringify({ acao, displayId, ...extra }) });
     const d = await r.json(); setBusy(null);
     if (!d.ok) { notify(d.error || "Erro na operação", "error"); return; }
-    notify("Tela atualizada com sucesso", "success");
+    // collect devolve msg detalhada + flag de confirmação
+    if (acao === "collect") {
+      notify(d.msg ?? "Comando enviado", d.confirmado ? "success" : "info");
+    } else {
+      notify("Tela atualizada com sucesso", "success");
+    }
     load();
   }
   async function renomear(displayId: number, atual: string) {
