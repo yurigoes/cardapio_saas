@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, LogOut, LayoutDashboard, Users, Package, FileText, UserCog,
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
-  LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette, Server,
+  LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette, Server, Camera, Power, Undo2, ScrollText, Map,
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
@@ -18,7 +18,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -56,6 +56,8 @@ export default function AdminPage() {
     { id: "contratos",   label: "Contratos",   icon: FileText, master: true },
     { id: "usuarios",    label: "Usuários",    icon: UserCog, master: true },
     { id: "marca",       label: "Marca",       icon: Palette, master: true },
+    { id: "mapa",        label: "Mapa",        icon: Map },
+    { id: "auditoria",   label: "Auditoria",   icon: ScrollText, master: true },
   ];
 
   return (
@@ -93,6 +95,8 @@ export default function AdminPage() {
         {aba === "contratos"   && <Contratos token={token} />}
         {aba === "usuarios"    && <Usuarios token={token} />}
         {aba === "marca"       && <Marca token={token} />}
+        {aba === "mapa"        && <MapaLocais token={token} />}
+        {aba === "auditoria"   && <Auditoria token={token} />}
         {aba === "noxibo"      && <NoXibo token={token} />}
       </div>
     </main>
@@ -194,7 +198,7 @@ function Badge({ s }: { s: string }) {
 }
 
 // ─── Tipos compartilhados ────────────────────────────────────────────────────
-interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; }
+interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; }
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
 interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; }
@@ -678,13 +682,15 @@ function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () =>
   const [nome, setNome] = useState(""); const [cidade, setCidade] = useState(""); const [endereco, setEndereco] = useState("");
   const [orientacao, setOrientacao] = useState<"retrato" | "paisagem">("retrato");
   const [capacidade, setCapacidade] = useState("0");
+  const [lat, setLat] = useState(""); const [lng, setLng] = useState("");
+  const [passantes, setPassantes] = useState("0");
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   // largura/altura derivados da orientação (default; backend usa esses se não vierem)
   const largura = orientacao === "paisagem" ? "1920" : "1080";
   const altura  = orientacao === "paisagem" ? "1080" : "1920";
   async function salvar() {
     setBusy(true); setErr("");
-    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, orientacao, largura, altura, capacidade_dia: capacidade }) });
+    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, orientacao, largura, altura, capacidade_dia: capacidade, lat: lat || null, lng: lng || null, passantes_dia: passantes }) });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
     onSaved();
@@ -702,8 +708,15 @@ function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () =>
           </button>
         ))}
       </div>
-      <Field label="Capacidade/dia (0 = ilimitado)" value={capacidade} onChange={setCapacidade} type="number" />
-      <p className="mb-3 text-xs text-slate-500">O sistema atribui o <strong>Display Profile</strong> certo ({orientacao}) automaticamente ao vincular telas neste local — desde que <code>XIBO_PROFILE_PORTRAIT_ID</code> e <code>XIBO_PROFILE_LANDSCAPE_ID</code> estejam configurados no <code>.env</code>.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Capacidade/dia (0 = ilimitado)" value={capacidade} onChange={setCapacidade} type="number" />
+        <Field label="Passantes/dia (estimativa)" value={passantes} onChange={setPassantes} type="number" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Latitude" value={lat} onChange={setLat} placeholder="-12.971" />
+        <Field label="Longitude" value={lng} onChange={setLng} placeholder="-38.513" />
+      </div>
+      <p className="mb-3 text-xs text-slate-500">Lat/lng aparecem no <strong>Mapa</strong>; passantes/dia entram no cálculo de audiência estimada da campanha. O sistema atribui o <strong>Display Profile</strong> certo ({orientacao}) automaticamente ao vincular telas.</p>
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
       <button onClick={salvar} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar local</button>
     </Modal>
@@ -940,6 +953,7 @@ function Telas({ token }: { token: string }) {
   const [erro, setErro] = useState("");
   const [busy, setBusy] = useState<number | null>(null);
   const [sel, setSel] = useState<Record<number, string>>({});
+  const [verTela, setVerTela] = useState<DisplayItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErro("");
@@ -1013,8 +1027,11 @@ function Telas({ token }: { token: string }) {
                       </select>
                     </td>
                     <td className="p-3">
-                      <div className="flex justify-end gap-1">
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <button onClick={() => setVerTela(d)} className="rounded border border-emerald-500/40 p-1.5 text-emerald-300 hover:bg-emerald-500/10" title="Ver tela agora (screenshot)"><Camera className="h-3.5 w-3.5" /></button>
                         <button onClick={() => acao(d.displayId, "collect")} disabled={busy === d.displayId} className="rounded border border-brand/40 p-1.5 text-brand-light hover:bg-brand/10 disabled:opacity-50" title="Forçar atualização agora">{busy === d.displayId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}</button>
+                        <button onClick={() => acao(d.displayId, "revert")} className="rounded border border-white/15 p-1.5 hover:bg-white/5" title="Voltar pro schedule"><Undo2 className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => acao(d.displayId, "wol")} className="rounded border border-white/15 p-1.5 hover:bg-white/5" title="Wake-on-LAN"><Power className="h-3.5 w-3.5" /></button>
                         <button onClick={() => renomear(d.displayId, d.nome)} className="rounded border border-white/15 p-1.5 hover:bg-white/5" title="Renomear"><Pencil className="h-3.5 w-3.5" /></button>
                         <button onClick={async () => { if (await confirmModal(`Excluir a tela "${d.nome}"?`)) acao(d.displayId, "excluir"); }} className="rounded border border-red-500/30 p-1.5 text-red-300 hover:bg-red-500/10" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
@@ -1027,7 +1044,43 @@ function Telas({ token }: { token: string }) {
           </div>
         </>
       )}
+      {verTela && <ScreenshotModal token={token} display={verTela} onClose={() => setVerTela(null)} />}
     </div>
+  );
+}
+function ScreenshotModal({ token, display, onClose }: { token: string; display: DisplayItem; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  async function pedirEAtualizar() {
+    setBusy(true); setErr("");
+    const r = await aapi(token, `/api/admin/displays/${display.displayId}/screenshot`, { method: "POST" });
+    const d = await r.json();
+    if (!d.ok) { setErr(d.error || "erro"); setBusy(false); return; }
+    notify(d.msg || "Captura solicitada — aguarde 15–30s e atualize", "info");
+    setTimeout(async () => { await carregar(); setBusy(false); }, 15_000);
+  }
+  async function carregar() {
+    setErr("");
+    if (url) URL.revokeObjectURL(url);
+    const r = await aapi(token, `/api/admin/displays/${display.displayId}/screenshot`);
+    if (!r.ok) { setErr("Sem captura ainda — peça uma nova."); setUrl(null); return; }
+    const b = await r.blob(); setUrl(URL.createObjectURL(b));
+  }
+  useEffect(() => { carregar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <Modal title={`Tela: ${display.nome}`} onClose={onClose} wide>
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <button onClick={pedirEAtualizar} disabled={busy} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />} Capturar agora</button>
+          <button onClick={carregar} className="rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5"><RefreshCw className="h-4 w-4" /></button>
+        </div>
+        {err && <p className="text-sm text-amber-300">{err}</p>}
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="screenshot" className="max-h-[70vh] w-full rounded-lg border border-white/10 bg-black object-contain" />
+        ) : !err && <Loader2 className="h-6 w-6 animate-spin text-slate-500" />}
+      </div>
+    </Modal>
   );
 }
 
@@ -1217,6 +1270,78 @@ function NoXibo({ token }: { token: string }) {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Mapa de locais ─────────────────────────────────────────────────────────
+function MapaLocais({ token }: { token: string }) {
+  const [locais, setLocais] = useState<Local[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { aapi(token, "/api/admin/locais").then(r => r.json()).then(d => d.ok && setLocais(d.locais)); }, [token]);
+  useEffect(() => {
+    if (!ref.current || !locais.length) return;
+    // Carrega Leaflet via CDN (uma vez)
+    const ensure = async () => {
+      if (!(window as unknown as { L?: unknown }).L) {
+        await new Promise<void>((res) => { const link = document.createElement("link"); link.rel = "stylesheet"; link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"; document.head.appendChild(link); const s = document.createElement("script"); s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; s.onload = () => res(); document.body.appendChild(s); });
+      }
+      // @ts-expect-error Leaflet via CDN sem types
+      const L = window.L;
+      if (!ref.current) return;
+      ref.current.innerHTML = "";
+      const ptos = locais.filter(l => l.lat != null && l.lng != null) as (Local & { lat: number; lng: number })[];
+      const center = ptos.length ? [Number(ptos[0].lat), Number(ptos[0].lng)] : [-12.97, -38.51];
+      const map = L.map(ref.current).setView(center, ptos.length > 1 ? 6 : 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap" }).addTo(map);
+      ptos.forEach(l => {
+        const cor = l.ativo ? "#22c55e" : "#94a3b8";
+        const icon = L.divIcon({ html: `<div style="background:${cor};width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px #0008;"></div>`, className: "", iconSize: [18, 18] });
+        L.marker([Number(l.lat), Number(l.lng)], { icon }).addTo(map).bindPopup(`<b>${l.nome}</b><br>${l.cidade ?? ""}${l.passantes_dia ? `<br>${l.passantes_dia} passantes/dia` : ""}`);
+      });
+    };
+    ensure();
+  }, [locais]);
+  const semGeo = locais.filter(l => l.lat == null || l.lng == null).length;
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-bold">Mapa de locais</h2><span className="text-xs text-slate-500">{locais.length} locais · {semGeo} sem coordenadas</span></div>
+      <div ref={ref} className="h-[70vh] w-full rounded-xl border border-white/10 bg-slate-900" />
+      {semGeo > 0 && <p className="mt-2 text-xs text-amber-300">⚠ {semGeo} locais sem lat/lng — edite os locais e preencha pra aparecerem no mapa.</p>}
+    </div>
+  );
+}
+
+// ─── Auditoria ──────────────────────────────────────────────────────────────
+interface AuditEvento { id: string; autor_tipo: string; autor_nome: string | null; acao: string; entidade: string | null; entidade_id: string | null; detalhes: Record<string, unknown> | null; ip: string | null; created_at: string; }
+function Auditoria({ token }: { token: string }) {
+  const [evs, setEvs] = useState<AuditEvento[]>([]);
+  const [q, setQ] = useState("");
+  const load = useCallback(async () => { const r = await aapi(token, `/api/admin/auditoria?q=${encodeURIComponent(q)}`); const d = await r.json(); if (d.ok) setEvs(d.eventos); }, [token, q]);
+  useEffect(() => { load(); }, [load]);
+  return (
+    <div>
+      <div className="mb-4 flex items-center gap-2">
+        <div className="flex flex-1 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3"><Search className="h-4 w-4 text-slate-500" /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Filtrar por ação, autor ou entidade" className="w-full bg-transparent py-2 text-sm outline-none" /></div>
+        <button onClick={load} className="rounded-xl border border-white/10 p-2 hover:bg-white/5"><RefreshCw className="h-4 w-4" /></button>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-white/10">
+        <table className="w-full text-sm">
+          <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Quando</th><th className="p-3">Quem</th><th className="p-3">Ação</th><th className="p-3">Entidade</th><th className="p-3">Detalhes</th></tr></thead>
+          <tbody>
+            {evs.map(e => (
+              <tr key={e.id} className="border-t border-white/5 align-top">
+                <td className="p-3 whitespace-nowrap text-xs text-slate-400">{new Date(e.created_at.replace(" ", "T")).toLocaleString("pt-BR")}</td>
+                <td className="p-3 text-xs"><div>{e.autor_nome ?? "—"}</div><div className="text-slate-500">{e.autor_tipo}</div></td>
+                <td className="p-3 font-mono text-xs">{e.acao}</td>
+                <td className="p-3 text-xs">{e.entidade}{e.entidade_id ? <div className="text-slate-500">{String(e.entidade_id).slice(0,12)}</div> : null}</td>
+                <td className="p-3 text-xs text-slate-400">{e.detalhes ? <pre className="whitespace-pre-wrap">{JSON.stringify(e.detalhes,null,0).slice(0,200)}</pre> : ""}</td>
+              </tr>
+            ))}
+            {!evs.length && <tr><td colSpan={5} className="p-6 text-center text-slate-500">Sem eventos.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

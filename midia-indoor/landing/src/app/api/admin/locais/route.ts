@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   try {
     await ensureSchema();
     const rows = await db().query(
-      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, splash_nome, capacidade_dia, orientacao, created_at
+      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, splash_nome, capacidade_dia, orientacao, lat, lng, passantes_dia, created_at
          FROM midia_locais ORDER BY cidade NULLS LAST, nome`
     ).then(r => r.rows);
     return NextResponse.json({ ok: true, locais: rows });
@@ -35,6 +35,9 @@ const novo = z.object({
   altura:    z.coerce.number().int().min(120).max(8000).optional(),
   capacidade_dia: z.coerce.number().int().min(0).default(0),
   orientacao: z.enum(["retrato", "paisagem"]).default("retrato"),
+  lat: z.coerce.number().optional().nullable(),
+  lng: z.coerce.number().optional().nullable(),
+  passantes_dia: z.coerce.number().int().min(0).default(0),
 });
 
 export async function POST(req: NextRequest) {
@@ -55,9 +58,9 @@ export async function POST(req: NextRequest) {
     const altura  = b.altura  ?? (b.orientacao === "paisagem" ? 1080 : 1920);
 
     const id = await db().query<{ id: string }>(
-      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, capacidade_dia, orientacao, xibo_display_group_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, largura, altura, b.capacidade_dia, b.orientacao, dgId]
+      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, capacidade_dia, orientacao, lat, lng, passantes_dia, xibo_display_group_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, largura, altura, b.capacidade_dia, b.orientacao, b.lat ?? null, b.lng ?? null, b.passantes_dia, dgId]
     ).then(r => r.rows[0].id);
     return NextResponse.json({ ok: true, id, xibo_display_group_id: dgId });
   } catch (err) {
@@ -76,6 +79,9 @@ const patch = z.object({
   altura: z.coerce.number().int().optional(),
   capacidade_dia: z.coerce.number().int().min(0).optional(),
   orientacao: z.enum(["retrato", "paisagem"]).optional(),
+  lat: z.coerce.number().optional().nullable(),
+  lng: z.coerce.number().optional().nullable(),
+  passantes_dia: z.coerce.number().int().min(0).optional(),
   ativo: z.boolean().optional(),
 });
 
@@ -87,7 +93,7 @@ export async function PATCH(req: NextRequest) {
 
   const sets: string[] = []; const vals: unknown[] = [];
   const add = (c: string, v: unknown) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
-  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "orientacao", "ativo"] as const)
+  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "orientacao", "lat", "lng", "passantes_dia", "ativo"] as const)
     if (b[k] !== undefined) add(k, b[k]);
   if (!sets.length) return NextResponse.json({ ok: false, error: "nada para atualizar" }, { status: 400 });
 

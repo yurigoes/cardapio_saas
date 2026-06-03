@@ -233,6 +233,32 @@ export async function listarDisplaysDoGrupo(displayGroupId: number): Promise<Xib
   return xibo<XiboDisplayFull[]>(`/api/display?displayGroupId=${displayGroupId}&embed=displaygroups`);
 }
 
+/** Pede ao player pra tirar uma screenshot da tela atual (via XMR). */
+export async function pedirScreenshot(displayId: number): Promise<void> {
+  await xibo(`/api/display/requestscreenshot/${displayId}`, { method: "PUT" });
+}
+
+/** Baixa a última screenshot do display (proxy autenticado). */
+export async function baixarScreenshot(displayId: number): Promise<{ buffer: ArrayBuffer; contentType: string } | null> {
+  const token = await getToken();
+  // Xibo serve em /library/screenshots/{displayId}.jpg
+  for (const path of [`/library/screenshots/${displayId}.jpg`, `/library/screenshot/${displayId}.jpg`]) {
+    const r = await fetch(`${XIBO_URL}${path}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
+    if (r.ok) return { buffer: await r.arrayBuffer(), contentType: r.headers.get("content-type") ?? "image/jpeg" };
+  }
+  return null;
+}
+
+/** Wake-on-LAN — liga a TV/box (se suportar). */
+export async function wolDisplay(displayId: number): Promise<void> {
+  await xibo(`/api/display/wol/${displayId}`, { method: "POST" });
+}
+
+/** Reverte o player pro schedule normal (cancela mudança de layout temporária). */
+export async function revertToSchedule(displayGroupId: number): Promise<void> {
+  await xibo(`/api/displaygroup/${displayGroupId}/action/revertToSchedule`, { method: "POST" });
+}
+
 /** Atribui um Display Profile (ex: Retrato vs Paisagem) a uma tela. */
 export async function setDisplayProfile(displayId: number, displayProfileId: number): Promise<void> {
   const atual = (await xibo<XiboDisplayFull[]>(`/api/display?displayId=${displayId}`))[0];

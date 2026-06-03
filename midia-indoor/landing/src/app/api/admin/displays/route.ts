@@ -13,7 +13,9 @@ import { autenticarAdmin, exigirMaster } from "@/lib/admin-auth";
 import {
   listarDisplaysFull, autorizarDisplay, adicionarDisplayAoGrupo, removerDisplayDoGrupo,
   renomearDisplay, excluirDisplay, criarDisplayGroup, collectNow, setDisplayProfile, setDefaultLayout,
+  wolDisplay, revertToSchedule,
 } from "@/lib/xibo";
+import { logAudit } from "@/lib/auditoria";
 
 // IDs dos Display Profiles do Xibo (criados uma vez no Xibo, configurados no .env)
 const PROFILE_RETRATO  = Number(process.env.XIBO_PROFILE_PORTRAIT_ID  ?? 0);
@@ -65,7 +67,8 @@ async function dgDoLocal(localId: string): Promise<number | null> {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
+  const master = await exigirMaster(req);
+  if (!master) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
   const b = await req.json().catch(() => null) as { acao?: string; displayId?: number; local_id?: string; nome?: string } | null;
   if (!b?.acao || !b.displayId) return NextResponse.json({ ok: false, error: "dados inválidos" }, { status: 400 });
 
@@ -121,11 +124,20 @@ export async function POST(req: NextRequest) {
         await renomearDisplay(b.displayId, b.nome);
         break;
       case "collect": {
-        // força a coleta: usa o grupo display-specific da própria tela
         const disp = (await listarDisplaysFull()).find(d => d.displayId === b.displayId);
         const proprio = disp?.displayGroups?.find(g => g.isDisplaySpecific === 1) ?? disp?.displayGroups?.[0];
         if (!proprio) return NextResponse.json({ ok: false, error: "tela sem grupo" }, { status: 400 });
         await collectNow(proprio.displayGroupId);
+        break;
+      }
+      case "wol":
+        await wolDisplay(b.displayId);
+        break;
+      case "revert": {
+        const disp = (await listarDisplaysFull()).find(d => d.displayId === b.displayId);
+        const proprio = disp?.displayGroups?.find(g => g.isDisplaySpecific === 1) ?? disp?.displayGroups?.[0];
+        if (!proprio) return NextResponse.json({ ok: false, error: "tela sem grupo" }, { status: 400 });
+        await revertToSchedule(proprio.displayGroupId);
         break;
       }
       case "excluir":
@@ -134,6 +146,7 @@ export async function POST(req: NextRequest) {
       default:
         return NextResponse.json({ ok: false, error: "ação desconhecida" }, { status: 400 });
     }
+    logAudit(req, { autor_tipo: "admin", autor_id: master.sub, autor_nome: master.nome, acao: `tela.${b.acao}`, entidade: "display", entidade_id: String(b.displayId), detalhes: { local_id: b.local_id, nome: b.nome } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[admin/displays POST]", err);

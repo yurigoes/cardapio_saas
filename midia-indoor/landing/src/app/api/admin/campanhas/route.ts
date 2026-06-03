@@ -43,6 +43,8 @@ const novo = z.object({
   segundos:      z.coerce.number().int().min(1).max(300).optional(),
   data_inicio:   z.string().optional(),
   data_fim:      z.string().optional(),
+  hora_inicio:   z.string().regex(/^\d{2}:\d{2}$/, "HH:MM").optional(),
+  hora_fim:      z.string().regex(/^\d{2}:\d{2}$/, "HH:MM").optional(),
   valor:         z.coerce.number().min(0).default(0),
   locais:        z.array(z.string().uuid()).min(1, "escolha pelo menos um local"),
 });
@@ -68,9 +70,9 @@ export async function POST(req: NextRequest) {
     if (!dias || !ins) return NextResponse.json({ ok: false, error: "informe dias e inserções/dia (ou um pacote)" }, { status: 400 });
 
     const campId = await p.query<{ id: string }>(
-      `INSERT INTO midia_campanhas (conta_id, pacote_id, nome, tipo, dias, insercoes_dia, segundos, data_inicio, data_fim, valor, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'rascunho') RETURNING id`,
-      [b.conta_id, b.pacote_id ?? null, b.nome, tipo ?? "video", dias, ins, seg ?? 10, b.data_inicio ?? null, b.data_fim ?? null, b.valor]
+      `INSERT INTO midia_campanhas (conta_id, pacote_id, nome, tipo, dias, insercoes_dia, segundos, data_inicio, data_fim, hora_inicio, hora_fim, valor, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'rascunho') RETURNING id`,
+      [b.conta_id, b.pacote_id ?? null, b.nome, tipo ?? "video", dias, ins, seg ?? 10, b.data_inicio ?? null, b.data_fim ?? null, b.hora_inicio ?? null, b.hora_fim ?? null, b.valor]
     ).then(r => r.rows[0].id);
 
     for (const localId of b.locais) {

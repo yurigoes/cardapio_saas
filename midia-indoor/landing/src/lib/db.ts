@@ -253,6 +253,32 @@ export async function ensureSchema(): Promise<void> {
   // Splash do local (tela de espera quando não há conteúdo agendado)
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_layout_id INTEGER;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_nome TEXT;`);
+  // Geo + audiência estimada
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS lat NUMERIC(10,6);`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS lng NUMERIC(10,6);`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS passantes_dia INTEGER NOT NULL DEFAULT 0;`);
+  // Day-parting na campanha (horário do dia em formato HH:MM)
+  await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS hora_inicio TEXT;`);
+  await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS hora_fim TEXT;`);
+  await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS xibo_daypart_id INTEGER;`);
+
+  // Audit log
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_auditoria (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      autor_tipo    TEXT NOT NULL,        -- admin|cliente|sistema
+      autor_id      TEXT,
+      autor_nome    TEXT,
+      acao          TEXT NOT NULL,        -- ex: campanha.lancar
+      entidade      TEXT,                 -- ex: campanha, local, anunciante
+      entidade_id   TEXT,
+      detalhes      JSONB,
+      ip            TEXT,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_auditoria_data ON midia_auditoria(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_midia_auditoria_acao ON midia_auditoria(acao);
+  `);
   // Orientação física das telas do local (retrato/paisagem) — usada pra escolher o Display Profile do Xibo
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS orientacao TEXT NOT NULL DEFAULT 'retrato';`);
 
