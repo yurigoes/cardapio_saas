@@ -175,8 +175,21 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
   try {
     let xiboCampaignId = camp.xibo_campaign_id ?? undefined;
     if (xiboCampaignId) {
-      await editarAdCampaign(xiboCampaignId, { nome: camp.nome, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups });
-    } else {
+      try {
+        await editarAdCampaign(xiboCampaignId, { nome: camp.nome, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups });
+      } catch (e) {
+        const msg = (e as Error).message ?? "";
+        // Se a ad campaign foi apagada no Xibo, descarta o id morto e cria de novo
+        if (/→ 404/.test(msg) || /not found/i.test(msg) || /n[aã]o encontrad/i.test(msg)) {
+          console.warn(`[lancar] ad campaign ${xiboCampaignId} sumiu no Xibo — recriando`);
+          await p.query(`UPDATE midia_campanhas SET xibo_campaign_id = NULL WHERE id = $1`, [campanhaId]);
+          xiboCampaignId = undefined;
+        } else {
+          throw e;
+        }
+      }
+    }
+    if (!xiboCampaignId) {
       xiboCampaignId = await criarAdCampaign({ nome: camp.nome, layoutId: camp.xibo_layout_id, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups, dayPartId });
     }
     const jaEstavaNoAr = camp.status === "no_ar";
