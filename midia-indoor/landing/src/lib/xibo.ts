@@ -554,6 +554,43 @@ export async function agendarLayoutNoGrupo(campaignId: number, displayGroupId: n
   return r.eventId ?? r.data?.eventId;
 }
 
+/** Devolve o campaignId auto-gerado de um layout (necessário pra agendar). */
+export async function obterCampaignIdDoLayout(layoutId: number): Promise<number | null> {
+  try {
+    const arr = await xibo<Array<{ campaignId?: number }>>(`/api/layout?layoutId=${layoutId}&embed=campaigns`);
+    const c = Array.isArray(arr) ? arr[0]?.campaignId : undefined;
+    return c ?? null;
+  } catch { return null; }
+}
+
+/**
+ * Cria um INTERRUPT schedule "kick-start" só pra hora corrente,
+ * pra cobrir o intervalo entre AGORA e a próxima hora cheia (quando o
+ * CampaignSchedulerTask passa a tocar). Retorna o eventId.
+ */
+export async function kickStartLayoutAteProximaHora(
+  layoutCampaignId: number, // o campaignId DO LAYOUT (não da ad campaign)
+  displayGroupIds: number[],
+  playsPerHour = 6,
+): Promise<number | undefined> {
+  const agora = new Date();
+  const proxHora = new Date(agora); proxHora.setMinutes(0, 0, 0); proxHora.setHours(proxHora.getHours() + 1);
+  if (proxHora.getTime() - agora.getTime() < 60_000) return undefined; // já está na virada da hora
+  const body = new URLSearchParams();
+  body.set("eventTypeId", "4");                // 4 = INTERRUPT (mesmo da ad campaign)
+  body.set("campaignId", String(layoutCampaignId));
+  body.set("displayOrder", "1");
+  body.set("isPriority", "0");
+  body.set("dayPartId", "0");                  // sem day-part
+  body.set("fromDt", fmtDt(agora));
+  body.set("toDt", fmtDt(proxHora));
+  body.set("shareOfVoice", String(Math.min(playsPerHour * 10, 3600)));
+  body.set("maxPlaysPerHour", String(playsPerHour));
+  for (const dg of displayGroupIds) body.append("displayGroupIds[]", String(dg));
+  const r = await xibo<{ eventId?: number; data?: { eventId: number } }>(`/api/schedule`, { method: "POST", body });
+  return r.eventId ?? r.data?.eventId;
+}
+
 /** Remove um evento de agenda. */
 export async function excluirEvento(eventId: number): Promise<void> {
   await xibo(`/api/schedule/${eventId}`, { method: "DELETE" });

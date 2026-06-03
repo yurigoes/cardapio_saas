@@ -8,7 +8,7 @@
  *   4. relatório → statsCampanha (proof-of-play)
  */
 import { db, ensureSchema } from "./db";
-import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, excluirMidia, criarDayPart, reassignLayoutNaAdCampaign, collectNow, type ExibicaoLinha } from "./xibo";
+import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, excluirMidia, criarDayPart, reassignLayoutNaAdCampaign, collectNow, kickStartLayoutAteProximaHora, obterCampaignIdDoLayout, type ExibicaoLinha } from "./xibo";
 
 interface CampanhaRow {
   id: string; conta_id: string; nome: string; tipo: string; dias: number; insercoes_dia: number;
@@ -199,6 +199,18 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
       `UPDATE midia_campanhas SET xibo_campaign_id = $1, status = 'no_ar', lancada_em = NOW(), updated_at = NOW() WHERE id = $2`,
       [xiboCampaignId, campanhaId]
     );
+    // Kick-start: cria um schedule manual que toca da hora atual até a virada,
+    // pra cobrir o intervalo até o CampaignSchedulerTask criar os eventos da
+    // próxima hora cheia. Sem isso, a campanha lançada às 15:20 só começaria 16:00.
+    try {
+      const layoutCampaignId = await obterCampaignIdDoLayout(camp.xibo_layout_id);
+      if (layoutCampaignId) {
+        const playsHora = Math.max(1, Math.ceil(camp.insercoes_dia / 12)); // ~12 horas úteis/dia
+        const eventId = await kickStartLayoutAteProximaHora(layoutCampaignId, groups, playsHora);
+        if (eventId) console.log(`[lancar] kick-start agendado (eventId ${eventId})`);
+      }
+    } catch (e) { console.warn("[lancar] kick-start falhou:", (e as Error).message); }
+
     // Força os players a coletarem a nova programação imediatamente (XMR push)
     for (const g of groups) {
       try { await collectNow(g); } catch (e) { console.warn(`[lancar] collectNow ${g} falhou:`, (e as Error).message); }
