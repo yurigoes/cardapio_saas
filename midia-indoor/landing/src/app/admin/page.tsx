@@ -194,7 +194,7 @@ function Badge({ s }: { s: string }) {
 }
 
 // ─── Tipos compartilhados ────────────────────────────────────────────────────
-interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; }
+interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; }
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
 interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; }
@@ -576,7 +576,9 @@ function Locais({ token }: { token: string }) {
 function LocalCard({ token, local, onChange, onToggle }: { token: string; local: Local; onChange: () => void; onToggle: () => void }) {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const [ocup, setOcup] = useState(false);
+  const [busySplash, setBusySplash] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const splashRef = useRef<HTMLInputElement>(null);
   async function enviarConteudo(files: FileList) {
     setBusy(true); setErr("");
     const fd = new FormData(); Array.from(files).forEach(f => fd.append("file", f));
@@ -587,6 +589,16 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
     notify(`Conteúdo base atualizado (${d.enviados ?? 1} arquivo${(d.enviados ?? 1) > 1 ? "s" : ""})`, "success");
     onChange();
   }
+  async function enviarSplash(files: FileList) {
+    setBusySplash(true);
+    const fd = new FormData(); Array.from(files).forEach(f => fd.append("file", f));
+    const r = await fetch(`/api/admin/locais/${local.id}/splash`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    const d = await r.json(); setBusySplash(false);
+    if (splashRef.current) splashRef.current.value = "";
+    if (!d.ok) { notify(d.error || "erro", "error"); return; }
+    notify(`Splash atualizado em ${d.telas_atualizadas ?? 0} tela(s)`, "success");
+    onChange();
+  }
   return (
     <div className={`rounded-2xl border p-4 ${local.ativo ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.02] opacity-60"}`}>
       <div className="flex items-start justify-between">
@@ -595,11 +607,16 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
       </div>
       <p className="mt-2 text-xs text-slate-500">{local.largura}×{local.altura} · grupo Xibo {local.xibo_display_group_id ?? "—"}</p>
       <p className="mt-1 text-xs text-slate-500">Conteúdo base: {local.conteudo_nome ? <span className="text-emerald-300">{local.conteudo_nome}</span> : "nenhum"}</p>
+      <p className="mt-1 text-xs text-slate-500">Splash (tela de espera): {local.splash_nome ? <span className="text-emerald-300">{local.splash_nome}</span> : "nenhum"}</p>
       {err && <p className="mt-1 text-xs text-red-400">{err}</p>}
       <div className="mt-3 flex gap-2">
         <label className="flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {local.conteudo_nome ? "Trocar conteúdo" : "Conteúdo base"}
           <input ref={inputRef} type="file" accept="image/*,video/*" multiple className="hidden" disabled={busy} onChange={e => { const f = e.target.files; if (f && f.length) enviarConteudo(f); }} />
+        </label>
+        <label className="flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">
+          {busySplash ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {local.splash_nome ? "Trocar splash" : "Splash"}
+          <input ref={splashRef} type="file" accept="image/*,video/*" multiple className="hidden" disabled={busySplash} onChange={e => { const f = e.target.files; if (f && f.length) enviarSplash(f); }} />
         </label>
         <button onClick={onToggle} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">{local.ativo ? "Desativar" : "Ativar"}</button>
       </div>

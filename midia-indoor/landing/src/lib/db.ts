@@ -250,6 +250,9 @@ export async function ensureSchema(): Promise<void> {
   // URL do APK do Xibo Player Android (hospedado pelo SaaS, evita depender do site do Xibo)
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_url TEXT;`);
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_versao TEXT;`);
+  // Splash do local (tela de espera quando não há conteúdo agendado)
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_layout_id INTEGER;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_nome TEXT;`);
   // Orientação física das telas do local (retrato/paisagem) — usada pra escolher o Display Profile do Xibo
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS orientacao TEXT NOT NULL DEFAULT 'retrato';`);
 

@@ -12,7 +12,7 @@ import { db, ensureSchema } from "@/lib/db";
 import { autenticarAdmin, exigirMaster } from "@/lib/admin-auth";
 import {
   listarDisplaysFull, autorizarDisplay, adicionarDisplayAoGrupo, removerDisplayDoGrupo,
-  renomearDisplay, excluirDisplay, criarDisplayGroup, collectNow, setDisplayProfile,
+  renomearDisplay, excluirDisplay, criarDisplayGroup, collectNow, setDisplayProfile, setDefaultLayout,
 } from "@/lib/xibo";
 
 // IDs dos Display Profiles do Xibo (criados uma vez no Xibo, configurados no .env)
@@ -80,8 +80,8 @@ export async function POST(req: NextRequest) {
         const dg = await dgDoLocal(b.local_id);
         if (!dg) return NextResponse.json({ ok: false, error: "local inválido" }, { status: 400 });
         // Lê orientação do local pra aplicar o Display Profile correto depois
-        const localInfo = await db().query<{ orientacao: string }>(
-          `SELECT orientacao FROM midia_locais WHERE id = $1`, [b.local_id]
+        const localInfo = await db().query<{ orientacao: string; splash_layout_id: number | null }>(
+          `SELECT orientacao, splash_layout_id FROM midia_locais WHERE id = $1`, [b.local_id]
         ).then(r => r.rows[0]);
         const profileAlvo = localInfo?.orientacao === "paisagem" ? PROFILE_PAISAGEM : PROFILE_RETRATO;
         const atual = (await listarDisplaysFull()).find(d => d.displayId === b.displayId);
@@ -102,6 +102,11 @@ export async function POST(req: NextRequest) {
         if (profileAlvo > 0) {
           try { await setDisplayProfile(b.displayId, profileAlvo); }
           catch (e) { console.warn("[vincular] não atribuiu Display Profile:", (e as Error).message); }
+        }
+        // Aplica o splash do local como Default Layout (se houver)
+        if (localInfo?.splash_layout_id) {
+          try { await setDefaultLayout(b.displayId, localInfo.splash_layout_id); }
+          catch (e) { console.warn("[vincular] não atribuiu splash:", (e as Error).message); }
         }
         break;
       }

@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   try {
     await ensureSchema();
     const rows = await db().query(
-      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, capacidade_dia, orientacao, created_at
+      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, splash_nome, capacidade_dia, orientacao, created_at
          FROM midia_locais ORDER BY cidade NULLS LAST, nome`
     ).then(r => r.rows);
     return NextResponse.json({ ok: true, locais: rows });
