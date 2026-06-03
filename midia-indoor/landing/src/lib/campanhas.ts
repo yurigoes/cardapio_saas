@@ -8,7 +8,7 @@
  *   4. relatório → statsCampanha (proof-of-play)
  */
 import { db, ensureSchema } from "./db";
-import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, excluirMidia, criarDayPart, type ExibicaoLinha } from "./xibo";
+import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, excluirMidia, criarDayPart, reassignLayoutNaAdCampaign, collectNow, type ExibicaoLinha } from "./xibo";
 
 interface CampanhaRow {
   id: string; conta_id: string; nome: string; tipo: string; dias: number; insercoes_dia: number;
@@ -177,6 +177,8 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
     if (xiboCampaignId) {
       try {
         await editarAdCampaign(xiboCampaignId, { nome: camp.nome, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups });
+        // Re-anexa o layout atual (cobre o caso de troca de arte: novo xibo_layout_id)
+        await reassignLayoutNaAdCampaign(xiboCampaignId, camp.xibo_layout_id, dayPartId);
       } catch (e) {
         const msg = (e as Error).message ?? "";
         // Se a ad campaign foi apagada no Xibo, descarta o id morto e cria de novo
@@ -197,6 +199,10 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
       `UPDATE midia_campanhas SET xibo_campaign_id = $1, status = 'no_ar', lancada_em = NOW(), updated_at = NOW() WHERE id = $2`,
       [xiboCampaignId, campanhaId]
     );
+    // Força os players a coletarem a nova programação imediatamente (XMR push)
+    for (const g of groups) {
+      try { await collectNow(g); } catch (e) { console.warn(`[lancar] collectNow ${g} falhou:`, (e as Error).message); }
+    }
     // E-mail "no ar" só na 1ª vez (não em reaplicações)
     if (!jaEstavaNoAr) {
       try {

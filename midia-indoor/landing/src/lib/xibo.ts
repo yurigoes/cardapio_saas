@@ -662,6 +662,37 @@ export async function editarAdCampaign(campaignId: number, opts: {
   await xibo(`/api/campaign/${campaignId}`, { method: "PUT", body });
 }
 
+/**
+ * Garante que o layout atual seja o único anexado à ad campaign:
+ * 1) busca os layouts atualmente anexados
+ * 2) desanexa todos
+ * 3) anexa o novo layoutId (com dayPart opcional)
+ */
+export async function reassignLayoutNaAdCampaign(campaignId: number, novoLayoutId: number, dayPartId?: number): Promise<void> {
+  // 1) Lista atual de layouts da campaign
+  let atuais: number[] = [];
+  try {
+    const resp = await xibo<Array<{ layouts?: Array<{ layoutId: number }> }> | { layouts?: Array<{ layoutId: number }> }>(
+      `/api/campaign?campaignId=${campaignId}&embed=layouts`
+    );
+    const arr = Array.isArray(resp) ? resp : [resp];
+    atuais = arr[0]?.layouts?.map(l => l.layoutId).filter(Boolean) ?? [];
+  } catch (e) { console.warn("[reassign] não listou layouts atuais:", (e as Error).message); }
+
+  // 2) Desanexa cada um
+  for (const lid of atuais) {
+    try {
+      await xibo(`/api/campaign/layout/unassign/${campaignId}`, { method: "POST", body: new URLSearchParams({ layoutId: String(lid) }) });
+    } catch (e) { console.warn(`[reassign] unassign ${lid} falhou:`, (e as Error).message); }
+  }
+
+  // 3) Anexa o novo
+  const body = new URLSearchParams();
+  body.set("layoutId", String(novoLayoutId));
+  if (dayPartId) body.set("dayPartId", String(dayPartId));
+  await xibo(`/api/campaign/layout/assign/${campaignId}`, { method: "POST", body });
+}
+
 /** Encerra a campanha (remove do ar). */
 export async function excluirCampanha(campaignId: number): Promise<void> {
   await xibo(`/api/campaign/${campaignId}`, { method: "DELETE" });
