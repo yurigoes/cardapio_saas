@@ -738,7 +738,7 @@ function AtivarPorCodigoModal({ token, local, onClose, onSaved }: { token: strin
   }
   return (
     <Modal title={`Ativar TV em: ${local.nome}`} onClose={onClose}>
-      <p className="mb-3 text-sm text-slate-400">Quando você abre o app Xibo na TV pela primeira vez, ele mostra um <strong>código de 6 caracteres</strong>. Digite abaixo pra vincular essa TV a este local automaticamente.</p>
+      <p className="mb-3 text-sm text-slate-400">Quando você abre o app Xibo na TV pela primeira vez, ele mostra um <strong>código de 6 caracteres</strong>. Digite abaixo. <em>Pode levar até 1 minuto</em> — o app precisa buscar a configuração do CMS.</p>
       <Field label="Código da TV" value={codigo} onChange={v => setCodigo(v.toUpperCase())} placeholder="ex: A3F7K9" />
       <Field label="Nome desta TV (opcional)" value={nome} onChange={setNome} placeholder={`${local.nome} — Tela`} />
       {out && !out.ok && <p className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-200">{out.error}</p>}

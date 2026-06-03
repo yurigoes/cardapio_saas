@@ -12,6 +12,7 @@ import { ativarDisplayPorCodigo, vincularDisplayAoGrupo, criarDisplayGroup, setD
 import { logAudit } from "@/lib/auditoria";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // até 60s pra esperar o player conectar
 
 const schema = z.object({
   codigo: z.string().min(4).max(8),

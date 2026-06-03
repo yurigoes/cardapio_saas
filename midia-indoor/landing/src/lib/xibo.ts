@@ -90,33 +90,49 @@ export async function criarFolder(nome: string, parentId?: number): Promise<numb
 
 // ─── Ativação de display por código (Add by Code do Xibo) ──────────────────
 /**
- * Ativa uma TV pelo código de 6 chars exibido na tela do player Xibo recém-instalado.
- * Tenta os endpoints conhecidos do Xibo 3.x/4.x em ordem; quando um responder OK,
- * tenta extrair o displayId retornado.
- * Lança erro se nenhum endpoint reconhecer o código.
+ * Ativa uma TV pelo código exibido no player Xibo recém-instalado.
+ * O fluxo do Xibo 3.x:
+ *   1) POST /api/display/addViaCode { user_code } — envia o CMS pra auth.signlicence.co.uk
+ *   2) Player polla a URL → recebe addr+key do CMS → se registra (aparece no /api/display)
+ *   3) Polling local (até ~45s) procurando o display novo (lastAccessed nos últimos 60s)
+ *   4) Autoriza (licensed=1) o display encontrado e devolve o displayId
  */
 export async function ativarDisplayPorCodigo(codigo: string, nome?: string): Promise<{ displayId: number }> {
-  const code = codigo.trim().toUpperCase();
-  if (!/^[A-Z0-9]{4,8}$/.test(code)) throw new Error("código inválido (4 a 8 letras/números)");
-  const tentativas: Array<{ path: string; body: Record<string, string> }> = [
-    // Xibo 3.x
-    { path: "/api/displays/addViaCode",     body: { code, displayName: nome ?? `Display ${code}` } },
-    { path: "/api/displays/addviacode",     body: { code, displayName: nome ?? `Display ${code}` } },
-    { path: "/api/display/addViaCode",      body: { code, displayName: nome ?? `Display ${code}` } },
-    // Xibo 4.x (camelCase displayCode)
-    { path: "/api/displays/registerCode",   body: { code, displayName: nome ?? `Display ${code}` } },
-    { path: "/api/display/registerByCode",  body: { code, displayName: nome ?? `Display ${code}` } },
-  ];
-  let ultimaErro = "";
-  for (const t of tentativas) {
+  const code = codigo.trim();
+  if (!/^[A-Za-z0-9]{4,16}$/.test(code)) throw new Error("código inválido");
+
+  // 1) Snapshot dos displayIds existentes ANTES da ativação
+  const antes = new Set<number>();
+  try {
+    const lista = await xibo<Array<{ displayId: number }>>(`/api/display`);
+    for (const d of Array.isArray(lista) ? lista : []) antes.add(d.displayId);
+  } catch (e) { console.warn("[ativar] snapshot inicial falhou:", (e as Error).message); }
+
+  // 2) Manda o código pro Xibo (endpoint REAL é /api/display/addViaCode com user_code)
+  const body = new URLSearchParams({ user_code: code });
+  await xibo(`/api/display/addViaCode`, { method: "POST", body });
+
+  // 3) Polling até 45s procurando o display novo
+  let novo: { displayId: number } | undefined;
+  for (let i = 0; i < 15; i++) {
+    await new Promise(r => setTimeout(r, 3000));
     try {
-      const body = new URLSearchParams(); for (const [k, v] of Object.entries(t.body)) body.set(k, v);
-      const r = await xibo<{ displayId?: number; data?: { displayId: number }; display?: { displayId: number } }>(t.path, { method: "POST", body });
-      const id = r.displayId ?? r.data?.displayId ?? r.display?.displayId;
-      if (id) return { displayId: id };
-    } catch (e) { ultimaErro = (e as Error).message; }
+      const lista = await xibo<Array<{ displayId: number; display: string; lastAccessed?: number }>>(`/api/display`);
+      novo = (Array.isArray(lista) ? lista : []).find(d => !antes.has(d.displayId));
+      if (novo) break;
+    } catch (e) { /* tenta de novo */ }
   }
-  throw new Error(`Xibo: nenhum endpoint reconheceu o código (último erro: ${ultimaErro || "n/a"})`);
+  if (!novo) throw new Error("código aceito mas a TV ainda não se conectou. Confirme que o player tem internet e tente novamente em alguns segundos.");
+
+  // 4) Autoriza + renomeia
+  try {
+    const upd = new URLSearchParams();
+    upd.set("display", nome ?? `TV ${code}`);
+    upd.set("licensed", "1");
+    await xibo(`/api/display/${novo.displayId}`, { method: "PUT", body: upd });
+  } catch (e) { console.warn("[ativar] autorizar/renomear falhou:", (e as Error).message); }
+
+  return { displayId: novo.displayId };
 }
 
 /** Adiciona um display a um display group (link). */
