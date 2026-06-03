@@ -22,7 +22,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!id) return NextResponse.json({ ok: false, error: "id inválido" }, { status: 400 });
   try {
     const r = await baixarScreenshot(id);
-    if (!r) return NextResponse.json({ ok: false, error: "sem captura ainda — peça uma nova" }, { status: 404 });
+    if (!r) return NextResponse.json({
+      ok: false,
+      error: "screenshot não encontrada. Verifique: (1) o player respondeu à solicitação; (2) o backend tem acesso à library do Xibo via XIBO_LIBRARY_PATH (monte o volume da library no container)."
+    }, { status: 404 });
     return new NextResponse(r.buffer, { headers: { "Content-Type": r.contentType, "Cache-Control": "no-store" } });
   } catch (err) { return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "erro" }, { status: 500 }); }
 }

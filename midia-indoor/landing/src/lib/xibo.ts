@@ -238,13 +238,43 @@ export async function pedirScreenshot(displayId: number): Promise<void> {
   await xibo(`/api/display/requestscreenshot/${displayId}`, { method: "PUT" });
 }
 
-/** Baixa a última screenshot do display (proxy autenticado). */
+/**
+ * Baixa a última screenshot do display.
+ * O Xibo NÃO expõe screenshots via API REST — o arquivo só é servido pela web UI
+ * (autenticada por sessão). Caminhos suportados, em ordem:
+ *   1) Filesystem direto via XIBO_LIBRARY_PATH (preferido) — monte a library do Xibo no container
+ *   2) HTTP com Bearer (não funciona em 3.x, deixamos como fallback)
+ */
 export async function baixarScreenshot(displayId: number): Promise<{ buffer: ArrayBuffer; contentType: string } | null> {
+  // 1) Filesystem
+  const libPath = process.env.XIBO_LIBRARY_PATH ?? "";
+  if (libPath) {
+    try {
+      const fs = await import("node:fs/promises");
+      const path = await import("node:path");
+      const candidatos = [
+        path.join(libPath, "screenshots", `${displayId}_screenshot.jpg`),
+        path.join(libPath, "screenshots", `${displayId}.jpg`),
+      ];
+      for (const fp of candidatos) {
+        try {
+          const buf = await fs.readFile(fp);
+          // Verifica se não está vazio
+          if (buf.length > 100) return { buffer: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), contentType: "image/jpeg" };
+        } catch { /* tenta próximo */ }
+      }
+    } catch (e) { console.warn("[baixarScreenshot] fs falhou:", (e as Error).message); }
+  }
+  // 2) HTTP (fallback — geralmente 403/404 em 3.x)
   const token = await getToken();
-  // Xibo serve em /library/screenshots/{displayId}.jpg
-  for (const path of [`/library/screenshots/${displayId}.jpg`, `/library/screenshot/${displayId}.jpg`]) {
-    const r = await fetch(`${XIBO_URL}${path}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
-    if (r.ok) return { buffer: await r.arrayBuffer(), contentType: r.headers.get("content-type") ?? "image/jpeg" };
+  for (const path of [`/library/screenshots/${displayId}_screenshot.jpg`, `/library/screenshots/${displayId}.jpg`]) {
+    try {
+      const r = await fetch(`${XIBO_URL}${path}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
+      if (r.ok) {
+        const buf = await r.arrayBuffer();
+        if (buf.byteLength > 100) return { buffer: buf, contentType: r.headers.get("content-type") ?? "image/jpeg" };
+      }
+    } catch { /* tenta próximo */ }
   }
   return null;
 }
