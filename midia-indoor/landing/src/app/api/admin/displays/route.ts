@@ -128,25 +128,19 @@ export async function POST(req: NextRequest) {
         const proprio = disp?.displayGroups?.find(g => g.isDisplaySpecific === 1) ?? disp?.displayGroups?.[0];
         if (!proprio) return NextResponse.json({ ok: false, error: "tela sem grupo" }, { status: 400 });
         const online = disp?.loggedIn === 1;
-        if (!online) {
-          // sem XMR ativo o comando não chega no player
-          return NextResponse.json({
-            ok: false,
-            error: "Tela aparece OFFLINE no Xibo (XMR sem conexão). Comando não foi enviado — verifique o player.",
-          }, { status: 409 });
-        }
         const ret = await collectNow(proprio.displayGroupId);
-        // aguarda 3s e olha o lastCommandSuccess pra confirmar entrega
+        logAudit(req, { autor_tipo: "admin", autor_id: master.sub, autor_nome: master.nome, acao: `tela.collect`, entidade: "display", entidade_id: String(b.displayId), detalhes: { ret } });
+
+        if (!online) {
+          return NextResponse.json({ ok: true, confirmado: false, msg: "Player está offline — o comando será aplicado no próximo poll quando ele reconectar." });
+        }
+        // se XMR está ativo, tenta confirmar entrega (lastCommandSuccess vira 1 em 2-3s)
         await new Promise(r => setTimeout(r, 3000));
         const st = await ultimoComandoStatus(b.displayId);
-        // lastCommandSuccess: 1=ok, 0=falha, 2=nunca tentou (default)
         const sucesso = st?.sucesso === 1;
-        const detalhe = st?.sucesso === 0
-          ? "XMR aceitou mas o player rejeitou o comando."
-          : st?.sucesso === 1
-            ? "Player confirmou o recebimento ✓"
-            : "Comando enfileirado — confirmação ainda pendente (status no Xibo: aguardando).";
-        logAudit(req, { autor_tipo: "admin", autor_id: master.sub, autor_nome: master.nome, acao: `tela.collect`, entidade: "display", entidade_id: String(b.displayId), detalhes: { ret, lastCommandSuccess: st?.sucesso } });
+        const detalhe = sucesso
+          ? "Player confirmou o recebimento ✓"
+          : "Sem confirmação via XMR — o comando será aplicado no próximo poll do player (a cada ~1-5min, conforme Display Profile).";
         return NextResponse.json({ ok: true, confirmado: sucesso, msg: `${ret.mensagem}. ${detalhe}` });
       }
       case "wol":
