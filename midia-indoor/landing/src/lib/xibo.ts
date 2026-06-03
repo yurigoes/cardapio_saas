@@ -108,9 +108,37 @@ export async function ativarDisplayPorCodigo(codigo: string, nome?: string): Pro
     for (const d of Array.isArray(lista) ? lista : []) antes.add(d.displayId);
   } catch (e) { console.warn("[ativar] snapshot inicial falhou:", (e as Error).message); }
 
-  // 2) Manda o código pro Xibo (endpoint REAL é /api/display/addViaCode com user_code)
+  // 2) Manda o código pro Xibo (endpoint REAL é /api/display/addViaCode com user_code).
+  //    IMPORTANTE: o Xibo pega o Host header pra gerar a URL do CMS que será enviada
+  //    ao servidor de auth (auth.signlicence.co.uk). Se XIBO_URL aponta pro container
+  //    interno (ex: midia_xibo_web), o player não vai conseguir acessar.
+  //    Solução: setar XIBO_PUBLIC_URL=https://xibo.seu-dominio.com.br no .env.
   const body = new URLSearchParams({ user_code: code });
-  await xibo(`/api/display/addViaCode`, { method: "POST", body });
+  const publicUrl = process.env.XIBO_PUBLIC_URL ?? "";
+  if (publicUrl) {
+    // chama o endpoint usando a URL pública, com Host correto pro HttpsDetect funcionar
+    const pubBase = publicUrl.replace(/\/$/, "");
+    const token = await getToken();
+    const host = new URL(pubBase).host;
+    const r = await fetch(`${pubBase}/api/display/addViaCode`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Host": host,
+        "X-Forwarded-Host": host,
+        "X-Forwarded-Proto": new URL(pubBase).protocol.replace(":", ""),
+      },
+      body: body.toString(),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      throw new Error(`Xibo addViaCode (pub) ${r.status}: ${t.slice(0, 200)}`);
+    }
+  } else {
+    await xibo(`/api/display/addViaCode`, { method: "POST", body });
+  }
 
   // 3) Polling até 45s procurando o display novo
   let novo: { displayId: number } | undefined;
