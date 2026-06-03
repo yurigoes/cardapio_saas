@@ -8,12 +8,13 @@
  *   4. relatório → statsCampanha (proof-of-play)
  */
 import { db, ensureSchema } from "./db";
-import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, excluirMidia, type ExibicaoLinha } from "./xibo";
+import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, excluirMidia, criarDayPart, type ExibicaoLinha } from "./xibo";
 
 interface CampanhaRow {
   id: string; conta_id: string; nome: string; tipo: string; dias: number; insercoes_dia: number;
   segundos: number; data_inicio: string | null; data_fim: string | null;
   xibo_media_id: number | null; xibo_layout_id: number | null; xibo_campaign_id: number | null;
+  xibo_daypart_id: number | null; hora_inicio: string | null; hora_fim: string | null;
   status: string;
 }
 
@@ -21,7 +22,8 @@ async function carregar(campanhaId: string): Promise<CampanhaRow | null> {
   await ensureSchema();
   const r = await db().query<CampanhaRow>(
     `SELECT id, conta_id, nome, tipo, dias, insercoes_dia, segundos, data_inicio, data_fim,
-            xibo_media_id, xibo_layout_id, xibo_campaign_id, status
+            xibo_media_id, xibo_layout_id, xibo_campaign_id,
+            xibo_daypart_id, hora_inicio, hora_fim, status
        FROM midia_campanhas WHERE id = $1`, [campanhaId]
   );
   return r.rows[0] ?? null;
@@ -54,7 +56,7 @@ async function folderDoAnunciante(contaId: string): Promise<number> {
  * Recebe a arte da campanha, cria o Layout no Xibo e guarda as refs.
  * width/height vêm do(s) local(is); usamos o tamanho do primeiro local da campanha.
  */
-export async function anexarArte(campanhaId: string, arquivo: Buffer | Blob, nomeArquivo: string, mime?: string): Promise<void> {
+export async function anexarArte(campanhaId: string, arquivo: Buffer | Blob, nomeArquivo: string, mime?: string, opts?: { precisaAprovacao?: boolean; enviadaPor?: string }): Promise<void> {
   const camp = await carregar(campanhaId);
   if (!camp) throw new Error("campanha não encontrada");
   const p = db();
@@ -82,14 +84,41 @@ export async function anexarArte(campanhaId: string, arquivo: Buffer | Blob, nom
     duracaoSeg: camp.segundos,
   });
 
+  // Marca versões anteriores como inativas e registra a nova versão
+  await p.query(`UPDATE midia_campanha_artes SET ativa = false WHERE campanha_id = $1`, [campanhaId]);
+  await p.query(
+    `INSERT INTO midia_campanha_artes (campanha_id, arte_nome, arte_tipo, xibo_layout_id, xibo_media_id, ativa, enviada_por)
+     VALUES ($1,$2,$3,$4,$5,true,$6)`,
+    [campanhaId, nomeArquivo, arteTipo, layoutId, mediaId, opts?.enviadaPor ?? null]
+  );
+
+  const novoArteStatus = opts?.precisaAprovacao ? "aguardando_aprovacao" : "aprovada";
   await p.query(
     `UPDATE midia_campanhas
         SET xibo_layout_id = $1, xibo_media_id = $2, arte_nome = $3, arte_tipo = $4,
+            arte_status = $5, arte_rejeicao_motivo = NULL,
             status = CASE WHEN status = 'rascunho' THEN 'aguardando_arte' ELSE status END,
             updated_at = NOW()
-      WHERE id = $5`,
-    [layoutId, mediaId, nomeArquivo, arteTipo, campanhaId]
+      WHERE id = $6`,
+    [layoutId, mediaId, nomeArquivo, arteTipo, novoArteStatus, campanhaId]
   );
+}
+
+/** Reativa uma versão antiga de arte (ela vira a ativa novamente). */
+export async function reativarArte(campanhaId: string, arteId: string): Promise<{ ok: boolean; erro?: string }> {
+  await ensureSchema();
+  const p = db();
+  const arte = await p.query<{ xibo_layout_id: number | null; xibo_media_id: number | null; arte_nome: string | null; arte_tipo: string | null }>(
+    `SELECT xibo_layout_id, xibo_media_id, arte_nome, arte_tipo FROM midia_campanha_artes WHERE id = $1 AND campanha_id = $2`, [arteId, campanhaId]
+  ).then(r => r.rows[0]);
+  if (!arte) return { ok: false, erro: "versão não encontrada" };
+  await p.query(`UPDATE midia_campanha_artes SET ativa = false WHERE campanha_id = $1`, [campanhaId]);
+  await p.query(`UPDATE midia_campanha_artes SET ativa = true WHERE id = $1`, [arteId]);
+  await p.query(
+    `UPDATE midia_campanhas SET xibo_layout_id = $1, xibo_media_id = $2, arte_nome = $3, arte_tipo = $4, arte_status = 'aprovada', updated_at = NOW() WHERE id = $5`,
+    [arte.xibo_layout_id, arte.xibo_media_id, arte.arte_nome, arte.arte_tipo, campanhaId]
+  );
+  return { ok: true };
 }
 
 /** Lança (ou relança) a campanha: cria/atualiza a Ad Campaign no Xibo. */
@@ -98,6 +127,10 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
   if (!camp) return { ok: false, erro: "campanha não encontrada" };
   if (!camp.xibo_layout_id) return { ok: false, erro: "envie a arte antes de lançar" };
   if (!camp.data_inicio || !camp.data_fim) return { ok: false, erro: "defina o período (início/fim)" };
+  // bloqueia lançamento se arte não aprovada (workflow)
+  const arteStatus = await db().query<{ arte_status: string }>(`SELECT arte_status FROM midia_campanhas WHERE id = $1`, [campanhaId]).then(r => r.rows[0]?.arte_status);
+  if (arteStatus === "aguardando_aprovacao") return { ok: false, erro: "arte aguardando aprovação do master" };
+  if (arteStatus === "rejeitada") return { ok: false, erro: "arte foi rejeitada — envie uma nova" };
 
   const p = db();
   // Display groups dos locais — cria na hora os que ainda não têm (ex: local
@@ -127,12 +160,24 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
   const fim    = new Date(camp.data_fim);    fim.setHours(23, 59, 59, 0);
   if (isNaN(+inicio) || isNaN(+fim)) return { ok: false, erro: "período inválido — edite as datas da campanha" };
 
+  // Day-parting opcional — cria/reusa um dayPart no Xibo a partir de hora_inicio/hora_fim
+  let dayPartId = camp.xibo_daypart_id ?? undefined;
+  const hi = (camp.hora_inicio ?? "").slice(0, 5);
+  const hf = (camp.hora_fim ?? "").slice(0, 5);
+  const temJanela = /^\d{2}:\d{2}$/.test(hi) && /^\d{2}:\d{2}$/.test(hf) && hi !== hf;
+  if (temJanela && !dayPartId) {
+    try {
+      dayPartId = await criarDayPart(`Camp ${camp.nome.slice(0, 30)} ${hi}-${hf}`, hi, hf);
+      await p.query(`UPDATE midia_campanhas SET xibo_daypart_id = $1 WHERE id = $2`, [dayPartId, campanhaId]);
+    } catch (e) { console.warn("[lancar] criar dayPart falhou:", (e as Error).message); }
+  }
+
   try {
     let xiboCampaignId = camp.xibo_campaign_id ?? undefined;
     if (xiboCampaignId) {
       await editarAdCampaign(xiboCampaignId, { nome: camp.nome, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups });
     } else {
-      xiboCampaignId = await criarAdCampaign({ nome: camp.nome, layoutId: camp.xibo_layout_id, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups });
+      xiboCampaignId = await criarAdCampaign({ nome: camp.nome, layoutId: camp.xibo_layout_id, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups, dayPartId });
     }
     const jaEstavaNoAr = camp.status === "no_ar";
     await p.query(

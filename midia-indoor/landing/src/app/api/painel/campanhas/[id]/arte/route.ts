@@ -47,8 +47,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (arquivo.size > MAX) return NextResponse.json({ ok: false, error: "arquivo muito grande (máx 200MB)" }, { status: 413 });
     if (!/^(image|video)\//.test(arquivo.type)) return NextResponse.json({ ok: false, error: "só imagem ou vídeo" }, { status: 415 });
 
-    await anexarArte(params.id, arquivo, arquivo.name, arquivo.type);
-    return NextResponse.json({ ok: true });
+    await anexarArte(params.id, arquivo, arquivo.name, arquivo.type, { precisaAprovacao: true, enviadaPor: auth.email });
+    return NextResponse.json({ ok: true, msg: "Arte enviada — aguardando aprovação" });
   } catch (err) {
     console.error("[painel/campanhas arte]", err);
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "erro" }, { status: 500 });

@@ -262,6 +262,59 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS hora_fim TEXT;`);
   await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS xibo_daypart_id INTEGER;`);
 
+  // Status de aprovação da arte na campanha + motivo de rejeição
+  await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS arte_status TEXT NOT NULL DEFAULT 'aprovada';`);
+  await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS arte_rejeicao_motivo TEXT;`);
+  // Histórico de criativos (versionamento de arte)
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_campanha_artes (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      campanha_id     UUID NOT NULL REFERENCES midia_campanhas(id) ON DELETE CASCADE,
+      arte_nome       TEXT,
+      arte_tipo       TEXT,
+      xibo_layout_id  INTEGER,
+      xibo_media_id   INTEGER,
+      ativa           BOOLEAN NOT NULL DEFAULT true,
+      criada_em       TIMESTAMPTZ DEFAULT NOW(),
+      enviada_por     TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_campanha_artes_camp ON midia_campanha_artes(campanha_id);
+  `);
+
+  // Multi-usuário por anunciante (operadores adicionais)
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_conta_usuarios (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      conta_id    UUID NOT NULL REFERENCES midia_contas(id) ON DELETE CASCADE,
+      nome        TEXT NOT NULL,
+      email       TEXT NOT NULL UNIQUE,
+      senha_hash  TEXT NOT NULL,
+      role        TEXT NOT NULL DEFAULT 'operador',  -- owner|operador
+      ativo       BOOLEAN NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_conta_usuarios_conta ON midia_conta_usuarios(conta_id);
+  `);
+
+  // Cupons de desconto
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_cupons (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      codigo        TEXT NOT NULL UNIQUE,
+      tipo          TEXT NOT NULL DEFAULT 'pct',  -- pct|fixo
+      valor         NUMERIC(10,2) NOT NULL,        -- pct: 10 = 10%; fixo: R$ valor
+      validade      TIMESTAMPTZ,
+      max_usos      INTEGER,
+      usos          INTEGER NOT NULL DEFAULT 0,
+      ativo         BOOLEAN NOT NULL DEFAULT true,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_cupons_codigo ON midia_cupons(codigo);
+  `);
+  // Cupom aplicado na campanha (registro do uso)
+  await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS cupom_id UUID REFERENCES midia_cupons(id) ON DELETE SET NULL;`);
+  await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS desconto NUMERIC(10,2) NOT NULL DEFAULT 0;`);
+
   // Audit log
   await p.query(`
     CREATE TABLE IF NOT EXISTS midia_auditoria (

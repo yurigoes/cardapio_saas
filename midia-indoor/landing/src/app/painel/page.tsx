@@ -4,18 +4,20 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import Link from "next/link";
 import {
   Tv, Upload, Loader2, LogOut, Megaphone, BarChart3, RefreshCw, Calendar, MapPin, Clock,
-  CreditCard, LifeBuoy, Plus, Send, X,
+  CreditCard, LifeBuoy, Plus, Send, X, UserCog, Trash2,
 } from "lucide-react";
 import { NotifyHost, notify } from "@/components/Notify";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dataHora = (s: string) => { const d = new Date(s.replace(" ", "T")); return isNaN(+d) ? s : d.toLocaleString("pt-BR"); };
 
-interface Me { conta: { nome: string; empresa: string; email: string } }
+interface Me { conta: { nome: string; empresa: string; email: string; papel?: string; operador?: string | null } }
+interface Operador { id: string; nome: string; email: string; role: string; ativo: boolean; created_at: string; }
 interface Camp {
   id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number;
   data_inicio: string | null; data_fim: string | null; status: string; status_pagamento: string;
   arte_nome: string | null; arte_tipo: string | null; valor: string; locais: number;
+  arte_status?: string; arte_rejeicao_motivo?: string | null;
 }
 interface Exibicao { start: string; display: string; numberPlays: number; duration: number; }
 
@@ -37,7 +39,7 @@ function Painel() {
   const [me, setMe] = useState<Me | null>(null);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState<"campanhas" | "suporte">("campanhas");
+  const [aba, setAba] = useState<"campanhas" | "suporte" | "usuarios">("campanhas");
 
   const [email, setEmail] = useState(""); const [senha, setSenha] = useState("");
   const [logBusy, setLogBusy] = useState(false); const [logErr, setLogErr] = useState("");
@@ -99,14 +101,18 @@ function Painel() {
       </div>
 
       <nav className="mt-6 flex gap-1 border-b border-white/10">
-        {([["campanhas", "Campanhas", Megaphone], ["suporte", "Suporte", LifeBuoy]] as const).map(([id, label, Icon]) => (
-          <button key={id} onClick={() => setAba(id)} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition ${aba === id ? "border-b-2 border-brand text-white" : "text-slate-400 hover:text-white"}`}>
-            <Icon className="h-4 w-4" /> {label}
-          </button>
-        ))}
+        {(() => {
+          const tabs: [typeof aba, string, React.ElementType][] = [["campanhas", "Campanhas", Megaphone], ["suporte", "Suporte", LifeBuoy]];
+          if ((me.conta.papel ?? "owner") === "owner") tabs.push(["usuarios", "Usuários", UserCog]);
+          return tabs.map(([id, label, Icon]) => (
+            <button key={id} onClick={() => setAba(id)} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition ${aba === id ? "border-b-2 border-brand text-white" : "text-slate-400 hover:text-white"}`}>
+              <Icon className="h-4 w-4" /> {label}
+            </button>
+          ));
+        })()}
       </nav>
 
-      {aba === "campanhas" ? (
+      {aba === "campanhas" && (
         <div className="mt-6 space-y-4">
           {camps.map(c => <CampanhaCard key={c.id} token={token} camp={c} onChange={() => carregar(token)} />)}
           {!camps.length && (
@@ -116,9 +122,9 @@ function Painel() {
             </div>
           )}
         </div>
-      ) : (
-        <Suporte token={token} />
       )}
+      {aba === "suporte"  && <Suporte token={token} />}
+      {aba === "usuarios" && <Usuarios token={token} />}
     </div>
   );
 }
@@ -167,6 +173,15 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
       </div>
 
       {camp.arte_nome && <ArtePreview token={token} campId={camp.id} tipo={camp.arte_tipo} nome={camp.arte_nome} />}
+
+      {camp.arte_status === "aguardando_aprovacao" && (
+        <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">⏳ Arte enviada — aguardando aprovação da Three Digital.</div>
+      )}
+      {camp.arte_status === "rejeitada" && (
+        <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          ✖ Arte rejeitada{camp.arte_rejeicao_motivo ? `: ${camp.arte_rejeicao_motivo}` : ""}. Envie uma nova versão.
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <Stat icon={Clock}    label="Inserções/dia" v={`${camp.insercoes_dia}`} />
@@ -356,5 +371,95 @@ export default function PainelPage() {
         <Painel />
       </Suspense>
     </main>
+  );
+}
+
+// ─── Multi-usuário ──────────────────────────────────────────────────────────
+function Usuarios({ token }: { token: string }) {
+  const [lista, setLista] = useState<Operador[]>([]);
+  const [novo, setNovo] = useState(false);
+  const load = useCallback(async () => {
+    const r = await api(token, "/api/painel/usuarios"); const d = await r.json();
+    if (d.ok) setLista(d.usuarios);
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  async function toggle(u: Operador) {
+    await api(token, "/api/painel/usuarios", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: u.id, ativo: !u.ativo }),
+    });
+    load();
+  }
+  async function remover(u: Operador) {
+    if (!confirm(`Remover ${u.nome}? Essa ação não pode ser desfeita.`)) return;
+    await api(token, "/api/painel/usuarios", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: u.id, remover: true }),
+    });
+    load();
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm text-slate-400">Convide colaboradores da sua empresa para enviar artes e acompanhar campanhas.</p>
+        <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo usuário</button>
+      </div>
+      <div className="overflow-x-auto rounded-2xl border border-white/10">
+        <table className="w-full text-sm">
+          <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Nome</th><th className="p-3">E-mail</th><th className="p-3">Papel</th><th className="p-3">Ativo</th><th className="p-3"></th></tr></thead>
+          <tbody>
+            {lista.map(u => (
+              <tr key={u.id} className="border-t border-white/5">
+                <td className="p-3">{u.nome}</td>
+                <td className="p-3 text-xs">{u.email}</td>
+                <td className="p-3 text-xs capitalize">{u.role}</td>
+                <td className="p-3"><button onClick={() => toggle(u)} className={`rounded px-2 py-1 text-xs ${u.ativo ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-slate-400"}`}>{u.ativo ? "Sim" : "Não"}</button></td>
+                <td className="p-3 text-right"><button onClick={() => remover(u)} className="rounded border border-red-500/30 p-1.5 text-red-300 hover:bg-red-500/10"><Trash2 className="h-3.5 w-3.5" /></button></td>
+              </tr>
+            ))}
+            {!lista.length && <tr><td colSpan={5} className="p-6 text-center text-slate-500">Nenhum usuário adicional.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {novo && <NovoUsuarioModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
+    </div>
+  );
+}
+
+function NovoUsuarioModal({ token, onClose, onSaved }: { token: string; onClose: () => void; onSaved: () => void }) {
+  const [nome, setNome] = useState(""); const [email, setEmail] = useState(""); const [senha, setSenha] = useState("");
+  const [role, setRole] = useState("operador");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  async function salvar() {
+    setBusy(true); setErr("");
+    const r = await api(token, "/api/painel/usuarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome, email, senha, role }),
+    });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro"); return; }
+    onSaved();
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#12121c] p-6" onClick={e => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between"><h3 className="font-bold">Novo usuário</h3><button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button></div>
+        <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome" className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none" />
+        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="E-mail" className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none" />
+        <input type="password" value={senha} onChange={e => setSenha(e.target.value)} placeholder="Senha (min 6)" className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none" />
+        <label className="mb-1 block text-xs text-slate-400">Papel</label>
+        <select value={role} onChange={e => setRole(e.target.value)} className="mb-4 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+          <option value="operador">Operador</option>
+          <option value="gerente">Gerente</option>
+        </select>
+        {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+        <button onClick={salvar} disabled={busy || !nome || !email || senha.length < 6} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar</button>
+      </div>
+    </div>
   );
 }

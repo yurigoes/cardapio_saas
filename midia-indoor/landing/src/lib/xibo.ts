@@ -249,6 +249,28 @@ export async function baixarScreenshot(displayId: number): Promise<{ buffer: Arr
   return null;
 }
 
+/** Cria um DayPart (janela de horário) no Xibo. fromTime/toTime no formato HH:MM. */
+export async function criarDayPart(nome: string, fromTime: string, toTime: string): Promise<number> {
+  const body = new URLSearchParams();
+  body.set("name", nome);
+  body.set("isCustom", "1");
+  body.set("isAlways", "0");
+  body.set("startTime", fromTime.length === 5 ? `${fromTime}:00` : fromTime);
+  body.set("endTime",   toTime.length === 5   ? `${toTime}:00`   : toTime);
+  const r = await xibo<{ dayPartId?: number; data?: { dayPartId: number } }>("/api/daypart", { method: "POST", body });
+  const id = r.dayPartId ?? r.data?.dayPartId;
+  if (!id) throw new Error("Xibo: não criou dayPart");
+  return id;
+}
+
+/** Anexa layout a uma ad campaign com dayPartId opcional (day-parting). */
+export async function anexarLayoutComDayPart(campaignId: number, layoutId: number, dayPartId?: number): Promise<void> {
+  const body = new URLSearchParams();
+  body.set("layoutId", String(layoutId));
+  if (dayPartId) body.set("dayPartId", String(dayPartId));
+  await xibo(`/api/campaign/layout/assign/${campaignId}`, { method: "POST", body });
+}
+
 /** Wake-on-LAN — liga a TV/box (se suportar). */
 export async function wolDisplay(displayId: number): Promise<void> {
   await xibo(`/api/display/wol/${displayId}`, { method: "POST" });
@@ -478,6 +500,7 @@ export async function criarAdCampaign(opts: {
   dataInicio: Date;
   dataFim: Date;
   displayGroupIds: number[];
+  dayPartId?: number;
 }): Promise<number> {
   // 1) Cria a campanha (ad campaign NÃO aceita layoutIds na criação)
   const body = new URLSearchParams();
@@ -489,9 +512,10 @@ export async function criarAdCampaign(opts: {
   const campaignId = created.campaignId ?? created.data?.campaignId;
   if (!campaignId) throw new Error("Xibo: não criou ad campaign");
 
-  // 2) Anexa o layout (criativo)
+  // 2) Anexa o layout (criativo) com dayPart opcional
   const assign = new URLSearchParams();
   assign.set("layoutId", String(opts.layoutId));
+  if (opts.dayPartId) assign.set("dayPartId", String(opts.dayPartId));
   await xibo(`/api/campaign/layout/assign/${campaignId}`, { method: "POST", body: assign });
 
   // 3) Define datas + locais

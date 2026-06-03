@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     const rows = await db().query(
       `SELECT c.id, c.nome, c.tipo, c.dias, c.insercoes_dia, c.segundos, c.data_inicio, c.data_fim,
               c.valor, c.status, c.status_pagamento, c.xibo_campaign_id, c.arte_nome, c.created_at,
+              c.arte_status, c.arte_rejeicao_motivo, c.hora_inicio, c.hora_fim, c.desconto,
               ct.empresa, ct.nome AS anunciante,
               (SELECT COUNT(*) FROM midia_campanha_locais cl WHERE cl.campanha_id = c.id) AS locais
          FROM midia_campanhas c JOIN midia_contas ct ON ct.id = c.conta_id
@@ -47,6 +48,7 @@ const novo = z.object({
   hora_fim:      z.string().regex(/^\d{2}:\d{2}$/, "HH:MM").optional(),
   valor:         z.coerce.number().min(0).default(0),
   locais:        z.array(z.string().uuid()).min(1, "escolha pelo menos um local"),
+  cupom_codigo:  z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -69,10 +71,28 @@ export async function POST(req: NextRequest) {
     }
     if (!dias || !ins) return NextResponse.json({ ok: false, error: "informe dias e inserções/dia (ou um pacote)" }, { status: 400 });
 
+    // Aplica cupom se informado
+    let cupomId: string | null = null;
+    let desconto = 0; let valorFinal = b.valor;
+    if (b.cupom_codigo) {
+      const cupom = await p.query<{ id: string; tipo: string; valor: string; validade: string | null; max_usos: number | null; usos: number; ativo: boolean }>(
+        `SELECT id, tipo, valor, validade, max_usos, usos, ativo FROM midia_cupons WHERE codigo = $1`, [b.cupom_codigo.toUpperCase()]
+      ).then(r => r.rows[0]);
+      if (!cupom || !cupom.ativo) return NextResponse.json({ ok: false, error: "cupom inválido" }, { status: 400 });
+      if (cupom.validade && new Date(cupom.validade) < new Date()) return NextResponse.json({ ok: false, error: "cupom expirado" }, { status: 400 });
+      if (cupom.max_usos != null && cupom.usos >= cupom.max_usos) return NextResponse.json({ ok: false, error: "cupom esgotado" }, { status: 400 });
+      const v = Number(cupom.valor);
+      desconto = cupom.tipo === "pct" ? Math.round((b.valor * v / 100) * 100) / 100 : v;
+      if (desconto > b.valor) desconto = b.valor;
+      valorFinal = Math.max(0, b.valor - desconto);
+      cupomId = cupom.id;
+      await p.query(`UPDATE midia_cupons SET usos = usos + 1 WHERE id = $1`, [cupom.id]);
+    }
+
     const campId = await p.query<{ id: string }>(
-      `INSERT INTO midia_campanhas (conta_id, pacote_id, nome, tipo, dias, insercoes_dia, segundos, data_inicio, data_fim, hora_inicio, hora_fim, valor, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'rascunho') RETURNING id`,
-      [b.conta_id, b.pacote_id ?? null, b.nome, tipo ?? "video", dias, ins, seg ?? 10, b.data_inicio ?? null, b.data_fim ?? null, b.hora_inicio ?? null, b.hora_fim ?? null, b.valor]
+      `INSERT INTO midia_campanhas (conta_id, pacote_id, nome, tipo, dias, insercoes_dia, segundos, data_inicio, data_fim, hora_inicio, hora_fim, valor, cupom_id, desconto, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'rascunho') RETURNING id`,
+      [b.conta_id, b.pacote_id ?? null, b.nome, tipo ?? "video", dias, ins, seg ?? 10, b.data_inicio ?? null, b.data_fim ?? null, b.hora_inicio ?? null, b.hora_fim ?? null, valorFinal, cupomId, desconto]
     ).then(r => r.rows[0].id);
 
     for (const localId of b.locais) {

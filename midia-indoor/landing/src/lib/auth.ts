@@ -22,10 +22,12 @@ export interface TokenPayload {
   sub:     string;   // conta_id
   email:   string;
   empresa: string;
+  papel?:  string;   // owner | operador | gerente (multi-usuário)
+  nome?:   string;
 }
 
 export async function criarToken(p: TokenPayload): Promise<string> {
-  return new SignJWT({ email: p.email, empresa: p.empresa })
+  return new SignJWT({ email: p.email, empresa: p.empresa, papel: p.papel ?? "owner", nome: p.nome ?? "" })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(p.sub)
     .setIssuedAt()
@@ -40,6 +42,8 @@ export async function verificarToken(token: string): Promise<TokenPayload | null
       sub:     String(payload.sub),
       email:   String(payload.email ?? ""),
       empresa: String(payload.empresa ?? ""),
+      papel:   payload.papel ? String(payload.papel) : "owner",
+      nome:    payload.nome  ? String(payload.nome)  : "",
     };
   } catch {
     return null;

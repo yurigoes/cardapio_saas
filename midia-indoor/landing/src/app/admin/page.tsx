@@ -5,6 +5,7 @@ import {
   Loader2, LogOut, LayoutDashboard, Users, Package, FileText, UserCog,
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
   LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette, Server, Camera, Power, Undo2, ScrollText, Map,
+  Ticket, CalendarDays, Check, ChevronLeft, ChevronRight, History,
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
@@ -18,7 +19,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -57,6 +58,8 @@ export default function AdminPage() {
     { id: "usuarios",    label: "Usuários",    icon: UserCog, master: true },
     { id: "marca",       label: "Marca",       icon: Palette, master: true },
     { id: "mapa",        label: "Mapa",        icon: Map },
+    { id: "calendario",  label: "Calendário",  icon: CalendarDays },
+    { id: "cupons",      label: "Cupons",      icon: Ticket, master: true },
     { id: "auditoria",   label: "Auditoria",   icon: ScrollText, master: true },
   ];
 
@@ -96,6 +99,8 @@ export default function AdminPage() {
         {aba === "usuarios"    && <Usuarios token={token} />}
         {aba === "marca"       && <Marca token={token} />}
         {aba === "mapa"        && <MapaLocais token={token} />}
+        {aba === "calendario"  && <Calendario token={token} />}
+        {aba === "cupons"      && <Cupons token={token} />}
         {aba === "auditoria"   && <Auditoria token={token} />}
         {aba === "noxibo"      && <NoXibo token={token} />}
       </div>
@@ -201,7 +206,9 @@ function Badge({ s }: { s: string }) {
 interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; }
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
-interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; }
+interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; arte_status?: string; arte_rejeicao_motivo?: string | null; hora_inicio?: string | null; hora_fim?: string | null; desconto?: string | null; }
+interface ArteVersao { id: string; arte_nome: string | null; arte_tipo: string | null; xibo_layout_id: number | null; ativa: boolean; criada_em: string; enviada_por: string | null; }
+interface Cupom { id: string; codigo: string; tipo: string; valor: string; validade: string | null; max_usos: number | null; usos: number; ativo: boolean; created_at: string; }
 
 const STATUS_CAMP: Record<string, string> = { rascunho: "text-slate-400", aguardando_arte: "text-amber-300", no_ar: "text-emerald-300", pausada: "text-amber-300", encerrada: "text-slate-500" };
 const TIPO_LABEL: Record<string, string> = { video: "Vídeo", banner_estatico: "Banner estático", banner_eletronico: "Banner eletrônico", peca: "Peça publicitária" };
@@ -265,6 +272,8 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
   const [contaId, setContaId] = useState(""); const [pacoteId, setPacoteId] = useState("");
   const [nome, setNome] = useState(""); const [valor, setValor] = useState("");
   const [inicio, setInicio] = useState(""); const [fim, setFim] = useState("");
+  const [hi, setHi] = useState(""); const [hf, setHf] = useState("");
+  const [cupom, setCupom] = useState("");
   const [selLocais, setSelLocais] = useState<string[]>([]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
 
@@ -287,7 +296,13 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
 
   async function salvar() {
     setBusy(true); setErr("");
-    const body = { conta_id: contaId, nome, pacote_id: pacoteId || undefined, data_inicio: inicio || undefined, data_fim: fim || undefined, valor: valor || 0, locais: selLocais };
+    const body = {
+      conta_id: contaId, nome, pacote_id: pacoteId || undefined,
+      data_inicio: inicio || undefined, data_fim: fim || undefined,
+      hora_inicio: hi || undefined, hora_fim: hf || undefined,
+      cupom_codigo: cupom.trim() || undefined,
+      valor: valor || 0, locais: selLocais,
+    };
     const r = await aapi(token, "/api/admin/campanhas", { method: "POST", body: JSON.stringify(body) });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
@@ -311,7 +326,14 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
         <Field label="Início" value={inicio} onChange={setInicio} type="date" />
         <Field label="Fim" value={fim} onChange={setFim} type="date" />
       </div>
-      <Field label="Valor (R$)" value={valor} onChange={setValor} type="number" />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Horário início (opcional, HH:MM)" value={hi} onChange={setHi} placeholder="ex: 08:00" />
+        <Field label="Horário fim (opcional, HH:MM)" value={hf} onChange={setHf} placeholder="ex: 22:00" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Valor (R$)" value={valor} onChange={setValor} type="number" />
+        <Field label="Cupom (opcional)" value={cupom} onChange={v => setCupom(v.toUpperCase())} placeholder="ex: PROMO10" />
+      </div>
       <label className="mb-1 block text-sm text-slate-300">Locais ({selLocais.length} selecionados)</label>
       <div className="mb-3 max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-2">
         {locais.map(l => (
@@ -397,6 +419,51 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
             </div>
           )}
 
+          {/* Aprovação de arte (workflow) */}
+          {c.arte_status === "aguardando_aprovacao" && isMaster && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+              <p className="font-medium text-amber-300">Arte enviada — aguardando sua aprovação</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  onClick={async () => {
+                    setBusy("aprovar");
+                    const r = await aapi(token, `/api/admin/campanhas/${camp.id}/aprovar`, { method: "POST", body: JSON.stringify({ acao: "aprovar" }) });
+                    const d = await r.json(); setBusy("");
+                    notify(d.ok ? "Arte aprovada" : (d.error || "Erro"), d.ok ? "success" : "error");
+                    load(); onChange();
+                  }}
+                  disabled={!!busy}
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50">
+                  <Check className="h-4 w-4" /> Aprovar
+                </button>
+                <button
+                  onClick={async () => {
+                    const motivo = await promptModal("Motivo da rejeição", "Diga o que precisa ajustar");
+                    if (!motivo) return;
+                    setBusy("rejeitar");
+                    const r = await aapi(token, `/api/admin/campanhas/${camp.id}/aprovar`, { method: "POST", body: JSON.stringify({ acao: "rejeitar", motivo }) });
+                    const d = await r.json(); setBusy("");
+                    notify(d.ok ? "Arte rejeitada" : (d.error || "Erro"), d.ok ? "success" : "error");
+                    load(); onChange();
+                  }}
+                  disabled={!!busy}
+                  className="flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50">
+                  <X className="h-4 w-4" /> Rejeitar
+                </button>
+              </div>
+            </div>
+          )}
+          {c.arte_status === "rejeitada" && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 text-sm">
+              <p className="font-medium text-red-300">Arte rejeitada</p>
+              {c.arte_rejeicao_motivo && <p className="mt-1 text-slate-300">Motivo: {c.arte_rejeicao_motivo}</p>}
+              <p className="mt-1 text-slate-400">Anunciante precisa enviar uma nova versão.</p>
+            </div>
+          )}
+
+          {/* Histórico de criativos */}
+          {isMaster && <HistoricoArtes token={token} campId={camp.id} onChange={() => { load(); onChange(); }} />}
+
           {msg && <p className="text-sm text-red-400">{msg}</p>}
 
           {isMaster && (
@@ -434,14 +501,17 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
 function Info({ label, v }: { label: string; v: string }) {
   return <div><p className="text-xs text-slate-500">{label}</p><p className="font-medium capitalize">{v}</p></div>;
 }
-function EditCampanha({ token, campId, det, pacotes, onSaved }: { token: string; campId: string; det: { data_inicio: string | null; data_fim: string | null; valor: string; insercoes_dia: number; segundos: number; dias: number; pacote_id?: string | null }; pacotes: Pacote[]; onSaved: () => void }) {
+function EditCampanha({ token, campId, det, pacotes, onSaved }: { token: string; campId: string; det: { data_inicio: string | null; data_fim: string | null; valor: string; insercoes_dia: number; segundos: number; dias: number; pacote_id?: string | null; hora_inicio?: string | null; hora_fim?: string | null }; pacotes: Pacote[]; onSaved: () => void }) {
   const fmt = (d: string | null) => (d ? String(d).slice(0, 10) : "");
+  const fmtH = (s: string | null | undefined) => (s ? String(s).slice(0, 5) : "");
   const [pacoteId, setPacoteId] = useState(det.pacote_id ?? "");
   const [ins, setIns] = useState(String(det.insercoes_dia));
   const [dias, setDias] = useState(String(det.dias));
   const [seg, setSeg] = useState(String(det.segundos));
   const [ini, setIni] = useState(fmt(det.data_inicio));
   const [fim, setFim] = useState(fmt(det.data_fim));
+  const [hi, setHi] = useState(fmtH(det.hora_inicio));
+  const [hf, setHf] = useState(fmtH(det.hora_fim));
   const [valor, setValor] = useState(String(Number(det.valor)));
   const [busy, setBusy] = useState(false);
 
@@ -452,7 +522,7 @@ function EditCampanha({ token, campId, det, pacotes, onSaved }: { token: string;
   }
   async function salvar() {
     setBusy(true);
-    const body = { pacote_id: pacoteId || undefined, insercoes_dia: ins, dias, segundos: seg, data_inicio: ini || undefined, data_fim: fim || undefined, valor };
+    const body = { pacote_id: pacoteId || undefined, insercoes_dia: ins, dias, segundos: seg, data_inicio: ini || undefined, data_fim: fim || undefined, hora_inicio: hi || undefined, hora_fim: hf || undefined, valor };
     const r = await aapi(token, `/api/admin/campanhas/${campId}`, { method: "PATCH", body: JSON.stringify(body) });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { notify(d.error || "Erro", "error"); return; }
@@ -477,6 +547,10 @@ function EditCampanha({ token, campId, det, pacotes, onSaved }: { token: string;
         <Field label="Início" value={ini} onChange={setIni} type="date" />
         <Field label="Fim" value={fim} onChange={setFim} type="date" />
         <Field label="Valor (R$)" value={valor} onChange={setValor} type="number" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Horário início (HH:MM, opcional)" value={hi} onChange={setHi} placeholder="ex: 08:00" />
+        <Field label="Horário fim (HH:MM, opcional)" value={hf} onChange={setHf} placeholder="ex: 22:00" />
       </div>
       <button onClick={salvar} disabled={busy} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark disabled:opacity-50">
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar alterações
@@ -1341,6 +1415,190 @@ function Auditoria({ token }: { token: string }) {
             {!evs.length && <tr><td colSpan={5} className="p-6 text-center text-slate-500">Sem eventos.</td></tr>}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Histórico de criativos (dentro do CampanhaDetalhe) ─────────────────────
+function HistoricoArtes({ token, campId, onChange }: { token: string; campId: string; onChange: () => void }) {
+  const [versoes, setVersoes] = useState<ArteVersao[]>([]);
+  const [busy, setBusy] = useState("");
+  const load = useCallback(async () => {
+    const r = await aapi(token, `/api/admin/campanhas/${campId}/artes`); const d = await r.json();
+    if (d.ok) setVersoes(d.artes);
+  }, [token, campId]);
+  useEffect(() => { load(); }, [load]);
+
+  async function reativar(arteId: string) {
+    if (!await confirmModal("Reativar esta versão? A versão atual passa a ser inativa.")) return;
+    setBusy(arteId);
+    const r = await aapi(token, `/api/admin/campanhas/${campId}/artes`, { method: "POST", body: JSON.stringify({ arte_id: arteId }) });
+    const d = await r.json(); setBusy("");
+    notify(d.ok ? "Versão reativada — Reaplicar p/ ir ao ar" : (d.error || "Erro"), d.ok ? "success" : "error");
+    if (d.ok) { load(); onChange(); }
+  }
+  if (!versoes.length) return null;
+  return (
+    <div className="rounded-xl border border-white/10 p-3">
+      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300"><History className="h-4 w-4" /> Versões da arte ({versoes.length})</p>
+      <ul className="space-y-1.5 text-xs">
+        {versoes.map(v => (
+          <li key={v.id} className="flex items-center justify-between rounded bg-white/5 px-2 py-1.5">
+            <div>
+              <span className={v.ativa ? "font-semibold text-emerald-300" : "text-slate-300"}>{v.arte_nome ?? "—"}</span>
+              <span className="ml-2 text-slate-500">{new Date(v.criada_em).toLocaleString("pt-BR")}</span>
+              {v.enviada_por && <span className="ml-2 text-slate-500">· {v.enviada_por}</span>}
+              {v.ativa && <span className="ml-2 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-300">ATIVA</span>}
+            </div>
+            {!v.ativa && (
+              <button onClick={() => reativar(v.id)} disabled={busy === v.id} className="rounded border border-white/15 px-2 py-1 hover:bg-white/5 disabled:opacity-50">
+                {busy === v.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Reativar"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ─── Cupons ─────────────────────────────────────────────────────────────────
+function Cupons({ token }: { token: string }) {
+  const [lista, setLista] = useState<Cupom[]>([]);
+  const [novo, setNovo] = useState(false);
+  const load = useCallback(async () => {
+    const r = await aapi(token, "/api/admin/cupons"); const d = await r.json();
+    if (d.ok) setLista(d.cupons);
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  async function toggleAtivo(c: Cupom) {
+    await aapi(token, "/api/admin/cupons", { method: "PATCH", body: JSON.stringify({ id: c.id, ativo: !c.ativo }) });
+    load();
+  }
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Cupons de desconto</h2>
+        <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo cupom</button>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-white/10">
+        <table className="w-full text-sm">
+          <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Código</th><th className="p-3">Tipo</th><th className="p-3">Valor</th><th className="p-3">Validade</th><th className="p-3">Usos</th><th className="p-3">Ativo</th></tr></thead>
+          <tbody>
+            {lista.map(c => (
+              <tr key={c.id} className="border-t border-white/5">
+                <td className="p-3 font-mono">{c.codigo}</td>
+                <td className="p-3">{c.tipo === "pct" ? "Percentual" : "Fixo"}</td>
+                <td className="p-3">{c.tipo === "pct" ? `${Number(c.valor)}%` : brl(Number(c.valor))}</td>
+                <td className="p-3 text-xs">{c.validade ? new Date(c.validade).toLocaleDateString("pt-BR") : "—"}</td>
+                <td className="p-3 text-xs">{c.usos}{c.max_usos != null ? ` / ${c.max_usos}` : ""}</td>
+                <td className="p-3"><button onClick={() => toggleAtivo(c)} className={`rounded px-2 py-1 text-xs ${c.ativo ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-slate-400"}`}>{c.ativo ? "Sim" : "Não"}</button></td>
+              </tr>
+            ))}
+            {!lista.length && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Nenhum cupom.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {novo && <NovoCupomModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
+    </div>
+  );
+}
+function NovoCupomModal({ token, onClose, onSaved }: { token: string; onClose: () => void; onSaved: () => void }) {
+  const [codigo, setCodigo] = useState(""); const [tipo, setTipo] = useState("pct");
+  const [valor, setValor] = useState(""); const [validade, setValidade] = useState("");
+  const [maxUsos, setMaxUsos] = useState("");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  async function salvar() {
+    setBusy(true); setErr("");
+    const body = { codigo: codigo.trim().toUpperCase(), tipo, valor: Number(valor), validade: validade || null, max_usos: maxUsos ? Number(maxUsos) : null };
+    const r = await aapi(token, "/api/admin/cupons", { method: "POST", body: JSON.stringify(body) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro"); return; }
+    onSaved();
+  }
+  return (
+    <Modal onClose={onClose} title="Novo cupom">
+      <Field label="Código" value={codigo} onChange={v => setCodigo(v.toUpperCase())} placeholder="ex: PROMO10" />
+      <label className="mb-1 block text-sm text-slate-300">Tipo</label>
+      <select value={tipo} onChange={e => setTipo(e.target.value)} className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+        <option value="pct">Percentual (%)</option>
+        <option value="fixo">Valor fixo (R$)</option>
+      </select>
+      <Field label={tipo === "pct" ? "Desconto (%)" : "Desconto (R$)"} value={valor} onChange={setValor} type="number" />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Validade (opcional)" value={validade} onChange={setValidade} type="date" />
+        <Field label="Máx. usos (opcional)" value={maxUsos} onChange={setMaxUsos} type="number" />
+      </div>
+      {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+      <button onClick={salvar} disabled={busy || !codigo || !valor} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar cupom</button>
+    </Modal>
+  );
+}
+
+// ─── Calendário de campanhas ────────────────────────────────────────────────
+function Calendario({ token }: { token: string }) {
+  const [ano, setAno] = useState(new Date().getFullYear());
+  const [mes, setMes] = useState(new Date().getMonth()); // 0-11
+  const [camps, setCamps] = useState<Camp[]>([]);
+  const load = useCallback(async () => {
+    const r = await aapi(token, "/api/admin/campanhas"); const d = await r.json();
+    if (d.ok) setCamps(d.campanhas);
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  function navega(delta: number) {
+    let m = mes + delta, a = ano;
+    if (m < 0) { m = 11; a--; }
+    if (m > 11) { m = 0; a++; }
+    setMes(m); setAno(a);
+  }
+
+  const primeiroDia = new Date(ano, mes, 1);
+  const ultimoDia   = new Date(ano, mes + 1, 0);
+  const inicioGrade = new Date(primeiroDia); inicioGrade.setDate(1 - primeiroDia.getDay());
+  const dias: Date[] = [];
+  for (let i = 0; i < 42; i++) { const d = new Date(inicioGrade); d.setDate(inicioGrade.getDate() + i); dias.push(d); }
+
+  function campsNoDia(d: Date): Camp[] {
+    const t = d.getTime();
+    return camps.filter(c => {
+      if (!c.data_inicio || !c.data_fim) return false;
+      const a = new Date(c.data_inicio).getTime();
+      const b = new Date(c.data_fim).getTime();
+      return t >= a && t <= b;
+    });
+  }
+  const nomesMes = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Calendário</h2>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navega(-1)} className="rounded-lg border border-white/15 p-2 hover:bg-white/5"><ChevronLeft className="h-4 w-4" /></button>
+          <span className="min-w-[180px] text-center font-medium">{nomesMes[mes]} {ano}</span>
+          <button onClick={() => navega(1)} className="rounded-lg border border-white/15 p-2 hover:bg-white/5"><ChevronRight className="h-4 w-4" /></button>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-xs">
+        {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map(d => <div key={d} className="p-2 text-center font-medium text-slate-400">{d}</div>)}
+        {dias.map((d, i) => {
+          const noMes = d.getMonth() === mes;
+          const lista = campsNoDia(d);
+          const ehDeFora = d < primeiroDia || d > ultimoDia;
+          return (
+            <div key={i} className={`min-h-[80px] rounded border p-1 ${noMes ? "border-white/10 bg-white/5" : "border-white/5 bg-white/0 opacity-40"} ${ehDeFora ? "" : ""}`}>
+              <div className="text-slate-500">{d.getDate()}</div>
+              <div className="mt-1 space-y-0.5">
+                {lista.slice(0, 3).map(c => (
+                  <div key={c.id} className="truncate rounded bg-brand/30 px-1 text-[10px]" title={`${c.empresa} — ${c.nome}`}>{c.nome}</div>
+                ))}
+                {lista.length > 3 && <div className="text-[10px] text-slate-500">+{lista.length - 3}</div>}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

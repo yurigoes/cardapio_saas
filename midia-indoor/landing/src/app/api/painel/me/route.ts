@@ -38,6 +38,8 @@ export async function GET(req: NextRequest) {
       conta: {
         nome: conta.nome, empresa: conta.empresa, email: conta.email, status: conta.status,
         provisionado: Boolean(conta.xibo_folder_id && conta.xibo_display_group_id),
+        papel: auth.papel ?? "owner",
+        operador: auth.nome ?? null,
       },
       assinatura: assin ? {
         plano: assin.plano,
