@@ -577,14 +577,18 @@ export async function kickStartLayoutAteProximaHora(
   const proxHora = new Date(agora); proxHora.setMinutes(0, 0, 0); proxHora.setHours(proxHora.getHours() + 1);
   if (proxHora.getTime() - agora.getTime() < 60_000) return undefined; // já está na virada da hora
   const body = new URLSearchParams();
-  body.set("eventTypeId", "4");                // 4 = INTERRUPT (mesmo da ad campaign)
+  // Layout normal (1) — toca 100% durante a janela. INTERRUPT (4) divide com splash via SoV
+  // e na prática alguns players não trocam, ficando só no splash.
+  body.set("eventTypeId", "1");
   body.set("campaignId", String(layoutCampaignId));
   body.set("displayOrder", "1");
   body.set("isPriority", "0");
   body.set("dayPartId", "0");                  // sem day-part
   body.set("fromDt", fmtDt(agora));
   body.set("toDt", fmtDt(proxHora));
-  body.set("shareOfVoice", String(Math.min(playsPerHour * 10, 3600)));
+  // SoV/maxPlays só são lidos por INTERRUPT events; em Layout normal são ignorados.
+  // Mantemos por compat. caso o tipo seja trocado depois.
+  body.set("shareOfVoice", "3600");
   body.set("maxPlaysPerHour", String(playsPerHour));
   for (const dg of displayGroupIds) body.append("displayGroupIds[]", String(dg));
   const r = await xibo<{ eventId?: number; data?: { eventId: number } }>(`/api/schedule`, { method: "POST", body });
