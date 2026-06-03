@@ -297,6 +297,9 @@ export async function criarDayPart(nome: string, fromTime: string, toTime: strin
 export async function anexarLayoutComDayPart(campaignId: number, layoutId: number, dayPartId?: number): Promise<void> {
   const body = new URLSearchParams();
   body.set("layoutId", String(layoutId));
+  body.set("displayOrder", "1");
+  // Sem daysOfWeek o CampaignSchedulerTask do Xibo pula a campanha (explode(',', NULL) → array vazio).
+  for (const d of [1, 2, 3, 4, 5, 6, 7]) body.append("daysOfWeek[]", String(d));
   if (dayPartId) body.set("dayPartId", String(dayPartId));
   await xibo(`/api/campaign/layout/assign/${campaignId}`, { method: "POST", body });
 }
@@ -668,6 +671,9 @@ export async function criarAdCampaign(opts: {
   // 2) Anexa o layout (criativo) com dayPart opcional
   const assign = new URLSearchParams();
   assign.set("layoutId", String(opts.layoutId));
+  assign.set("displayOrder", "1");
+  // Sem daysOfWeek o CampaignSchedulerTask pula (explode(',', NULL) vira array vazio)
+  for (const d of [1, 2, 3, 4, 5, 6, 7]) assign.append("daysOfWeek[]", String(d));
   if (opts.dayPartId) assign.set("dayPartId", String(opts.dayPartId));
   await xibo(`/api/campaign/layout/assign/${campaignId}`, { method: "POST", body: assign });
 
@@ -716,9 +722,11 @@ export async function reassignLayoutNaAdCampaign(campaignId: number, novoLayoutI
     } catch (e) { console.warn(`[reassign] unassign ${lid} falhou:`, (e as Error).message); }
   }
 
-  // 3) Anexa o novo
+  // 3) Anexa o novo (com daysOfWeek senão CampaignSchedulerTask pula)
   const body = new URLSearchParams();
   body.set("layoutId", String(novoLayoutId));
+  body.set("displayOrder", "1");
+  for (const d of [1, 2, 3, 4, 5, 6, 7]) body.append("daysOfWeek[]", String(d));
   if (dayPartId) body.set("dayPartId", String(dayPartId));
   await xibo(`/api/campaign/layout/assign/${campaignId}`, { method: "POST", body });
 }
