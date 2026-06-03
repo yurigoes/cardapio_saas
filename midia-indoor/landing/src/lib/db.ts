@@ -335,6 +335,115 @@ export async function ensureSchema(): Promise<void> {
   // Orientação física das telas do local (retrato/paisagem) — usada pra escolher o Display Profile do Xibo
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS orientacao TEXT NOT NULL DEFAULT 'retrato';`);
 
+  // ─── Lote 4: NF + cobrança recorrente, afiliados, backups ────────────────
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_notas_fiscais (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      conta_id        UUID NOT NULL REFERENCES midia_contas(id) ON DELETE CASCADE,
+      campanha_id     UUID REFERENCES midia_campanhas(id) ON DELETE SET NULL,
+      numero          TEXT,
+      serie           TEXT,
+      valor           NUMERIC(10,2) NOT NULL,
+      data_emissao    DATE NOT NULL,
+      pdf_url         TEXT,
+      xml_url         TEXT,
+      status          TEXT NOT NULL DEFAULT 'pendente',  -- pendente|emitida|cancelada
+      observacao      TEXT,
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_nf_conta ON midia_notas_fiscais(conta_id);
+    CREATE INDEX IF NOT EXISTS idx_midia_nf_campanha ON midia_notas_fiscais(campanha_id);
+  `);
+
+  // Cobrança recorrente (assinatura DOOH "sempre no ar": cobra X / mês enquanto ativa)
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_cobrancas_recorrentes (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      conta_id        UUID NOT NULL REFERENCES midia_contas(id) ON DELETE CASCADE,
+      nome            TEXT NOT NULL,
+      valor_mensal    NUMERIC(10,2) NOT NULL,
+      dia_vencimento  INTEGER NOT NULL DEFAULT 10,    -- 1..28
+      ativo           BOOLEAN NOT NULL DEFAULT true,
+      mp_preapproval_id TEXT,                          -- MP Subscription id (opcional)
+      proximo_venc    DATE,
+      ultimo_cobrado  DATE,
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_cobrancas_conta ON midia_cobrancas_recorrentes(conta_id);
+  `);
+
+  // Fatura mensal gerada pelo cron de cobrança
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_faturas (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      conta_id        UUID NOT NULL REFERENCES midia_contas(id) ON DELETE CASCADE,
+      cobranca_id     UUID REFERENCES midia_cobrancas_recorrentes(id) ON DELETE SET NULL,
+      competencia     TEXT NOT NULL,                   -- ex: 2026-06
+      valor           NUMERIC(10,2) NOT NULL,
+      vencimento      DATE NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'aberta',  -- aberta|paga|atrasada|cancelada
+      pago_em         TIMESTAMPTZ,
+      mp_init_point   TEXT,
+      mp_payment_id   TEXT,
+      created_at      TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (conta_id, competencia, cobranca_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_faturas_conta ON midia_faturas(conta_id);
+    CREATE INDEX IF NOT EXISTS idx_midia_faturas_status ON midia_faturas(status);
+  `);
+
+  // Programa de afiliados (parceiros que indicam anunciantes)
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_afiliados (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      nome            TEXT NOT NULL,
+      email           TEXT NOT NULL UNIQUE,
+      whatsapp        TEXT,
+      codigo          TEXT NOT NULL UNIQUE,            -- ex: JOAO10 — usado no link de indicação
+      comissao_pct    NUMERIC(5,2) NOT NULL DEFAULT 10,
+      pix_chave       TEXT,
+      ativo           BOOLEAN NOT NULL DEFAULT true,
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_afiliados_codigo ON midia_afiliados(codigo);
+  `);
+  // Vincula anunciante ao afiliado que o indicou (e snapshot da comissão na hora do cadastro)
+  await p.query(`ALTER TABLE midia_contas ADD COLUMN IF NOT EXISTS afiliado_id UUID REFERENCES midia_afiliados(id) ON DELETE SET NULL;`);
+  await p.query(`ALTER TABLE midia_contas ADD COLUMN IF NOT EXISTS afiliado_comissao_pct NUMERIC(5,2);`);
+
+  // Comissões geradas por campanha paga
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_comissoes (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      afiliado_id     UUID NOT NULL REFERENCES midia_afiliados(id) ON DELETE CASCADE,
+      conta_id        UUID NOT NULL REFERENCES midia_contas(id)    ON DELETE CASCADE,
+      campanha_id     UUID REFERENCES midia_campanhas(id) ON DELETE SET NULL,
+      base            NUMERIC(10,2) NOT NULL,           -- valor da campanha (já com desconto)
+      pct             NUMERIC(5,2)  NOT NULL,
+      valor           NUMERIC(10,2) NOT NULL,           -- base * pct/100
+      status          TEXT NOT NULL DEFAULT 'pendente', -- pendente|paga|cancelada
+      pago_em         TIMESTAMPTZ,
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_comissoes_afiliado ON midia_comissoes(afiliado_id);
+    CREATE INDEX IF NOT EXISTS idx_midia_comissoes_status ON midia_comissoes(status);
+  `);
+
+  // Histórico de backups (gerado pelo cron de backup)
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_backups (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tipo            TEXT NOT NULL,                   -- db|library|completo
+      tamanho_bytes   BIGINT,
+      caminho         TEXT,                            -- ex: /backups/2026-06-03_db.sql.gz
+      sha256          TEXT,
+      status          TEXT NOT NULL DEFAULT 'ok',      -- ok|falha
+      mensagem        TEXT,
+      criado_em       TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_backups_data ON midia_backups(criado_em DESC);
+  `);
+
   await seedPlanos();
   await seedPacotes();
   await seedMasterAdmin();

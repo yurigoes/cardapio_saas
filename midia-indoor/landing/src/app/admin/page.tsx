@@ -6,9 +6,11 @@ import {
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
   LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette, Server, Camera, Power, Undo2, ScrollText, Map,
   Ticket, CalendarDays, Check, ChevronLeft, ChevronRight, History, Grid3x3, Database,
+  FileSpreadsheet, Repeat, HandCoins, Archive,
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
+import { Notas, Cobrancas, Afiliados, Backups } from "./financeiro";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -19,7 +21,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -62,6 +64,10 @@ export default function AdminPage() {
     { id: "grade",       label: "Grade",       icon: Grid3x3 },
     { id: "templates",   label: "Templates",   icon: Database, master: true },
     { id: "cupons",      label: "Cupons",      icon: Ticket, master: true },
+    { id: "notas",       label: "NFs",         icon: FileSpreadsheet, master: true },
+    { id: "cobrancas",   label: "Cobranças",   icon: Repeat, master: true },
+    { id: "afiliados",   label: "Afiliados",   icon: HandCoins, master: true },
+    { id: "backups",     label: "Backups",     icon: Archive, master: true },
     { id: "auditoria",   label: "Auditoria",   icon: ScrollText, master: true },
   ];
 
@@ -105,6 +111,10 @@ export default function AdminPage() {
         {aba === "grade"       && <GradeLocal token={token} />}
         {aba === "templates"   && <Templates token={token} />}
         {aba === "cupons"      && <Cupons token={token} />}
+        {aba === "notas"       && <Notas token={token} />}
+        {aba === "cobrancas"   && <Cobrancas token={token} />}
+        {aba === "afiliados"   && <Afiliados token={token} />}
+        {aba === "backups"     && <Backups token={token} />}
         {aba === "auditoria"   && <Auditoria token={token} />}
         {aba === "noxibo"      && <NoXibo token={token} />}
       </div>

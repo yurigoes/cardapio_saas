@@ -99,6 +99,23 @@ export async function POST(req: NextRequest) {
       await p.query(`INSERT INTO midia_campanha_locais (campanha_id, local_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [campId, localId]);
     }
 
+    // Gera comissão pendente se o anunciante tem afiliado vinculado
+    try {
+      const conta = await p.query<{ afiliado_id: string | null; afiliado_comissao_pct: string | null }>(
+        `SELECT afiliado_id, afiliado_comissao_pct FROM midia_contas WHERE id = $1`, [b.conta_id]
+      ).then(r => r.rows[0]);
+      if (conta?.afiliado_id && valorFinal > 0) {
+        const pct = Number(conta.afiliado_comissao_pct ?? 0);
+        if (pct > 0) {
+          const valorCom = Math.round((valorFinal * pct / 100) * 100) / 100;
+          await p.query(
+            `INSERT INTO midia_comissoes (afiliado_id, conta_id, campanha_id, base, pct, valor) VALUES ($1,$2,$3,$4,$5,$6)`,
+            [conta.afiliado_id, b.conta_id, campId, valorFinal, pct, valorCom]
+          );
+        }
+      }
+    } catch (e) { console.warn("[campanhas] gerar comissão falhou:", (e as Error).message); }
+
     return NextResponse.json({ ok: true, id: campId });
   } catch (err) {
     console.error("[admin/campanhas POST]", err);
