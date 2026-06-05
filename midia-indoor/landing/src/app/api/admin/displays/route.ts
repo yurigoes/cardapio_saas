@@ -13,7 +13,7 @@ import { autenticarAdmin, exigirMaster } from "@/lib/admin-auth";
 import {
   listarDisplaysFull, autorizarDisplay, adicionarDisplayAoGrupo, removerDisplayDoGrupo,
   renomearDisplay, excluirDisplay, criarDisplayGroup, collectNow, setDisplayProfile, setDefaultLayout,
-  wolDisplay, revertToSchedule, ultimoComandoStatus,
+  wolDisplay, revertToSchedule, ultimoComandoStatus, clearCache, bumpDisplayCache,
 } from "@/lib/xibo";
 import { logAudit } from "@/lib/auditoria";
 
@@ -151,6 +151,19 @@ export async function POST(req: NextRequest) {
         const proprio = disp?.displayGroups?.find(g => g.isDisplaySpecific === 1) ?? disp?.displayGroups?.[0];
         if (!proprio) return NextResponse.json({ ok: false, error: "tela sem grupo" }, { status: 400 });
         await revertToSchedule(proprio.displayGroupId);
+        break;
+      }
+      case "clear-cache":
+        await clearCache(b.displayId);
+        break;
+      case "resync": {
+        // Workaround Xibo Android v3: bump do defaultLayoutId destrava cache zumbi
+        const disp = (await listarDisplaysFull()).find(d => d.displayId === b.displayId);
+        const atualLayout = disp?.defaultLayoutId ?? 1;
+        await bumpDisplayCache(b.displayId, atualLayout);
+        // E manda collectNow no grupo próprio
+        const proprio = disp?.displayGroups?.find(g => g.isDisplaySpecific === 1) ?? disp?.displayGroups?.[0];
+        if (proprio) await collectNow(proprio.displayGroupId).catch(() => {});
         break;
       }
       case "excluir":

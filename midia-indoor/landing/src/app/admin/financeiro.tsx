@@ -449,3 +449,88 @@ export function Arquivados({ token }: { token: string }) {
     </div>
   );
 }
+
+// ─── Display Profiles (configs dos players direto do SaaS) ─────────────────
+interface ProfileItem { displayProfileId: number; name: string; type: string; isDefault: number; config: Array<{ name: string; value: string | number | boolean }>; }
+const PROFILE_KEYS_COMUNS = [
+  { key: "collectInterval",        label: "Intervalo de coleta (s)", type: "number" },
+  { key: "screenShotIntent",       label: "Screenshot a cada (s)",   type: "number" },
+  { key: "screenShotSize",         label: "Tamanho da screenshot (px largura)", type: "number" },
+  { key: "expireModifiedLayouts",  label: "Expirar layouts modificados (0/1)",  type: "number" },
+  { key: "logLevel",               label: "Nível de log (audit/info/error)",    type: "text" },
+  { key: "orientation",            label: "Orientação (portrait/landscape/reverse)", type: "text" },
+];
+
+export function DisplayProfiles({ token }: { token: string }) {
+  const [profiles, setProfiles] = useState<ProfileItem[]>([]);
+  const [editando, setEditando] = useState<ProfileItem | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => { const r = await aapi(token, "/api/admin/display-profiles"); const d = await r.json(); if (d.ok) setProfiles(d.profiles); }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  function valor(p: ProfileItem, key: string): string {
+    const c = (p.config ?? []).find(x => x.name === key);
+    return c ? String(c.value) : "";
+  }
+
+  async function salvar(patches: Record<string, string | number>) {
+    if (!editando) return;
+    setBusy(true);
+    const r = await aapi(token, "/api/admin/display-profiles", { method: "PATCH", body: JSON.stringify({ id: editando.displayProfileId, patches }) });
+    const d = await r.json(); setBusy(false);
+    notify(d.ok ? "Perfil atualizado — players aplicam no próximo poll" : (d.error || "Erro"), d.ok ? "success" : "error");
+    if (d.ok) { setEditando(null); load(); }
+  }
+
+  return (
+    <div>
+      <h2 className="mb-4 text-lg font-semibold">Perfis de player (Display Profiles)</h2>
+      <p className="mb-4 text-sm text-slate-400">Configurações que se aplicam a todos os players desse perfil. Mudanças entram em vigor no próximo poll do player (~1min).</p>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {profiles.map(p => (
+          <div key={p.displayProfileId} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center justify-between"><p className="font-medium">{p.name}</p>{p.isDefault === 1 && <span className="rounded bg-brand/20 px-2 py-0.5 text-xs text-brand-light">Default</span>}</div>
+            <p className="text-xs text-slate-500">{p.type}</p>
+            <div className="mt-3 space-y-1 text-xs text-slate-400">
+              {PROFILE_KEYS_COMUNS.slice(0, 4).map(k => {
+                const v = valor(p, k.key);
+                return v ? <div key={k.key}><span className="text-slate-500">{k.label}:</span> <span className="text-slate-200">{v}</span></div> : null;
+              })}
+            </div>
+            <button onClick={() => setEditando(p)} className="mt-3 w-full rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">Editar</button>
+          </div>
+        ))}
+        {!profiles.length && <p className="text-sm text-slate-500">Nenhum perfil cadastrado no Xibo.</p>}
+      </div>
+      {editando && <EditProfileModal profile={editando} busy={busy} onClose={() => setEditando(null)} onSave={salvar} />}
+    </div>
+  );
+}
+function EditProfileModal({ profile, busy, onClose, onSave }: { profile: ProfileItem; busy: boolean; onClose: () => void; onSave: (patches: Record<string, string | number>) => void }) {
+  const valor = (key: string): string => { const c = (profile.config ?? []).find(x => x.name === key); return c ? String(c.value) : ""; };
+  const [vals, setVals] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const k of PROFILE_KEYS_COMUNS) init[k.key] = valor(k.key);
+    return init;
+  });
+  function set(key: string, v: string) { setVals(s => ({ ...s, [key]: v })); }
+  function salvar() {
+    const patches: Record<string, string | number> = {};
+    for (const k of PROFILE_KEYS_COMUNS) {
+      if (vals[k.key] !== "" && vals[k.key] !== valor(k.key)) {
+        patches[k.key] = k.type === "number" ? Number(vals[k.key]) : vals[k.key];
+      }
+    }
+    if (!Object.keys(patches).length) { notify("Nada mudou", "info"); return; }
+    onSave(patches);
+  }
+  return (
+    <Modal onClose={onClose} title={`Editar perfil: ${profile.name}`} wide>
+      <p className="mb-3 text-xs text-slate-500">Deixe em branco pra manter o atual.</p>
+      {PROFILE_KEYS_COMUNS.map(k => (
+        <Field key={k.key} label={k.label} value={vals[k.key]} onChange={v => set(k.key, v)} type={k.type === "number" ? "number" : "text"} placeholder={valor(k.key) || "—"} />
+      ))}
+      <button onClick={salvar} disabled={busy} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar</button>
+    </Modal>
+  );
+}

@@ -240,6 +240,70 @@ export async function autorizarDisplay(displayId: number): Promise<void> {
   await xibo(`/api/display/authorise/${displayId}`, { method: "PUT" });
 }
 
+/** Manda comando "Clear Statistics and Cache" pro player (precisa XMR ou aguarda próximo poll). */
+export async function clearCache(displayId: number): Promise<void> {
+  await xibo(`/api/display/${displayId}/action/clearStatsAndLogs`, { method: "POST" }).catch(async () => {
+    // versões antigas usavam URL diferente
+    await xibo(`/api/display/${displayId}/clearCache`, { method: "POST" });
+  });
+}
+
+/** "Bump" do defaultLayoutId pra destravar player Android v3 zumbi. */
+export async function bumpDisplayCache(displayId: number, layoutFinal: number): Promise<void> {
+  // muda pra layout 1 (Default global), espera, e volta
+  await setDefaultLayout(displayId, 1).catch(() => {});
+  await new Promise(r => setTimeout(r, 2000));
+  await setDefaultLayout(displayId, layoutFinal);
+}
+
+/**
+ * Lista os eventos agendados pra um display num dado dia.
+ * Retorna array de { eventId, eventTypeId, campaignId, layoutId?, layout?, fromDt, toDt }.
+ */
+export interface EventoDisplay { eventId: number; eventTypeId: number; campaignId: number; layoutId?: number; layout?: string; fromDt: number; toDt: number; }
+export async function eventosDoDisplay(displayId: number, dia: string): Promise<EventoDisplay[]> {
+  // Xibo expõe /api/schedule/data/events com filtro displayGroupId. Usa o próprio do display.
+  const disp = (await listarDisplaysFull()).find(d => d.displayId === displayId);
+  const proprio = disp?.displayGroups?.find(g => g.isDisplaySpecific === 1) ?? disp?.displayGroups?.[0];
+  if (!proprio) return [];
+  const from = `${dia} 00:00:00`;
+  const to   = `${dia} 23:59:59`;
+  try {
+    const r = await xibo<Array<EventoDisplay>>(`/api/schedule/data/events?displayGroupId=${proprio.displayGroupId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    return Array.isArray(r) ? r : [];
+  } catch (e) {
+    console.warn("[eventosDoDisplay]", (e as Error).message);
+    return [];
+  }
+}
+
+/** Lista Display Profiles. */
+export interface XiboProfile { displayProfileId: number; name: string; type: string; isDefault: number; config: Array<{ name: string; value: string | number | boolean }>; }
+export async function listarDisplayProfiles(): Promise<XiboProfile[]> {
+  const r = await xibo<XiboProfile[]>(`/api/displayprofile`);
+  return Array.isArray(r) ? r : [];
+}
+
+/** Atualiza configs específicas de um Display Profile (mantém o resto). */
+export async function atualizarDisplayProfile(profileId: number, patches: Record<string, string | number | boolean>): Promise<void> {
+  const profiles = await listarDisplayProfiles();
+  const atual = profiles.find(p => p.displayProfileId === profileId);
+  if (!atual) throw new Error(`profile ${profileId} não encontrado`);
+  // aplica patches sobre o config
+  const merged = [...(atual.config ?? [])];
+  for (const [k, v] of Object.entries(patches)) {
+    const idx = merged.findIndex(c => c.name === k);
+    if (idx >= 0) merged[idx] = { ...merged[idx], value: v };
+    else merged.push({ name: k, value: v });
+  }
+  const body = new URLSearchParams();
+  body.set("name", atual.name);
+  body.set("type", atual.type);
+  body.set("isDefault", String(atual.isDefault));
+  body.set("config", JSON.stringify(merged));
+  await xibo(`/api/displayprofile/${profileId}`, { method: "PUT", body });
+}
+
 export async function adicionarDisplayAoGrupo(displayId: number, displayGroupId: number): Promise<void> {
   const body = new URLSearchParams();
   body.append("displayId[]", String(displayId));

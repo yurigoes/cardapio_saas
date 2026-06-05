@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
-import { Notas, Cobrancas, Afiliados, Backups, Arquivados } from "./financeiro";
+import { Notas, Cobrancas, Afiliados, Backups, Arquivados, DisplayProfiles } from "./financeiro";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -21,7 +21,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -68,6 +68,7 @@ export default function AdminPage() {
     { id: "cobrancas",   label: "Cobranças",   icon: Repeat, master: true },
     { id: "afiliados",   label: "Afiliados",   icon: HandCoins, master: true },
     { id: "backups",     label: "Backups",     icon: Archive, master: true },
+    { id: "perfis",      label: "Perfis player", icon: MonitorPlay, master: true },
     { id: "arquivados",  label: "Arquivados",  icon: Archive, master: true },
     { id: "auditoria",   label: "Auditoria",   icon: ScrollText, master: true },
   ];
@@ -116,6 +117,7 @@ export default function AdminPage() {
         {aba === "cobrancas"   && <Cobrancas token={token} />}
         {aba === "afiliados"   && <Afiliados token={token} />}
         {aba === "backups"     && <Backups token={token} />}
+        {aba === "perfis"      && <DisplayProfiles token={token} />}
         {aba === "arquivados"  && <Arquivados token={token} />}
         {aba === "auditoria"   && <Auditoria token={token} />}
         {aba === "noxibo"      && <NoXibo token={token} />}
@@ -219,7 +221,7 @@ function Badge({ s }: { s: string }) {
 }
 
 // ─── Tipos compartilhados ────────────────────────────────────────────────────
-interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; }
+interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; telas_total?: number; telas_online?: number; sync_em?: string | null; }
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
 interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; arte_status?: string; arte_rejeicao_motivo?: string | null; hora_inicio?: string | null; hora_fim?: string | null; desconto?: string | null; dias_semana?: string | null; }
@@ -726,6 +728,13 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
         <MapPin className="h-4 w-4 text-brand-light" />
       </div>
       <p className="mt-2 text-xs text-slate-500">{local.largura}×{local.altura} · grupo Xibo {local.xibo_display_group_id ?? "—"}</p>
+      {(local.telas_total ?? 0) > 0 && (
+        <p className="mt-1 text-xs">
+          <span className={`inline-flex items-center gap-1 ${local.telas_online === local.telas_total ? "text-emerald-300" : local.telas_online! > 0 ? "text-amber-300" : "text-red-300"}`}>
+            ● {local.telas_online}/{local.telas_total} tela(s) online
+          </span>
+        </p>
+      )}
       <p className="mt-1 text-xs text-slate-500">Conteúdo base: {local.conteudo_nome ? <span className="text-emerald-300">{local.conteudo_nome}</span> : "nenhum"}</p>
       <p className="mt-1 text-xs text-slate-500">Splash (tela de espera): {local.splash_nome ? <span className="text-emerald-300">{local.splash_nome}</span> : "nenhum"}</p>
       {err && <p className="mt-1 text-xs text-red-400">{err}</p>}
@@ -1185,6 +1194,8 @@ function Telas({ token }: { token: string }) {
                         <button onClick={() => acao(d.displayId, "collect")} disabled={busy === d.displayId} className="rounded border border-brand/40 p-1.5 text-brand-light hover:bg-brand/10 disabled:opacity-50" title="Forçar atualização agora">{busy === d.displayId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}</button>
                         <button onClick={() => acao(d.displayId, "revert")} className="rounded border border-white/15 p-1.5 hover:bg-white/5" title="Voltar pro schedule"><Undo2 className="h-3.5 w-3.5" /></button>
                         <button onClick={() => acao(d.displayId, "wol")} className="rounded border border-white/15 p-1.5 hover:bg-white/5" title="Wake-on-LAN"><Power className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => acao(d.displayId, "resync")} className="rounded border border-amber-500/40 p-1.5 text-amber-300 hover:bg-amber-500/10" title="Re-sync (destrava player zumbi)"><History className="h-3.5 w-3.5" /></button>
+                        <button onClick={async () => { if (await confirmModal(`Limpar cache da tela "${d.nome}"?`)) acao(d.displayId, "clear-cache"); }} className="rounded border border-white/15 p-1.5 hover:bg-white/5" title="Limpar cache"><Database className="h-3.5 w-3.5" /></button>
                         <button onClick={() => renomear(d.displayId, d.nome)} className="rounded border border-white/15 p-1.5 hover:bg-white/5" title="Renomear"><Pencil className="h-3.5 w-3.5" /></button>
                         <button onClick={async () => { if (await confirmModal(`Excluir a tela "${d.nome}"?`)) acao(d.displayId, "excluir"); }} className="rounded border border-red-500/30 p-1.5 text-red-300 hover:bg-red-500/10" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>

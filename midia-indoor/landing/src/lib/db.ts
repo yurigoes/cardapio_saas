@@ -444,6 +444,11 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_midia_backups_data ON midia_backups(criado_em DESC);
   `);
 
+  // Sync periódico Xibo → SaaS (contadores de telas por local)
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS telas_total  INTEGER NOT NULL DEFAULT 0;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS telas_online INTEGER NOT NULL DEFAULT 0;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS sync_em TIMESTAMPTZ;`);
+
   // Dias da semana em que a campanha pode tocar (CSV "1,2,3" = Seg,Ter,Qua... 7=Dom).
   // NULL ou "1,2,3,4,5,6,7" = todos os dias.
   await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS dias_semana TEXT;`);
