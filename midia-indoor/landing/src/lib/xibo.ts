@@ -583,7 +583,7 @@ export async function kickStartLayoutAteProximaHora(
   body.set("campaignId", String(layoutCampaignId));
   body.set("displayOrder", "1");
   body.set("isPriority", "0");
-  body.set("dayPartId", "0");                  // sem day-part
+  body.set("dayPartId", "1");                  // 1 = Custom/Always (Xibo ignora event com dayPartId=0)
   body.set("fromDt", fmtDt(agora));
   body.set("toDt", fmtDt(proxHora));
   // SoV/maxPlays só são lidos por INTERRUPT events; em Layout normal são ignorados.
