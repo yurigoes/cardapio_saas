@@ -48,11 +48,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     try { await vincularDisplayAoGrupo(displayId, dgId); }
     catch (e) { console.warn("[ativar-tela] vincular ao grupo falhou:", (e as Error).message); }
 
-    // Se tiver splash, aplica como default
-    if (local.splash_layout_id) {
-      try { await setDefaultLayout(displayId, local.splash_layout_id); }
-      catch (e) { console.warn("[ativar-tela] setDefaultLayout falhou:", (e as Error).message); }
-    }
+    // Bug workaround: Xibo Android v3 trava no primeiro sync mostrando só splash.
+    // "Bumpar" o defaultLayoutId (mudar e voltar) força o player a re-sincronizar.
+    // Sem isso, o player só baixa o splash e ignora o schedule até alguma config mudar.
+    const layoutAlvo = local.splash_layout_id ?? 1; // layoutId final desejado (splash do local ou Default global)
+    try {
+      // bumpa pra layout temporário, espera, e volta pro alvo
+      await setDefaultLayout(displayId, 1).catch(() => {});
+      await new Promise(r => setTimeout(r, 2000));
+      await setDefaultLayout(displayId, layoutAlvo);
+    } catch (e) { console.warn("[ativar-tela] bump defaultLayout falhou:", (e as Error).message); }
 
     logAudit(req, { autor_tipo: "admin", autor_id: master.sub, autor_nome: master.nome, acao: "tela.ativar-codigo", entidade: "local", entidade_id: params.id, detalhes: { codigo: parsed.data.codigo, displayId } });
     return NextResponse.json({ ok: true, displayId, msg: "Tela ativada e vinculada ao local. O player deve atualizar em segundos." });
