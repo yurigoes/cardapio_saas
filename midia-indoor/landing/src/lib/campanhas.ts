@@ -8,7 +8,7 @@
  *   4. relatório → statsCampanha (proof-of-play)
  */
 import { db, ensureSchema } from "./db";
-import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, excluirMidia, criarDayPart, reassignLayoutNaAdCampaign, collectNow, kickStartLayoutAteProximaHora, obterCampaignIdDoLayout, type ExibicaoLinha } from "./xibo";
+import { criarLayoutDeMidia, criarAdCampaign, editarAdCampaign, excluirCampanha, statsCampanha, statsDetalhe, criarDisplayGroup, excluirLayout, excluirMidia, criarDayPart, reassignLayoutNaAdCampaign, collectNow, kickStartLayoutAteProximaHora, obterCampaignIdDoLayout, atualizarDuracaoWidget, type ExibicaoLinha } from "./xibo";
 
 interface CampanhaRow {
   id: string; conta_id: string; nome: string; tipo: string; dias: number; insercoes_dia: number;
@@ -172,6 +172,14 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
       await p.query(`UPDATE midia_campanhas SET xibo_daypart_id = $1 WHERE id = $2`, [dayPartId, campanhaId]);
     } catch (e) { console.warn("[lancar] criar dayPart falhou:", (e as Error).message); }
   }
+
+  // Atualiza a duração do widget no layout (segundos por inserção) — propaga mudança do SaaS
+  try {
+    if (camp.xibo_layout_id && camp.segundos > 0) {
+      await atualizarDuracaoWidget(camp.xibo_layout_id, camp.segundos);
+      console.log(`[lancar] duração do widget atualizada pra ${camp.segundos}s`);
+    }
+  } catch (e) { console.warn("[lancar] atualizar duração:", (e as Error).message); }
 
   try {
     let xiboCampaignId = camp.xibo_campaign_id ?? undefined;

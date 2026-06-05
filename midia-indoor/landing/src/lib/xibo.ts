@@ -248,6 +248,30 @@ export async function clearCache(displayId: number): Promise<void> {
   });
 }
 
+/** Atualiza a duração (segundos) do widget principal de um layout. */
+export async function atualizarDuracaoWidget(layoutId: number, novaDuracaoSeg: number): Promise<void> {
+  // 1) Pega as regiões do layout e suas playlists
+  type LayoutFull = { regions?: Array<{ regionPlaylist?: { playlistId: number } }> };
+  const arr = await xibo<LayoutFull[]>(`/api/layout?layoutId=${layoutId}&embed=regions,playlists`);
+  const layout = Array.isArray(arr) ? arr[0] : null;
+  const playlistId = layout?.regions?.[0]?.regionPlaylist?.playlistId;
+  if (!playlistId) throw new Error("Xibo: layout sem playlist");
+
+  // 2) Lista widgets dessa playlist e atualiza o primeiro
+  const widgets = await xibo<Array<{ widgetId: number; type: string }>>(`/api/playlist/widget?playlistId=${playlistId}`);
+  const w = Array.isArray(widgets) ? widgets[0] : null;
+  if (!w?.widgetId) throw new Error("Xibo: nenhum widget no layout");
+
+  const body = new URLSearchParams({ duration: String(novaDuracaoSeg), useDuration: "1" });
+  await xibo(`/api/playlist/widget/${w.widgetId}`, { method: "PUT", body });
+
+  // 3) Re-publica o layout pra valer a mudança
+  try {
+    const publishId = layoutId; // assume layoutId é o publicado
+    await xibo(`/api/layout/publish/${publishId}`, { method: "PUT", body: new URLSearchParams({ publishNow: "1" }) });
+  } catch (e) { console.warn("[atualizarDuracaoWidget] publish falhou:", (e as Error).message); }
+}
+
 /** "Bump" do defaultLayoutId pra destravar player Android v3 zumbi. */
 export async function bumpDisplayCache(displayId: number, layoutFinal: number): Promise<void> {
   // muda pra layout 1 (Default global), espera, e volta
