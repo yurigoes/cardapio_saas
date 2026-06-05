@@ -222,7 +222,7 @@ function Badge({ s }: { s: string }) {
 interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; }
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
-interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; arte_status?: string; arte_rejeicao_motivo?: string | null; hora_inicio?: string | null; hora_fim?: string | null; desconto?: string | null; }
+interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; arte_status?: string; arte_rejeicao_motivo?: string | null; hora_inicio?: string | null; hora_fim?: string | null; desconto?: string | null; dias_semana?: string | null; }
 interface ArteVersao { id: string; arte_nome: string | null; arte_tipo: string | null; xibo_layout_id: number | null; ativa: boolean; criada_em: string; enviada_por: string | null; }
 interface Cupom { id: string; codigo: string; tipo: string; valor: string; validade: string | null; max_usos: number | null; usos: number; ativo: boolean; created_at: string; }
 
@@ -290,8 +290,10 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
   const [inicio, setInicio] = useState(""); const [fim, setFim] = useState("");
   const [hi, setHi] = useState(""); const [hf, setHf] = useState("");
   const [cupom, setCupom] = useState("");
+  const [diasSemana, setDiasSemana] = useState<number[]>([1, 2, 3, 4, 5, 6, 7]); // ISO 1=Seg..7=Dom
   const [selLocais, setSelLocais] = useState<string[]>([]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  function toggleDia(d: number) { setDiasSemana(s => s.includes(d) ? s.filter(x => x !== d) : [...s, d].sort((a, b) => a - b)); }
 
   useEffect(() => {
     aapi(token, "/api/admin/anunciantes").then(r => r.json()).then(d => d.ok && setAnuncs(d.anunciantes));
@@ -317,6 +319,7 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
       data_inicio: inicio || undefined, data_fim: fim || undefined,
       hora_inicio: hi || undefined, hora_fim: hf || undefined,
       cupom_codigo: cupom.trim() || undefined,
+      dias_semana: diasSemana.length === 7 ? undefined : diasSemana.join(","),
       valor: valor || 0, locais: selLocais,
     };
     const r = await aapi(token, "/api/admin/campanhas", { method: "POST", body: JSON.stringify(body) });
@@ -346,6 +349,17 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
         <Field label="Horário início (opcional, HH:MM)" value={hi} onChange={setHi} placeholder="ex: 08:00" />
         <Field label="Horário fim (opcional, HH:MM)" value={hf} onChange={setHf} placeholder="ex: 22:00" />
       </div>
+      <label className="mb-1 block text-sm text-slate-300">Dias da semana</label>
+      <div className="mb-3 flex flex-wrap gap-1">
+        {[["Seg",1],["Ter",2],["Qua",3],["Qui",4],["Sex",5],["Sáb",6],["Dom",7]].map(([lbl, d]) => (
+          <button key={d as number} type="button" onClick={() => toggleDia(d as number)}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${diasSemana.includes(d as number) ? "border-brand bg-brand text-white" : "border-white/15 text-slate-400 hover:bg-white/5"}`}>
+            {lbl}
+          </button>
+        ))}
+        <button type="button" onClick={() => setDiasSemana([1,2,3,4,5,6,7])} className="ml-2 rounded-lg border border-white/10 px-2 py-1.5 text-xs text-slate-500 hover:bg-white/5">Todos</button>
+      </div>
+      <p className="mb-3 text-xs text-slate-500">Útil pra promoção semanal (ex: só Ter+Qua). Padrão: todos os dias.</p>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Valor (R$)" value={valor} onChange={setValor} type="number" />
         <Field label="Cupom (opcional)" value={cupom} onChange={v => setCupom(v.toUpperCase())} placeholder="ex: PROMO10" />
@@ -517,7 +531,7 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
 function Info({ label, v }: { label: string; v: string }) {
   return <div><p className="text-xs text-slate-500">{label}</p><p className="font-medium capitalize">{v}</p></div>;
 }
-function EditCampanha({ token, campId, det, pacotes, onSaved }: { token: string; campId: string; det: { data_inicio: string | null; data_fim: string | null; valor: string; insercoes_dia: number; segundos: number; dias: number; pacote_id?: string | null; hora_inicio?: string | null; hora_fim?: string | null }; pacotes: Pacote[]; onSaved: () => void }) {
+function EditCampanha({ token, campId, det, pacotes, onSaved }: { token: string; campId: string; det: { data_inicio: string | null; data_fim: string | null; valor: string; insercoes_dia: number; segundos: number; dias: number; pacote_id?: string | null; hora_inicio?: string | null; hora_fim?: string | null; dias_semana?: string | null }; pacotes: Pacote[]; onSaved: () => void }) {
   const fmt = (d: string | null) => (d ? String(d).slice(0, 10) : "");
   const fmtH = (s: string | null | undefined) => (s ? String(s).slice(0, 5) : "");
   const [pacoteId, setPacoteId] = useState(det.pacote_id ?? "");
@@ -528,8 +542,10 @@ function EditCampanha({ token, campId, det, pacotes, onSaved }: { token: string;
   const [fim, setFim] = useState(fmt(det.data_fim));
   const [hi, setHi] = useState(fmtH(det.hora_inicio));
   const [hf, setHf] = useState(fmtH(det.hora_fim));
+  const [diasSemana, setDiasSemana] = useState<number[]>(det.dias_semana ? det.dias_semana.split(",").map(s => parseInt(s, 10)) : [1, 2, 3, 4, 5, 6, 7]);
   const [valor, setValor] = useState(String(Number(det.valor)));
   const [busy, setBusy] = useState(false);
+  function toggleDia(d: number) { setDiasSemana(s => s.includes(d) ? s.filter(x => x !== d) : [...s, d].sort((a, b) => a - b)); }
 
   function aplicarPacote(id: string) {
     setPacoteId(id);
@@ -538,7 +554,7 @@ function EditCampanha({ token, campId, det, pacotes, onSaved }: { token: string;
   }
   async function salvar() {
     setBusy(true);
-    const body = { pacote_id: pacoteId || undefined, insercoes_dia: ins, dias, segundos: seg, data_inicio: ini || undefined, data_fim: fim || undefined, hora_inicio: hi || undefined, hora_fim: hf || undefined, valor };
+    const body = { pacote_id: pacoteId || undefined, insercoes_dia: ins, dias, segundos: seg, data_inicio: ini || undefined, data_fim: fim || undefined, hora_inicio: hi || undefined, hora_fim: hf || undefined, dias_semana: diasSemana.length === 7 ? "" : diasSemana.join(","), valor };
     const r = await aapi(token, `/api/admin/campanhas/${campId}`, { method: "PATCH", body: JSON.stringify(body) });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { notify(d.error || "Erro", "error"); return; }
@@ -567,6 +583,15 @@ function EditCampanha({ token, campId, det, pacotes, onSaved }: { token: string;
       <div className="grid grid-cols-2 gap-2">
         <Field label="Horário início (HH:MM, opcional)" value={hi} onChange={setHi} placeholder="ex: 08:00" />
         <Field label="Horário fim (HH:MM, opcional)" value={hf} onChange={setHf} placeholder="ex: 22:00" />
+      </div>
+      <label className="mb-1 block text-xs text-slate-400">Dias da semana</label>
+      <div className="mb-3 flex flex-wrap gap-1">
+        {[["Seg",1],["Ter",2],["Qua",3],["Qui",4],["Sex",5],["Sáb",6],["Dom",7]].map(([lbl, d]) => (
+          <button key={d as number} type="button" onClick={() => toggleDia(d as number)}
+            className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${diasSemana.includes(d as number) ? "border-brand bg-brand text-white" : "border-white/15 text-slate-400 hover:bg-white/5"}`}>
+            {lbl}
+          </button>
+        ))}
       </div>
       <button onClick={salvar} disabled={busy} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark disabled:opacity-50">
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar alterações

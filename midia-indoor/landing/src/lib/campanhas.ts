@@ -15,6 +15,7 @@ interface CampanhaRow {
   segundos: number; data_inicio: string | null; data_fim: string | null;
   xibo_media_id: number | null; xibo_layout_id: number | null; xibo_campaign_id: number | null;
   xibo_daypart_id: number | null; hora_inicio: string | null; hora_fim: string | null;
+  dias_semana: string | null;
   status: string;
 }
 
@@ -23,7 +24,7 @@ async function carregar(campanhaId: string): Promise<CampanhaRow | null> {
   const r = await db().query<CampanhaRow>(
     `SELECT id, conta_id, nome, tipo, dias, insercoes_dia, segundos, data_inicio, data_fim,
             xibo_media_id, xibo_layout_id, xibo_campaign_id,
-            xibo_daypart_id, hora_inicio, hora_fim, status
+            xibo_daypart_id, hora_inicio, hora_fim, dias_semana, status
        FROM midia_campanhas WHERE id = $1`, [campanhaId]
   );
   return r.rows[0] ?? null;
@@ -178,7 +179,7 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
       try {
         await editarAdCampaign(xiboCampaignId, { nome: camp.nome, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups });
         // Re-anexa o layout atual (cobre o caso de troca de arte: novo xibo_layout_id)
-        await reassignLayoutNaAdCampaign(xiboCampaignId, camp.xibo_layout_id, dayPartId);
+        await reassignLayoutNaAdCampaign(xiboCampaignId, camp.xibo_layout_id, dayPartId, camp.dias_semana ?? undefined);
       } catch (e) {
         const msg = (e as Error).message ?? "";
         // Se a ad campaign foi apagada no Xibo, descarta o id morto e cria de novo
@@ -192,7 +193,7 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
       }
     }
     if (!xiboCampaignId) {
-      xiboCampaignId = await criarAdCampaign({ nome: camp.nome, layoutId: camp.xibo_layout_id, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups, dayPartId });
+      xiboCampaignId = await criarAdCampaign({ nome: camp.nome, layoutId: camp.xibo_layout_id, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups, dayPartId, diasSemana: camp.dias_semana ?? undefined });
     }
     const jaEstavaNoAr = camp.status === "no_ar";
     await p.query(
@@ -206,7 +207,7 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
       const layoutCampaignId = await obterCampaignIdDoLayout(camp.xibo_layout_id);
       if (layoutCampaignId) {
         const playsHora = Math.max(1, Math.ceil(camp.insercoes_dia / 12)); // ~12 horas úteis/dia
-        const eventId = await kickStartLayoutAteProximaHora(layoutCampaignId, groups, playsHora);
+        const eventId = await kickStartLayoutAteProximaHora(layoutCampaignId, groups, playsHora, camp.dias_semana ?? undefined);
         if (eventId) console.log(`[lancar] kick-start agendado (eventId ${eventId})`);
       }
     } catch (e) { console.warn("[lancar] kick-start falhou:", (e as Error).message); }

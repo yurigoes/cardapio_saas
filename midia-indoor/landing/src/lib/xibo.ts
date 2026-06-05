@@ -572,8 +572,12 @@ export async function kickStartLayoutAteProximaHora(
   layoutCampaignId: number, // o campaignId DO LAYOUT (não da ad campaign)
   displayGroupIds: number[],
   playsPerHour = 6,
+  diasSemana?: string,       // CSV "1,3,5" — se hoje não estiver no set, não cria
 ): Promise<number | undefined> {
   const agora = new Date();
+  // Xibo usa ISO day-of-week (1=Seg ... 7=Dom). JS getDay() retorna 0=Dom..6=Sab.
+  const isoDow = agora.getDay() === 0 ? 7 : agora.getDay();
+  if (diasSemana && !diasSemana.split(",").map(s => parseInt(s, 10)).includes(isoDow)) return undefined;
   const proxHora = new Date(agora); proxHora.setMinutes(0, 0, 0); proxHora.setHours(proxHora.getHours() + 1);
   if (proxHora.getTime() - agora.getTime() < 60_000) return undefined; // já está na virada da hora
   const body = new URLSearchParams();
@@ -793,6 +797,7 @@ export async function criarAdCampaign(opts: {
   dataFim: Date;
   displayGroupIds: number[];
   dayPartId?: number;
+  diasSemana?: string;   // CSV "1,3,5" — padrão = todos os dias
 }): Promise<number> {
   // 1) Cria a campanha (ad campaign NÃO aceita layoutIds na criação)
   const body = new URLSearchParams();
@@ -808,8 +813,10 @@ export async function criarAdCampaign(opts: {
   const assign = new URLSearchParams();
   assign.set("layoutId", String(opts.layoutId));
   assign.set("displayOrder", "1");
-  // Sem daysOfWeek o CampaignSchedulerTask pula (explode(',', NULL) vira array vazio)
-  for (const d of [1, 2, 3, 4, 5, 6, 7]) assign.append("daysOfWeek[]", String(d));
+  // Sem daysOfWeek o CampaignSchedulerTask pula (explode(',', NULL) vira array vazio).
+  // Aceita opts.diasSemana = "1,3,5" pra restringir; padrão = todos os dias.
+  const dias = opts.diasSemana ? opts.diasSemana.split(",").map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= 7) : [1, 2, 3, 4, 5, 6, 7];
+  for (const d of dias) assign.append("daysOfWeek[]", String(d));
   if (opts.dayPartId) assign.set("dayPartId", String(opts.dayPartId));
   await xibo(`/api/campaign/layout/assign/${campaignId}`, { method: "POST", body: assign });
 
@@ -840,7 +847,7 @@ export async function editarAdCampaign(campaignId: number, opts: {
  * 2) desanexa todos
  * 3) anexa o novo layoutId (com dayPart opcional)
  */
-export async function reassignLayoutNaAdCampaign(campaignId: number, novoLayoutId: number, dayPartId?: number): Promise<void> {
+export async function reassignLayoutNaAdCampaign(campaignId: number, novoLayoutId: number, dayPartId?: number, diasSemana?: string): Promise<void> {
   // 1) Lista atual de layouts da campaign
   let atuais: number[] = [];
   try {
@@ -862,7 +869,8 @@ export async function reassignLayoutNaAdCampaign(campaignId: number, novoLayoutI
   const body = new URLSearchParams();
   body.set("layoutId", String(novoLayoutId));
   body.set("displayOrder", "1");
-  for (const d of [1, 2, 3, 4, 5, 6, 7]) body.append("daysOfWeek[]", String(d));
+  const dias = diasSemana ? diasSemana.split(",").map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= 7) : [1, 2, 3, 4, 5, 6, 7];
+  for (const d of dias) body.append("daysOfWeek[]", String(d));
   if (dayPartId) body.set("dayPartId", String(dayPartId));
   await xibo(`/api/campaign/layout/assign/${campaignId}`, { method: "POST", body });
 }

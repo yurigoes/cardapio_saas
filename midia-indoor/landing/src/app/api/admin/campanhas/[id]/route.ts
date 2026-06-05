@@ -52,6 +52,7 @@ const patch = z.object({
   segundos: z.coerce.number().int().min(1).max(300).optional(),
   hora_inicio: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   hora_fim:    z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  dias_semana: z.string().regex(/^([1-7],)*[1-7]$/).optional().or(z.literal("")),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -76,7 +77,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const sets: string[] = []; const vals: unknown[] = [];
     const add = (c: string, v: unknown) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
-    for (const k of ["nome", "data_inicio", "data_fim", "valor", "status_pagamento", "status", "pacote_id", "tipo", "dias", "insercoes_dia", "segundos", "hora_inicio", "hora_fim"] as const)
+    for (const k of ["nome", "data_inicio", "data_fim", "valor", "status_pagamento", "status", "pacote_id", "tipo", "dias", "insercoes_dia", "segundos", "hora_inicio", "hora_fim", "dias_semana"] as const)
       if (b[k] !== undefined) add(k, b[k]);
     if (sets.length) {
       vals.push(params.id);

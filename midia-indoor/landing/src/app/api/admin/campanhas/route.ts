@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const rows = await db().query(
       `SELECT c.id, c.nome, c.tipo, c.dias, c.insercoes_dia, c.segundos, c.data_inicio, c.data_fim,
               c.valor, c.status, c.status_pagamento, c.xibo_campaign_id, c.arte_nome, c.created_at,
-              c.arte_status, c.arte_rejeicao_motivo, c.hora_inicio, c.hora_fim, c.desconto,
+              c.arte_status, c.arte_rejeicao_motivo, c.hora_inicio, c.hora_fim, c.desconto, c.dias_semana,
               ct.empresa, ct.nome AS anunciante,
               (SELECT COUNT(*) FROM midia_campanha_locais cl WHERE cl.campanha_id = c.id) AS locais
          FROM midia_campanhas c JOIN midia_contas ct ON ct.id = c.conta_id
@@ -47,6 +47,7 @@ const novo = z.object({
   data_fim:      z.string().optional(),
   hora_inicio:   z.string().regex(/^\d{2}:\d{2}$/, "HH:MM").optional(),
   hora_fim:      z.string().regex(/^\d{2}:\d{2}$/, "HH:MM").optional(),
+  dias_semana:   z.string().regex(/^([1-7],)*[1-7]$/, "dias 1-7 CSV").optional(),
   valor:         z.coerce.number().min(0).default(0),
   locais:        z.array(z.string().uuid()).min(1, "escolha pelo menos um local"),
   cupom_codigo:  z.string().optional(),
@@ -91,9 +92,9 @@ export async function POST(req: NextRequest) {
     }
 
     const campId = await p.query<{ id: string }>(
-      `INSERT INTO midia_campanhas (conta_id, pacote_id, nome, tipo, dias, insercoes_dia, segundos, data_inicio, data_fim, hora_inicio, hora_fim, valor, cupom_id, desconto, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'rascunho') RETURNING id`,
-      [b.conta_id, b.pacote_id ?? null, b.nome, tipo ?? "video", dias, ins, seg ?? 10, b.data_inicio ?? null, b.data_fim ?? null, b.hora_inicio ?? null, b.hora_fim ?? null, valorFinal, cupomId, desconto]
+      `INSERT INTO midia_campanhas (conta_id, pacote_id, nome, tipo, dias, insercoes_dia, segundos, data_inicio, data_fim, hora_inicio, hora_fim, valor, cupom_id, desconto, dias_semana, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'rascunho') RETURNING id`,
+      [b.conta_id, b.pacote_id ?? null, b.nome, tipo ?? "video", dias, ins, seg ?? 10, b.data_inicio ?? null, b.data_fim ?? null, b.hora_inicio ?? null, b.hora_fim ?? null, valorFinal, cupomId, desconto, b.dias_semana ?? null]
     ).then(r => r.rows[0].id);
 
     for (const localId of b.locais) {
