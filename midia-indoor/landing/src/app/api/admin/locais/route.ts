@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     await ensureSchema();
     const rows = await db().query(
       `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, splash_nome, capacidade_dia, orientacao, lat, lng, passantes_dia, created_at
-         FROM midia_locais ORDER BY cidade NULLS LAST, nome`
+         FROM midia_locais WHERE archived_at IS NULL ORDER BY cidade NULLS LAST, nome`
     ).then(r => r.rows);
     return NextResponse.json({ ok: true, locais: rows });
   } catch (err) {
@@ -101,6 +101,9 @@ export async function PATCH(req: NextRequest) {
     await ensureSchema();
     vals.push(b.id);
     await db().query(`UPDATE midia_locais SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $${vals.length}`, vals);
+    // Arquiva/desarquiva conforme ativo
+    if (b.ativo === false) await db().query(`UPDATE midia_locais SET archived_at = COALESCE(archived_at, NOW()) WHERE id = $1`, [b.id]);
+    if (b.ativo === true)  await db().query(`UPDATE midia_locais SET archived_at = NULL WHERE id = $1`, [b.id]);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[admin/locais PATCH]", err);

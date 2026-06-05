@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Plus, X, Archive } from "lucide-react";
-import { notify } from "@/components/Notify";
+import { Loader2, Plus, X, Archive, RotateCcw, Trash2, AlertTriangle } from "lucide-react";
+import { notify, confirmModal } from "@/components/Notify";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -317,6 +317,134 @@ export function Backups({ token }: { token: string }) {
         <pre className="rounded bg-black/40 p-2 text-[11px]">{`0 3 * * * curl -s "https://midia.tthreedigital.com.br/api/cron/backup?key=$CRON_SECRET" > /dev/null
 0 4 * * * curl -s "https://midia.tthreedigital.com.br/api/cron/cobrancas?key=$CRON_SECRET" > /dev/null`}</pre>
         <p className="mt-2">Variáveis do container: <code>BACKUP_DIR</code> (default <code>/backups</code>), <code>BACKUP_LIB_PATH</code> (opcional, ex: <code>/var/www/xibo/library</code>), <code>BACKUP_RETENTION_DIAS</code> (default 14). O container precisa de <code>pg_dump</code> instalado e ter acesso à pasta.</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Arquivados (campanhas encerradas, locais e anunciantes inativos) ──────
+interface ArqItem { id: string; archived_at: string; dias_ate_purge: number; }
+interface ArqCampanha extends ArqItem { nome: string; status: string; data_fim: string | null; empresa: string | null; }
+interface ArqLocal    extends ArqItem { nome: string; cidade: string | null; }
+interface ArqAnunc    extends ArqItem { empresa: string; nome: string; email: string; status: string; }
+
+function diasTexto(d: number) {
+  if (d <= 0) return "purge a qualquer momento";
+  if (d <= 7) return `⚠ purge em ${d}d`;
+  if (d <= 30) return `${d}d até purge`;
+  return `${d}d até purge`;
+}
+
+export function Arquivados({ token }: { token: string }) {
+  const [d, setD] = useState<{ campanhas: ArqCampanha[]; locais: ArqLocal[]; anunciantes: ArqAnunc[] } | null>(null);
+  const [busy, setBusy] = useState<string>("");
+  const load = useCallback(async () => {
+    const r = await aapi(token, "/api/admin/arquivados"); const x = await r.json();
+    if (x.ok) setD({ campanhas: x.campanhas, locais: x.locais, anunciantes: x.anunciantes });
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  async function acao(tipo: string, id: string, acao: "reativar" | "excluir") {
+    if (acao === "excluir") {
+      const ok = await confirmModal(`Excluir DEFINITIVAMENTE este ${tipo}? Essa ação não pode ser desfeita.`);
+      if (!ok) return;
+    }
+    setBusy(`${tipo}-${id}`);
+    const r = await aapi(token, "/api/admin/arquivados", { method: "PATCH", body: JSON.stringify({ tipo, id, acao }) });
+    const x = await r.json(); setBusy("");
+    notify(x.ok ? x.msg : (x.error || "Erro"), x.ok ? "success" : "error");
+    if (x.ok) load();
+  }
+
+  if (!d) return <Loader2 className="h-6 w-6 animate-spin text-slate-500" />;
+
+  const Sec = ({ titulo, count, children }: { titulo: string; count: number; children: React.ReactNode }) => (
+    <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300"><Archive className="h-4 w-4" /> {titulo} ({count})</h3>
+      {count === 0 ? <p className="text-xs text-slate-500">Nenhum item arquivado.</p> : children}
+    </div>
+  );
+  const Acoes = ({ tipo, id }: { tipo: string; id: string }) => (
+    <div className="flex gap-1">
+      <button disabled={busy === `${tipo}-${id}`} onClick={() => acao(tipo, id, "reativar")} className="flex items-center gap-1 rounded border border-emerald-500/30 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50" title="Reativar">
+        {busy === `${tipo}-${id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />} Reativar
+      </button>
+      <button disabled={busy === `${tipo}-${id}`} onClick={() => acao(tipo, id, "excluir")} className="flex items-center gap-1 rounded border border-red-500/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50" title="Excluir definitivo">
+        <Trash2 className="h-3 w-3" /> Excluir
+      </button>
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Arquivados</h2>
+          <p className="text-xs text-slate-400">Campanhas encerradas, locais/anunciantes desativados. <strong>Purge automático após 6 meses.</strong> Reative se ainda quiser usar.</p>
+        </div>
+      </div>
+
+      <Sec titulo="Campanhas encerradas" count={d.campanhas.length}>
+        <div className="overflow-x-auto rounded-xl border border-white/10">
+          <table className="w-full text-sm">
+            <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-2">Nome</th><th className="p-2">Anunciante</th><th className="p-2">Status</th><th className="p-2">Arquivada em</th><th className="p-2">Purge</th><th className="p-2"></th></tr></thead>
+            <tbody>
+              {d.campanhas.map(c => (
+                <tr key={c.id} className="border-t border-white/5">
+                  <td className="p-2">{c.nome}</td>
+                  <td className="p-2 text-xs text-slate-400">{c.empresa ?? "—"}</td>
+                  <td className="p-2 text-xs">{c.status}</td>
+                  <td className="p-2 text-xs text-slate-400">{new Date(c.archived_at).toLocaleDateString("pt-BR")}</td>
+                  <td className={`p-2 text-xs ${c.dias_ate_purge <= 7 ? "text-amber-300" : "text-slate-400"}`}>{diasTexto(c.dias_ate_purge)}</td>
+                  <td className="p-2 text-right"><Acoes tipo="campanha" id={c.id} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Sec>
+
+      <Sec titulo="Locais desativados" count={d.locais.length}>
+        <div className="overflow-x-auto rounded-xl border border-white/10">
+          <table className="w-full text-sm">
+            <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-2">Nome</th><th className="p-2">Cidade</th><th className="p-2">Arquivado em</th><th className="p-2">Purge</th><th className="p-2"></th></tr></thead>
+            <tbody>
+              {d.locais.map(l => (
+                <tr key={l.id} className="border-t border-white/5">
+                  <td className="p-2">{l.nome}</td>
+                  <td className="p-2 text-xs text-slate-400">{l.cidade ?? "—"}</td>
+                  <td className="p-2 text-xs text-slate-400">{new Date(l.archived_at).toLocaleDateString("pt-BR")}</td>
+                  <td className={`p-2 text-xs ${l.dias_ate_purge <= 7 ? "text-amber-300" : "text-slate-400"}`}>{diasTexto(l.dias_ate_purge)}</td>
+                  <td className="p-2 text-right"><Acoes tipo="local" id={l.id} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Sec>
+
+      <Sec titulo="Anunciantes inativos" count={d.anunciantes.length}>
+        <div className="overflow-x-auto rounded-xl border border-white/10">
+          <table className="w-full text-sm">
+            <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-2">Empresa</th><th className="p-2">Contato</th><th className="p-2">Arquivado em</th><th className="p-2">Purge</th><th className="p-2"></th></tr></thead>
+            <tbody>
+              {d.anunciantes.map(a => (
+                <tr key={a.id} className="border-t border-white/5">
+                  <td className="p-2">{a.empresa}</td>
+                  <td className="p-2 text-xs text-slate-400">{a.nome} · {a.email}</td>
+                  <td className="p-2 text-xs text-slate-400">{new Date(a.archived_at).toLocaleDateString("pt-BR")}</td>
+                  <td className={`p-2 text-xs ${a.dias_ate_purge <= 7 ? "text-amber-300" : "text-slate-400"}`}>{diasTexto(a.dias_ate_purge)}</td>
+                  <td className="p-2 text-right"><Acoes tipo="anunciante" id={a.id} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Sec>
+
+      <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200">
+        <p className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" /> Sobre o purge automático</p>
+        <p className="mt-1">Itens com mais de <strong>6 meses</strong> arquivados são apagados definitivamente pelo cron <code>/api/cron/limpeza-arquivados</code> (executado 1x/dia). Pra preservar, reative antes desse prazo.</p>
       </div>
     </div>
   );

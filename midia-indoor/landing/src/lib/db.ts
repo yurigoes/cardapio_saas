@@ -444,6 +444,15 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_midia_backups_data ON midia_backups(criado_em DESC);
   `);
 
+  // ─── Arquivamento (soft-delete com purge automático após 6 meses) ────────
+  await p.query(`ALTER TABLE midia_campanhas  ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;`);
+  await p.query(`ALTER TABLE midia_locais     ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;`);
+  await p.query(`ALTER TABLE midia_contas     ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;`);
+  // Quando uma campanha vira "encerrada", marca archived_at automaticamente
+  await p.query(`UPDATE midia_campanhas SET archived_at = COALESCE(archived_at, updated_at) WHERE status = 'encerrada' AND archived_at IS NULL;`);
+  await p.query(`UPDATE midia_locais    SET archived_at = COALESCE(archived_at, updated_at) WHERE ativo = false AND archived_at IS NULL;`);
+  await p.query(`UPDATE midia_contas    SET archived_at = COALESCE(archived_at, updated_at) WHERE status IN ('inativo','cancelado') AND archived_at IS NULL;`);
+
   await seedPlanos();
   await seedPacotes();
   await seedMasterAdmin();

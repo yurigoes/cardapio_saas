@@ -16,8 +16,9 @@ export async function GET(req: NextRequest) {
   const status = req.nextUrl.searchParams.get("status")?.trim();
   try {
     await ensureSchema();
-    const vals: unknown[] = []; let where = "";
-    if (status) { vals.push(status); where = `WHERE c.status = $1`; }
+    const vals: unknown[] = []; const filtros: string[] = ["c.archived_at IS NULL"];
+    if (status) { vals.push(status); filtros.push(`c.status = $${vals.length}`); }
+    const where = `WHERE ${filtros.join(" AND ")}`;
     const rows = await db().query(
       `SELECT c.id, c.nome, c.tipo, c.dias, c.insercoes_dia, c.segundos, c.data_inicio, c.data_fim,
               c.valor, c.status, c.status_pagamento, c.xibo_campaign_id, c.arte_nome, c.created_at,

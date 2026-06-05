@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
-import { Notas, Cobrancas, Afiliados, Backups } from "./financeiro";
+import { Notas, Cobrancas, Afiliados, Backups, Arquivados } from "./financeiro";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -21,7 +21,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -68,6 +68,7 @@ export default function AdminPage() {
     { id: "cobrancas",   label: "Cobranças",   icon: Repeat, master: true },
     { id: "afiliados",   label: "Afiliados",   icon: HandCoins, master: true },
     { id: "backups",     label: "Backups",     icon: Archive, master: true },
+    { id: "arquivados",  label: "Arquivados",  icon: Archive, master: true },
     { id: "auditoria",   label: "Auditoria",   icon: ScrollText, master: true },
   ];
 
@@ -115,6 +116,7 @@ export default function AdminPage() {
         {aba === "cobrancas"   && <Cobrancas token={token} />}
         {aba === "afiliados"   && <Afiliados token={token} />}
         {aba === "backups"     && <Backups token={token} />}
+        {aba === "arquivados"  && <Arquivados token={token} />}
         {aba === "auditoria"   && <Auditoria token={token} />}
         {aba === "noxibo"      && <NoXibo token={token} />}
       </div>

@@ -280,7 +280,7 @@ export async function encerrarCampanha(campanhaId: string): Promise<{ ok: boolea
     if (camp.xibo_media_id)    { try { await excluirMidia(camp.xibo_media_id); }      catch (e) { console.warn("[encerrar] mídia:", (e as Error).message); } }
 
     await db().query(
-      `UPDATE midia_campanhas SET status = 'encerrada', xibo_campaign_id = NULL, xibo_layout_id = NULL, xibo_media_id = NULL, updated_at = NOW() WHERE id = $1`,
+      `UPDATE midia_campanhas SET status = 'encerrada', xibo_campaign_id = NULL, xibo_layout_id = NULL, xibo_media_id = NULL, archived_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [campanhaId]
     );
     return { ok: true };

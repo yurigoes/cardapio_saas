@@ -16,9 +16,9 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
   try {
     await ensureSchema();
-    const vals: unknown[] = [];
-    let where = "";
-    if (q) { vals.push(`%${q}%`); where = `WHERE empresa ILIKE $1 OR nome ILIKE $1 OR email ILIKE $1`; }
+    const vals: unknown[] = []; const filtros: string[] = ["archived_at IS NULL"];
+    if (q) { vals.push(`%${q}%`); filtros.push(`(empresa ILIKE $${vals.length} OR nome ILIKE $${vals.length} OR email ILIKE $${vals.length})`); }
+    const where = `WHERE ${filtros.join(" AND ")}`;
     const rows = await db().query(
       `SELECT c.id, c.nome, c.empresa, c.email, c.whatsapp, c.cidade, c.status, c.created_at,
               (SELECT COUNT(*) FROM midia_campanhas mc WHERE mc.conta_id = c.id) AS campanhas
