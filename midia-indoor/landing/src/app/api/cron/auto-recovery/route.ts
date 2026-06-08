@@ -31,10 +31,10 @@ async function run(req: NextRequest) {
     const acoes: Array<{ displayId: number; display: string; segOffline: number; acao: string }> = [];
 
     for (const d of displays) {
-      const segOff = d.loggedIn === 0 && d.lastAccessed ? agora - d.lastAccessed : 0;
+      const segOff = d.loggedIn === 0 && Number(d.lastAccessed ?? 0) ? agora - Number(d.lastAccessed ?? 0) : 0;
 
       // Reconectou recente? bump pra destravar
-      if (d.loggedIn === 1 && d.lastAccessed && (agora - d.lastAccessed) < 600 /* 10min */) {
+      if (d.loggedIn === 1 && Number(d.lastAccessed ?? 0) && (agora - Number(d.lastAccessed ?? 0)) < 600 /* 10min */) {
         try {
           const layoutAlvo = d.defaultLayoutId ?? 1;
           await bumpDisplayCache(d.displayId, layoutAlvo);
@@ -58,7 +58,7 @@ async function run(req: NextRequest) {
           [`%${d.display}%`]
         ).then(r => Number(r.rows[0]?.n ?? 0));
         if (!ja) {
-          await notificar({ tipo: "tela-offline", titulo: `Tela "${d.display}" offline há mais de 1h`, mensagem: `Última conexão: ${d.lastAccessed ? new Date(d.lastAccessed * 1000).toLocaleString("pt-BR") : "n/d"}`, icone: "⚠️" });
+          await notificar({ tipo: "tela-offline", titulo: `Tela "${d.display}" offline há mais de 1h`, mensagem: `Última conexão: ${Number(d.lastAccessed ?? 0) ? new Date(Number(d.lastAccessed ?? 0) * 1000).toLocaleString("pt-BR") : "n/d"}`, icone: "⚠️" });
           acoes.push({ displayId: d.displayId, display: d.display, segOffline: segOff, acao: "notif-1h" });
         }
       }

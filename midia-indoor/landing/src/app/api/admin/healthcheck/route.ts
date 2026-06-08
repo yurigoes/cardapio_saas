@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
       if (d.loggedIn === 1) telas.online++;
       else telas.offline++;
       // offline há mais de 1h = problema
-      if (d.loggedIn !== 1 && d.lastAccessed && agora - d.lastAccessed > 3600) telas.problemas++;
+      const last = Number(d.lastAccessed ?? 0);
+      if (d.loggedIn !== 1 && last > 0 && agora - last > 3600) telas.problemas++;
     }
   } catch (e) { console.warn("[healthcheck] xibo:", (e as Error).message); }
 
