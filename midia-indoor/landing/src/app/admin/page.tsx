@@ -16,6 +16,7 @@ import { NotifBell } from "./notif-bell";
 import { HealthcheckBar } from "./healthcheck-bar";
 import { Tenants } from "./tenants";
 import { PlayerApkUploader } from "./player-apk";
+import { TelasOrfas } from "./telas-orfas";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -26,7 +27,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis" | "calculadora" | "tenants";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis" | "calculadora" | "tenants" | "orfas";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export default function AdminPage() {
     { id: "anunciantes", label: "Anunciantes", icon: Users },
     { id: "locais",      label: "Locais",      icon: MapPin, master: true },
     { id: "telas",       label: "Telas",       icon: MonitorPlay, master: true },
+    { id: "orfas",       label: "TVs novas",   icon: MonitorPlay, master: true },
     { id: "noxibo",      label: "No Xibo",     icon: Server, master: true },
     { id: "pacotes",     label: "Pacotes",     icon: Package, master: true },
     { id: "chamados",    label: "Chamados",    icon: LifeBuoy },
@@ -111,6 +113,7 @@ export default function AdminPage() {
         {aba === "anunciantes" && <Anunciantes token={token} isMaster={isMaster} />}
         {aba === "locais"      && <Locais token={token} />}
         {aba === "telas"       && <Telas token={token} />}
+        {aba === "orfas"       && <TelasOrfas token={token} />}
         {aba === "pacotes"     && <Pacotes token={token} />}
         {aba === "chamados"    && <Chamados token={token} />}
         {aba === "contratos"   && <Contratos token={token} />}
