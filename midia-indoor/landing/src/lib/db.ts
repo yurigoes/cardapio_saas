@@ -250,6 +250,11 @@ export async function ensureSchema(): Promise<void> {
   // URL do APK do Xibo Player Android (hospedado pelo SaaS, evita depender do site do Xibo)
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_url TEXT;`);
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_versao TEXT;`);
+  // APK hospedado no SaaS (arquivo gravado em APK_DIR)
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_filename TEXT;`);
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_size BIGINT;`);
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_sha256 TEXT;`);
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_uploaded_at TIMESTAMPTZ;`);
   // Splash do local (tela de espera quando não há conteúdo agendado)
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_layout_id INTEGER;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_nome TEXT;`);

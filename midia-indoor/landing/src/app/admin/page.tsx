@@ -15,6 +15,7 @@ import { GruposDeLocais, NovoGrupoLocaisModal } from "./grupos-locais";
 import { NotifBell } from "./notif-bell";
 import { HealthcheckBar } from "./healthcheck-bar";
 import { Tenants } from "./tenants";
+import { PlayerApkUploader } from "./player-apk";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -1440,11 +1441,12 @@ function Marca({ token }: { token: string }) {
         </div>
         <div className="border-t border-white/10 pt-4">
           <p className="mb-1 text-sm font-semibold text-slate-300">Player Android (APK)</p>
-          <p className="mb-3 text-xs text-slate-500">Hospede o APK do Xibo Player (recomendado: no MinIO) e cole a URL. Vai aparecer um botão de download no /guia e no rodapé da landing.</p>
+          <p className="mb-3 text-xs text-slate-500">Hospede o APK do Xibo Player. <strong>Opção 1:</strong> URL externa (MinIO, drive). <strong>Opção 2:</strong> upload direto no SaaS (botão abaixo) — vai pra <code>/api/publico/apk</code>.</p>
           <div className="grid grid-cols-[1fr_180px] gap-3">
-            <Field label="URL do APK" value={b.player_apk_url ?? ""} onChange={v => set("player_apk_url", v)} placeholder="https://minio.tthreedigital.com.br/.../xibo-player.apk" />
-            <Field label="Versão (rótulo)" value={b.player_versao ?? ""} onChange={v => set("player_versao", v)} placeholder="ex: R301 (v3)" />
+            <Field label="URL do APK (externa, opcional)" value={b.player_apk_url ?? ""} onChange={v => set("player_apk_url", v)} placeholder="ou deixe vazio se vai usar upload" />
+            <Field label="Versão (rótulo)" value={b.player_versao ?? ""} onChange={v => set("player_versao", v)} placeholder="ex: R301-self" />
           </div>
+          <PlayerApkUploader token={token} />
         </div>
 
         <div className="flex items-center gap-3 pt-2">
