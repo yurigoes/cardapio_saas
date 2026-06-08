@@ -972,12 +972,27 @@ export interface StatLinha { type: string; layoutId?: number; numberPlays: numbe
 
 /** Proof-of-play: total de exibições de uma campanha num período. */
 export async function statsCampanha(campaignId: number, fromDt: string, toDt: string): Promise<{ plays: number; duracao: number; linhas: number }> {
-  const qs = new URLSearchParams({ type: "Layout", campaignId: String(campaignId), fromDt, toDt });
-  const r = await xibo<{ data?: StatLinha[] } | StatLinha[]>(`/api/stats?${qs.toString()}`);
-  const linhas = Array.isArray(r) ? r : (r.data ?? []);
-  const plays = linhas.reduce((s, l) => s + (Number(l.numberPlays) || 0), 0);
-  const duracao = linhas.reduce((s, l) => s + (Number(l.duration) || 0), 0);
-  return { plays, duracao, linhas: linhas.length };
+  // Tenta 2 buscas e soma sem duplicar:
+  //  1) parentCampaignId = ad campaign id (mais correto pra ad campaigns)
+  //  2) campaignId = id do layout-campaign (fallback pra agendamento direto)
+  const visto = new Set<string>();
+  let plays = 0, duracao = 0, linhas = 0;
+  for (const filtro of [`parentCampaignId=${campaignId}`, `campaignId=${campaignId}`]) {
+    try {
+      const qs = `type=Layout&${filtro}&fromDt=${encodeURIComponent(fromDt)}&toDt=${encodeURIComponent(toDt)}`;
+      const r = await xibo<{ data?: StatLinha[] } | StatLinha[]>(`/api/stats?${qs}`);
+      const lista = Array.isArray(r) ? r : (r.data ?? []);
+      for (const l of lista) {
+        const key = `${l.displayId ?? ""}-${l.start ?? ""}-${l.end ?? ""}-${l.layoutId ?? ""}`;
+        if (visto.has(key)) continue;
+        visto.add(key);
+        plays += Number(l.numberPlays) || 0;
+        duracao += Number(l.duration) || 0;
+        linhas++;
+      }
+    } catch (e) { /* tenta o próximo filtro */ }
+  }
+  return { plays, duracao, linhas };
 }
 
 export interface ExibicaoLinha {
@@ -991,9 +1006,22 @@ export interface ExibicaoLinha {
 
 /** Proof-of-play detalhado: cada registro de exibição com horário + tela (transparência). */
 export async function statsDetalhe(campaignId: number, fromDt: string, toDt: string): Promise<ExibicaoLinha[]> {
-  const qs = new URLSearchParams({ type: "Layout", campaignId: String(campaignId), fromDt, toDt, embed: "displayName" });
-  const r = await xibo<{ data?: Record<string, unknown>[] } | Record<string, unknown>[]>(`/api/stats?${qs.toString()}`);
-  const rows = Array.isArray(r) ? r : (r.data ?? []);
+  // Igual ao statsCampanha: tenta parentCampaignId e campaignId, dedupe.
+  const visto = new Set<string>();
+  const rows: Record<string, unknown>[] = [];
+  for (const filtro of [`parentCampaignId=${campaignId}`, `campaignId=${campaignId}`]) {
+    try {
+      const qs = `type=Layout&${filtro}&fromDt=${encodeURIComponent(fromDt)}&toDt=${encodeURIComponent(toDt)}&embed=displayName`;
+      const r = await xibo<{ data?: Record<string, unknown>[] } | Record<string, unknown>[]>(`/api/stats?${qs}`);
+      const lista = Array.isArray(r) ? r : (r.data ?? []);
+      for (const row of lista) {
+        const key = `${row.displayId ?? ""}-${row.start ?? ""}-${row.end ?? ""}-${row.layoutId ?? ""}`;
+        if (visto.has(key)) continue;
+        visto.add(key);
+        rows.push(row);
+      }
+    } catch (e) { /* segue */ }
+  }
   return rows.map(row => ({
     start:       String(row.start ?? row.statDate ?? ""),
     end:         String(row.end ?? ""),
