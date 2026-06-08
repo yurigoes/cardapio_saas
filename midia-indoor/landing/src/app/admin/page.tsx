@@ -13,6 +13,7 @@ import { aplicarCorBranding } from "@/components/Branding";
 import { Notas, Cobrancas, Afiliados, Backups, Arquivados, DisplayProfiles, Calculadora, CalculadoraInline } from "./financeiro";
 import { GruposDeLocais, NovoGrupoLocaisModal } from "./grupos-locais";
 import { NotifBell } from "./notif-bell";
+import { HealthcheckBar } from "./healthcheck-bar";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -180,6 +181,7 @@ function Dashboard({ token }: { token: string }) {
   if (!d) return <Loader2 className="h-6 w-6 animate-spin text-slate-500" />;
   return (
     <div>
+      <HealthcheckBar token={token} />
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <Kpi label="Anunciantes" value={String(d.kpis.anunciantes)} />
         <Kpi label="Campanhas no ar" value={String(d.kpis.campanhas_no_ar)} />
