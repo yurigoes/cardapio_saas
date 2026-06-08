@@ -14,6 +14,7 @@ import { Notas, Cobrancas, Afiliados, Backups, Arquivados, DisplayProfiles, Calc
 import { GruposDeLocais, NovoGrupoLocaisModal } from "./grupos-locais";
 import { NotifBell } from "./notif-bell";
 import { HealthcheckBar } from "./healthcheck-bar";
+import { Tenants } from "./tenants";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -24,7 +25,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis" | "calculadora";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis" | "calculadora" | "tenants";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -73,6 +74,7 @@ export default function AdminPage() {
     { id: "afiliados",   label: "Afiliados",   icon: HandCoins, master: true },
     { id: "backups",     label: "Backups",     icon: Archive, master: true },
     { id: "perfis",      label: "Perfis player", icon: MonitorPlay, master: true },
+    { id: "tenants",     label: "Tenants",     icon: Server, master: true },
     { id: "arquivados",  label: "Arquivados",  icon: Archive, master: true },
     { id: "auditoria",   label: "Auditoria",   icon: ScrollText, master: true },
   ];
@@ -124,6 +126,7 @@ export default function AdminPage() {
         {aba === "backups"     && <Backups token={token} />}
         {aba === "perfis"      && <DisplayProfiles token={token} />}
         {aba === "calculadora" && <Calculadora />}
+        {aba === "tenants"     && <Tenants token={token} />}
         {aba === "arquivados"  && <Arquivados token={token} />}
         {aba === "auditoria"   && <Auditoria token={token} />}
         {aba === "noxibo"      && <NoXibo token={token} />}

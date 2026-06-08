@@ -444,6 +444,38 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_midia_backups_data ON midia_backups(criado_em DESC);
   `);
 
+  // ─── Multi-tenant / White-label (operadores DOOH revendendo o SaaS) ────
+  //   - Cada operador é uma "tenant" com domínio próprio + branding
+  //   - Detecção: middleware compara host da requisição com tenant.dominios
+  //   - Todos os dados de cada tenant ficam isolados via tenant_id
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_tenants (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      slug            TEXT NOT NULL UNIQUE,         -- ex: "atacadao-xyz"
+      nome            TEXT NOT NULL,
+      dominios        TEXT[] NOT NULL DEFAULT '{}', -- hosts deste tenant (ex: ['media.atacadaoxy.com.br'])
+      branding_id     UUID,                          -- aponta pra midia_branding (já existente, multi-row aqui)
+      ativo           BOOLEAN NOT NULL DEFAULT true,
+      plano           TEXT NOT NULL DEFAULT 'basico',-- basico|pro|enterprise
+      preco_mensal    NUMERIC(10,2) NOT NULL DEFAULT 0,
+      mp_assinatura_id TEXT,
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tenant_slug ON midia_tenants(slug);
+  `);
+  // Tenant default ("Three Digital") pra continuar funcionando como hoje
+  await p.query(`
+    INSERT INTO midia_tenants (slug, nome, dominios, plano, preco_mensal)
+    VALUES ('three-digital', 'Three Digital Mídia', ARRAY['midiaindoor.tthreedigital.com.br','localhost'], 'enterprise', 0)
+    ON CONFLICT (slug) DO NOTHING;
+  `);
+  // Adiciona tenant_id às tabelas principais (NULL = pertence ao tenant default)
+  for (const tabela of ["midia_contas", "midia_locais", "midia_campanhas", "midia_pacotes", "midia_cupons", "midia_afiliados"]) {
+    await p.query(`ALTER TABLE ${tabela} ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES midia_tenants(id) ON DELETE CASCADE;`);
+    // Backfill: tudo que não tem tenant_id aponta pro default
+    await p.query(`UPDATE ${tabela} SET tenant_id = (SELECT id FROM midia_tenants WHERE slug='three-digital') WHERE tenant_id IS NULL;`);
+  }
+
   // ─── Templates de campanha (salvos pra reusar) ────────────────────────
   await p.query(`
     CREATE TABLE IF NOT EXISTS midia_campanha_templates (
