@@ -222,15 +222,26 @@ function QRCodeModal({ item, onClose }: { item: ItemInv; onClose: () => void }) 
 
   useEffect(() => {
     if (typeof window !== "undefined") setOrigem(window.location.origin);
+    let cancelled = false;
     (async () => {
-      await carregarQRCode();
-      if (canvasRef.current && window.QRCode) {
-        const url = `${window.location.origin}/q/${item.qr_token}`;
-        window.QRCode.toCanvas(canvasRef.current, url, { width: 300, margin: 2 }, (err) => {
-          if (err) console.error(err);
-        });
+      try {
+        await carregarQRCode();
+        // pequeno delay pra garantir que canvas montou no DOM
+        await new Promise(r => setTimeout(r, 50));
+        if (cancelled) return;
+        if (canvasRef.current && window.QRCode) {
+          const url = `${window.location.origin}/q/${item.qr_token}`;
+          window.QRCode.toCanvas(canvasRef.current, url, { width: 300, margin: 2 }, (err) => {
+            if (err) console.error("QR error:", err);
+          });
+        } else {
+          console.warn("QR: canvas ou lib indisponivel", { canvas: !!canvasRef.current, lib: !!window.QRCode });
+        }
+      } catch (e) {
+        console.error("QR carga falhou:", e);
       }
     })();
+    return () => { cancelled = true; };
   }, [item.qr_token]);
 
   function imprimir() {

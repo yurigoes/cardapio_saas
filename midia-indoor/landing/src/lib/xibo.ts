@@ -1044,26 +1044,33 @@ export interface StatLinha { type: string; layoutId?: number; displayId?: number
 
 /** Proof-of-play: total de exibições de uma campanha num período. */
 export async function statsCampanha(campaignId: number, fromDt: string, toDt: string): Promise<{ plays: number; duracao: number; linhas: number }> {
-  // Tenta 2 buscas e soma sem duplicar:
-  //  1) parentCampaignId = ad campaign id (mais correto pra ad campaigns)
-  //  2) campaignId = id do layout-campaign (fallback pra agendamento direto)
+  // Combina varios filtros (Xibo 3.x e variants) e dedupe.
+  //  - type=Layout (maiusculo)
+  //  - type=layout (minusculo) - algumas versoes
+  //  - sem type (todos)
+  //  - parentCampaignId vs campaignId
   const visto = new Set<string>();
   let plays = 0, duracao = 0, linhas = 0;
+  const tentativas: string[] = [];
   for (const filtro of [`parentCampaignId=${campaignId}`, `campaignId=${campaignId}`]) {
-    try {
-      const qs = `type=Layout&${filtro}&fromDt=${encodeURIComponent(fromDt)}&toDt=${encodeURIComponent(toDt)}`;
-      const r = await xibo<{ data?: StatLinha[] } | StatLinha[]>(`/api/stats?${qs}`);
-      const lista = Array.isArray(r) ? r : (r.data ?? []);
-      for (const l of lista) {
-        const key = `${l.displayId ?? ""}-${l.start ?? ""}-${l.end ?? ""}-${l.layoutId ?? ""}`;
-        if (visto.has(key)) continue;
-        visto.add(key);
-        plays += Number(l.numberPlays) || 0;
-        duracao += Number(l.duration) || 0;
-        linhas++;
-      }
-    } catch (e) { /* tenta o próximo filtro */ }
+    for (const tipo of [`type=Layout`, `type=layout`, ``]) {
+      const qs = [tipo, filtro, `fromDt=${encodeURIComponent(fromDt)}`, `toDt=${encodeURIComponent(toDt)}`].filter(Boolean).join("&");
+      tentativas.push(qs);
+      try {
+        const r = await xibo<{ data?: StatLinha[]; recordsTotal?: number } | StatLinha[]>(`/api/stats?${qs}`);
+        const lista = Array.isArray(r) ? r : (r.data ?? []);
+        for (const l of lista) {
+          const key = `${l.displayId ?? ""}-${l.start ?? ""}-${l.end ?? ""}-${l.layoutId ?? ""}`;
+          if (visto.has(key)) continue;
+          visto.add(key);
+          plays += Number(l.numberPlays) || 0;
+          duracao += Number(l.duration) || 0;
+          linhas++;
+        }
+      } catch (e) { /* tenta proximo */ }
+    }
   }
+  if (linhas === 0) console.log(`[statsCampanha] sem stats para campaign ${campaignId} (${fromDt} → ${toDt}). Tentativas:`, tentativas);
   return { plays, duracao, linhas };
 }
 
