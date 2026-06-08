@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw } from "lucide-react";
+import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw, Monitor, Copy } from "lucide-react";
 import { notify, confirmModal } from "@/components/Notify";
 
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -12,6 +12,7 @@ interface ItemInv {
   fabricante: string | null; modelo: string | null; local_id: string | null; local_nome: string | null;
   xibo_display_id: number | null; qr_token: string; ip_local: string | null;
   valor: string | null; nota_fiscal: string | null; observacao: string | null; ativo: boolean;
+  rustdesk_id: string | null; rustdesk_senha: string | null;
 }
 interface LocalSimples { id: string; nome: string; cidade?: string | null; }
 
@@ -76,7 +77,7 @@ export function Inventario({ token }: { token: string }) {
       <div className="overflow-x-auto rounded-xl border border-white/10">
         <table className="w-full text-sm">
           <thead className="bg-white/5 text-left text-slate-400">
-            <tr><th className="p-3">Tipo</th><th className="p-3">Nome</th><th className="p-3">MAC</th><th className="p-3">Serial</th><th className="p-3">Local</th><th className="p-3">Xibo</th><th className="p-3"></th></tr>
+            <tr><th className="p-3">Tipo</th><th className="p-3">Nome</th><th className="p-3">MAC</th><th className="p-3">Serial</th><th className="p-3">Local</th><th className="p-3">Xibo</th><th className="p-3">RustDesk</th><th className="p-3"></th></tr>
           </thead>
           <tbody>
             {filtrados.map(i => (
@@ -87,15 +88,17 @@ export function Inventario({ token }: { token: string }) {
                 <td className="p-3 font-mono text-xs">{i.serial ?? "—"}</td>
                 <td className="p-3 text-xs">{i.local_nome ?? "—"}</td>
                 <td className="p-3 text-xs">{i.xibo_display_id ? `#${i.xibo_display_id}` : "—"}</td>
+                <td className="p-3 text-xs font-mono">{i.rustdesk_id ?? "—"}</td>
                 <td className="p-3 text-right">
                   <div className="flex justify-end gap-1">
+                    {i.rustdesk_id && <RemotoBtn id={i.rustdesk_id} senha={i.rustdesk_senha} />}
                     <button onClick={() => setVerQR(i)} className="rounded border border-brand/40 p-1.5 text-brand-light hover:bg-brand/10" title="QR Code"><QrCode className="h-3.5 w-3.5" /></button>
                     <button onClick={() => excluir(i)} className="rounded border border-red-500/30 p-1.5 text-red-300 hover:bg-red-500/10" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 </td>
               </tr>
             ))}
-            {!filtrados.length && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Nenhum item.</td></tr>}
+            {!filtrados.length && <tr><td colSpan={8} className="p-6 text-center text-slate-500">Nenhum item.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -187,6 +190,29 @@ function Field({ label, value, onChange, placeholder = "", type = "text", mono }
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         className={`w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none ${mono ? "font-mono" : ""}`} />
     </div>
+  );
+}
+
+function RemotoBtn({ id, senha }: { id: string; senha: string | null }) {
+  function abrir() {
+    // RustDesk schema: rustdesk://connection/new/connect?id=XXXX&password=YYYY
+    // No Windows com client instalado, abre direto. Senao mostra modal.
+    const url = `rustdesk://connection/new/connect?id=${id}${senha ? `&password=${encodeURIComponent(senha)}` : ""}`;
+    window.location.href = url;
+  }
+  function copiar() {
+    navigator.clipboard.writeText(id);
+    notify(`ID ${id} copiado`, "success");
+  }
+  return (
+    <>
+      <button onClick={abrir} className="rounded border border-emerald-500/40 p-1.5 text-emerald-300 hover:bg-emerald-500/10" title={`Acessar via RustDesk (ID ${id}${senha ? `, senha ${senha}` : ""})`}>
+        <Monitor className="h-3.5 w-3.5" />
+      </button>
+      <button onClick={copiar} className="rounded border border-slate-500/40 p-1.5 text-slate-300 hover:bg-slate-500/10" title="Copiar ID RustDesk">
+        <Copy className="h-3.5 w-3.5" />
+      </button>
+    </>
   );
 }
 

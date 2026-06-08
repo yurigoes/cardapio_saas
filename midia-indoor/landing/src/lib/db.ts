@@ -480,6 +480,9 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_inv_local ON midia_inventario(local_id);
     CREATE INDEX IF NOT EXISTS idx_inv_qr ON midia_inventario(qr_token);
   `);
+  // RustDesk: ID do app pra acesso remoto (capturado no provisionamento)
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS rustdesk_id TEXT;`);
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS rustdesk_senha TEXT;`);
 
   // ─── Multi-tenant / White-label (operadores DOOH revendendo o SaaS) ────
   //   - Cada operador é uma "tenant" com domínio próprio + branding
