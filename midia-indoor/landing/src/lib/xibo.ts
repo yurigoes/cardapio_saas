@@ -52,16 +52,18 @@ interface XiboOpts {
 }
 
 async function xibo<T = unknown>(path: string, opts: XiboOpts = {}): Promise<T> {
+  return _xiboOnce<T>(path, opts, false);
+}
+
+async function _xiboOnce<T = unknown>(path: string, opts: XiboOpts, isRetry: boolean): Promise<T> {
   const token = await getToken();
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     ...(opts.headers ?? {}),
   };
-  // URLSearchParams → form-urlencoded (a maioria dos POSTs do Xibo usa isso)
   if (opts.body instanceof URLSearchParams && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/x-www-form-urlencoded";
   }
-  // Default 30s; uploads grandes (FormData) ganham 5min
   const timeout = opts.timeoutMs ?? (opts.body instanceof FormData ? 5 * 60_000 : 30_000);
   const r = await fetch(`${XIBO_URL}${path}`, {
     method:  opts.method ?? "GET",
@@ -70,6 +72,11 @@ async function xibo<T = unknown>(path: string, opts: XiboOpts = {}): Promise<T> 
     signal:  AbortSignal.timeout(timeout),
   });
   const text = await r.text();
+  // 401/403: token invalidado server-side (CMS reiniciou ou segredo trocou). Limpa cache e tenta 1x mais.
+  if ((r.status === 401 || r.status === 403) && !isRetry) {
+    _token = null;
+    return _xiboOnce<T>(path, opts, true);
+  }
   if (!r.ok) {
     throw new Error(`Xibo ${opts.method ?? "GET"} ${path} → ${r.status}: ${text.slice(0, 300)}`);
   }
