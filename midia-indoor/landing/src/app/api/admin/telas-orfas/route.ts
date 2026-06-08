@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       lastAccessed: d.lastAccessed,
       clientAddress: (d as { clientAddress?: string }).clientAddress ?? "",
     }))
-    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0));
+    .sort((a, b) => (Number(b.lastAccessed) || 0) - (Number(a.lastAccessed) || 0));
 
   return NextResponse.json({ ok: true, telas_orfas: orfas, total_locais: locais.length });
 }
