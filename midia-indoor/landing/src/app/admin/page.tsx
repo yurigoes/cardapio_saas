@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
-import { Notas, Cobrancas, Afiliados, Backups, Arquivados, DisplayProfiles, Calculadora } from "./financeiro";
+import { Notas, Cobrancas, Afiliados, Backups, Arquivados, DisplayProfiles, Calculadora, CalculadoraInline } from "./financeiro";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -226,7 +226,7 @@ function Badge({ s }: { s: string }) {
 interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; telas_total?: number; telas_online?: number; sync_em?: string | null; }
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
-interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; arte_status?: string; arte_rejeicao_motivo?: string | null; hora_inicio?: string | null; hora_fim?: string | null; desconto?: string | null; dias_semana?: string | null; }
+interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; arte_status?: string; arte_rejeicao_motivo?: string | null; hora_inicio?: string | null; hora_fim?: string | null; desconto?: string | null; dias_semana?: string | null; formato?: string; }
 interface ArteVersao { id: string; arte_nome: string | null; arte_tipo: string | null; xibo_layout_id: number | null; ativa: boolean; criada_em: string; enviada_por: string | null; }
 interface Cupom { id: string; codigo: string; tipo: string; valor: string; validade: string | null; max_usos: number | null; usos: number; ativo: boolean; created_at: string; }
 
@@ -296,6 +296,9 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
   const [cupom, setCupom] = useState("");
   const [diasSemana, setDiasSemana] = useState<number[]>([1, 2, 3, 4, 5, 6, 7]); // ISO 1=Seg..7=Dom
   const [formato, setFormato] = useState<"simples" | "encarte_totem" | "encarte_gondola">("simples");
+  const [insercoes, setInsercoes] = useState<string>(""); // override do pacote (se preenchido)
+  const [segundos, setSegundos] = useState<string>("");   // override do pacote (se preenchido)
+  const [verCalc, setVerCalc] = useState(false);
   const [selLocais, setSelLocais] = useState<string[]>([]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   function toggleDia(d: number) { setDiasSemana(s => s.includes(d) ? s.filter(x => x !== d) : [...s, d].sort((a, b) => a - b)); }
@@ -326,6 +329,8 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
       cupom_codigo: cupom.trim() || undefined,
       dias_semana: diasSemana.length === 7 ? undefined : diasSemana.join(","),
       formato,
+      insercoes_dia: insercoes ? Number(insercoes) : undefined,
+      segundos:      segundos  ? Number(segundos)  : undefined,
       valor: valor || 0, locais: selLocais,
     };
     const r = await aapi(token, "/api/admin/campanhas", { method: "POST", body: JSON.stringify(body) });
@@ -360,6 +365,22 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
         <option value="">Selecione um pacote…</option>
         {pacotes.map(p => <option key={p.id} value={p.id}>{p.nome} · {p.insercoes_dia}/dia · {p.segundos}s</option>)}
       </select>
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        <Field label="Inserções/dia (opcional, sobrescreve pacote)" value={insercoes} onChange={setInsercoes} type="number" />
+        <Field label="Segundos/inserção (opcional)" value={segundos} onChange={setSegundos} type="number" />
+        <div className="flex items-end">
+          <button type="button" onClick={() => setVerCalc(true)} className="w-full rounded-xl border border-brand/30 bg-brand/5 py-2 text-xs font-semibold text-brand-light hover:bg-brand/10">
+            🧮 Calcular inserções
+          </button>
+        </div>
+      </div>
+      {verCalc && (
+        <CalculadoraInline
+          segundosInicial={segundos}
+          onClose={() => setVerCalc(false)}
+          onUsar={(ins, segs) => { setInsercoes(String(ins)); setSegundos(String(segs)); }}
+        />
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Início" value={inicio} onChange={setInicio} type="date" />
         <Field label="Fim" value={fim} onChange={setFim} type="date" />
@@ -466,6 +487,11 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
               <p className="flex items-center gap-2 font-medium text-emerald-300"><BarChart3 className="h-4 w-4" /> Proof-of-play</p>
               <p className="mt-1 text-slate-300">{det.relatorio.plays} exibições · {Math.round(det.relatorio.duracao)}s no total</p>
             </div>
+          )}
+
+          {/* Playlist de encarte_gondola (várias artes em sequência) */}
+          {(c as Camp & { formato?: string }).formato === "encarte_gondola" && isMaster && (
+            <PlaylistEncarte token={token} campId={camp.id} onChange={() => { load(); onChange(); }} />
           )}
 
           {/* Aprovação de arte (workflow) */}
@@ -1887,4 +1913,119 @@ function Templates({ token }: { token: string }) {
       </div>
     </div>
   );
+}
+
+// ─── Playlist do encarte_gondola ────────────────────────────────────────────
+interface ItemPlaylist { id: string; arte_nome: string | null; arte_tipo: string | null; xibo_layout_id: number | null; criada_em: string; }
+function PlaylistEncarte({ token, campId, onChange }: { token: string; campId: string; onChange: () => void }) {
+  const [itens, setItens] = useState<ItemPlaylist[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [progresso, setProgresso] = useState<string>("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    const r = await aapi(token, `/api/admin/campanhas/${campId}/playlist`); const d = await r.json();
+    if (d.ok) setItens(d.itens);
+  }, [token, campId]);
+  useEffect(() => { load(); }, [load]);
+
+  async function enviarArquivos(files: FileList) {
+    setBusy(true); setProgresso("");
+    try {
+      // Separa PDFs (converte) e demais (envia direto)
+      const pdfs = Array.from(files).filter(f => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+      const outros = Array.from(files).filter(f => !pdfs.includes(f));
+
+      const enviar: File[] = [...outros];
+
+      // Converte cada PDF em imagens (1 por página) — client-side via pdfjs-dist (CDN)
+      if (pdfs.length) {
+        setProgresso("Carregando conversor de PDF…");
+        await carregarPdfJs();
+        // @ts-expect-error pdfjsLib injetado via script tag
+        const pdfjsLib = window.pdfjsLib;
+        for (const pdf of pdfs) {
+          setProgresso(`Convertendo ${pdf.name}…`);
+          const arr = new Uint8Array(await pdf.arrayBuffer());
+          const doc = await pdfjsLib.getDocument({ data: arr }).promise;
+          for (let i = 1; i <= doc.numPages; i++) {
+            const page = await doc.getPage(i);
+            const viewport = page.getViewport({ scale: 2 }); // 2x = qualidade boa
+            const canvas = document.createElement("canvas");
+            canvas.width = viewport.width; canvas.height = viewport.height;
+            const ctx = canvas.getContext("2d")!;
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            const blob = await new Promise<Blob>(res => canvas.toBlob(b => res(b!), "image/jpeg", 0.92));
+            const nome = `${pdf.name.replace(/\.pdf$/i, "")}-p${String(i).padStart(2, "0")}.jpg`;
+            enviar.push(new File([blob], nome, { type: "image/jpeg" }));
+            setProgresso(`Convertendo ${pdf.name}: página ${i}/${doc.numPages}`);
+          }
+        }
+      }
+
+      setProgresso(`Subindo ${enviar.length} arquivo(s)…`);
+      const fd = new FormData();
+      for (const f of enviar) fd.append("file", f);
+      const r = await fetch(`/api/admin/campanhas/${campId}/playlist`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || "erro no upload");
+      notify(`Playlist atualizada: +${enviar.length} item(ns). Reaplique pra atualizar nos players.`, "success");
+      load(); onChange();
+    } catch (e) {
+      notify((e as Error).message || "Erro", "error");
+    } finally {
+      setBusy(false); setProgresso("");
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function remover(arteId: string) {
+    if (!await confirmModal("Remover este item da playlist?")) return;
+    const r = await aapi(token, `/api/admin/campanhas/${campId}/playlist?arte_id=${arteId}`, { method: "DELETE" });
+    const d = await r.json();
+    notify(d.ok ? d.msg : (d.error || "Erro"), d.ok ? "success" : "error");
+    if (d.ok) load();
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="flex items-center gap-2 text-sm font-medium text-amber-200"><Megaphone className="h-4 w-4" /> Playlist do encarte ({itens.length} item{itens.length === 1 ? "" : "s"})</p>
+        <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold hover:bg-brand-dark">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          {busy ? "Processando…" : "Adicionar (imagens/vídeos/PDF)"}
+          <input ref={inputRef} type="file" accept="image/*,video/*,application/pdf" multiple className="hidden" disabled={busy} onChange={e => e.target.files && e.target.files.length && enviarArquivos(e.target.files)} />
+        </label>
+      </div>
+      {progresso && <p className="mb-2 text-xs text-slate-300">{progresso}</p>}
+      <p className="mb-2 text-xs text-slate-400">A ordem da reprodução segue a ordem de upload. PDFs são convertidos em uma imagem por página automaticamente.</p>
+      <ul className="space-y-1 text-xs">
+        {itens.map((it, i) => (
+          <li key={it.id} className="flex items-center justify-between rounded bg-white/5 px-2 py-1.5">
+            <div><span className="mr-2 text-slate-500">{i + 1}.</span> {it.arte_nome ?? "—"} <span className="ml-2 text-slate-500">({it.arte_tipo})</span></div>
+            <button onClick={() => remover(it.id)} className="rounded border border-red-500/30 px-2 py-0.5 text-red-300 hover:bg-red-500/10"><Trash2 className="h-3 w-3" /></button>
+          </li>
+        ))}
+        {!itens.length && <li className="text-slate-500">Nenhum item ainda. Adicione imagens, vídeos ou um PDF.</li>}
+      </ul>
+    </div>
+  );
+}
+
+let _pdfJsLoaded = false;
+async function carregarPdfJs(): Promise<void> {
+  if (_pdfJsLoaded) return;
+  if (typeof window === "undefined") return;
+  // @ts-expect-error injetado por script externo
+  if (window.pdfjsLib) { _pdfJsLoaded = true; return; }
+  await new Promise<void>((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("falha ao carregar pdfjs"));
+    document.head.appendChild(s);
+  });
+  // @ts-expect-error
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  _pdfJsLoaded = true;
 }

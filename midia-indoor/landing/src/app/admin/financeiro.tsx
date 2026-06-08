@@ -657,3 +657,43 @@ function Linha({ label, v, destaque }: { label: string; v: string; destaque?: bo
     </div>
   );
 }
+
+// Versão compacta da calculadora pra usar em modal dentro do NovaCampanha
+export function CalculadoraInline({ segundosInicial, onUsar, onClose }: { segundosInicial?: string; onUsar: (insercoesDia: number, segundos: number) => void; onClose: () => void }) {
+  const [hi, setHi] = useState("08:00");
+  const [hf, setHf] = useState("22:00");
+  const [intervaloMin, setIntervaloMin] = useState("5");
+  const [segundos, setSegundos] = useState(segundosInicial ?? "10");
+  const [rotacao, setRotacao] = useState("3");
+
+  const parseHora = (s: string): number => { const [h, m] = s.split(":").map(n => parseInt(n, 10)); return (h ?? 0) * 60 + (m ?? 0); };
+  const minDia = Math.max(0, parseHora(hf) - parseHora(hi));
+  const intervalo = Math.max(1, Number(intervaloMin));
+  const segs = Math.max(1, Number(segundos));
+  const insTotal = Math.floor(minDia / intervalo);
+  const insPorCliente = Math.floor(insTotal / Math.max(1, Number(rotacao)));
+  const tempoOcupado = insTotal * segs;
+  const ocupPct = minDia > 0 ? Math.round((tempoOcupado / (minDia * 60)) * 1000) / 10 : 0;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#12121c] p-5" onClick={e => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between"><h3 className="font-bold">Calculadora de inserções</h3><button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button></div>
+        <p className="mb-3 text-xs text-slate-400">Defina a grade desejada — o sistema sugere quantas inserções/dia configurar.</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Início" value={hi} onChange={setHi} placeholder="08:00" />
+          <Field label="Fim" value={hf} onChange={setHf} placeholder="22:00" />
+        </div>
+        <Field label="Segundos/inserção" value={segundos} onChange={setSegundos} type="number" />
+        <Field label="A cada quantos min" value={intervaloMin} onChange={setIntervaloMin} type="number" />
+        <Field label="Quantos clientes na mesma TV (rateio)" value={rotacao} onChange={setRotacao} type="number" />
+        <div className="my-3 rounded-lg border border-brand/30 bg-brand/10 p-3 text-sm">
+          <div className="flex justify-between"><span className="text-slate-300">Total/dia:</span> <strong className="text-brand-light">{insTotal} inserções</strong></div>
+          <div className="flex justify-between"><span className="text-slate-300">Para este cliente:</span> <strong className="text-brand-light">{insPorCliente} ins/dia</strong></div>
+          <div className="flex justify-between text-xs text-slate-400"><span>Ocupação:</span> <span>{ocupPct}%</span></div>
+        </div>
+        <button onClick={() => { onUsar(insPorCliente, segs); onClose(); }} disabled={insPorCliente <= 0} className="w-full rounded-xl bg-brand py-2 font-semibold hover:bg-brand-dark disabled:opacity-50">Usar esses valores</button>
+      </div>
+    </div>
+  );
+}
