@@ -575,6 +575,21 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
                   {busy === "rel-email" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar relatório por e-mail
                 </button>
               )}
+              <button onClick={async () => {
+                setBusy("pdf");
+                try {
+                  const r = await aapi(token, `/api/admin/campanhas/${camp.id}/relatorio-pdf`);
+                  if (!r.ok) throw new Error("erro ao gerar");
+                  const html = await r.text();
+                  const blob = new Blob([html], { type: "text/html" });
+                  const url = URL.createObjectURL(blob);
+                  window.open(url, "_blank");
+                  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                } catch (e) { notify((e as Error).message, "error"); }
+                setBusy("");
+              }} disabled={!!busy} className="flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5 disabled:opacity-50">
+                {busy === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Gerar PDF
+              </button>
               <div className="ml-auto flex items-center gap-1 text-xs">
                 <span className="text-slate-400">Pgto:</span>
                 {["pago", "pendente", "isento"].map(s => (
