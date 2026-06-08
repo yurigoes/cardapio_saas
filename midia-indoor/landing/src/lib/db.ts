@@ -449,6 +449,38 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_midia_backups_data ON midia_backups(criado_em DESC);
   `);
 
+  // ─── Inventário de hardware (controle interno) ─────────────────────────
+  //   Cada item físico (box, TV, totem, cabo, fonte, suporte) com MAC,
+  //   serial, fabricante, valor, etc. Cada item gera um QR único pra
+  //   colar fisicamente no equipamento; quando escaneado abre a página
+  //   pública /q/{token} com dados completos.
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_inventario (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tipo            TEXT NOT NULL DEFAULT 'box',  -- box|tv|totem|cabo|fonte|suporte|outro
+      nome            TEXT NOT NULL,                -- ex: "Box-001 Atacadão"
+      mac             TEXT,                          -- AA:BB:CC:DD:EE:FF
+      serial          TEXT,
+      fabricante      TEXT,
+      modelo          TEXT,
+      local_id        UUID REFERENCES midia_locais(id) ON DELETE SET NULL,
+      xibo_display_id INTEGER,                       -- vínculo com display do Xibo
+      qr_token        TEXT NOT NULL UNIQUE,          -- token único pro QR
+      ip_local        TEXT,                          -- último IP visto na LAN
+      valor           NUMERIC(10,2),
+      comprado_em     DATE,
+      garantia_ate    DATE,
+      nota_fiscal     TEXT,
+      observacao      TEXT,
+      ativo           BOOLEAN NOT NULL DEFAULT true,
+      created_at      TIMESTAMPTZ DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_inv_mac ON midia_inventario(mac);
+    CREATE INDEX IF NOT EXISTS idx_inv_local ON midia_inventario(local_id);
+    CREATE INDEX IF NOT EXISTS idx_inv_qr ON midia_inventario(qr_token);
+  `);
+
   // ─── Multi-tenant / White-label (operadores DOOH revendendo o SaaS) ────
   //   - Cada operador é uma "tenant" com domínio próprio + branding
   //   - Detecção: middleware compara host da requisição com tenant.dominios
