@@ -453,6 +453,14 @@ export async function ensureSchema(): Promise<void> {
   // NULL ou "1,2,3,4,5,6,7" = todos os dias.
   await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS dias_semana TEXT;`);
 
+  // Tipo/formato da campanha (define o fluxo de mídia/layout)
+  //  - simples            : 1 arte só, layout fullscreen padrão (default)
+  //  - encarte_totem      : 1 arte/vídeo (totem vertical de entrada de loja)
+  //  - encarte_gondola    : N artes em sequência num único layout (ex: 8 promos
+  //                         de ponta de gôndola que tocam todas seguidas, depois
+  //                         outros anúncios assumem, e volta)
+  await p.query(`ALTER TABLE midia_campanhas ADD COLUMN IF NOT EXISTS formato TEXT NOT NULL DEFAULT 'simples';`);
+
   // ─── Arquivamento (soft-delete com purge automático após 6 meses) ────────
   await p.query(`ALTER TABLE midia_campanhas  ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;`);
   await p.query(`ALTER TABLE midia_locais     ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;`);

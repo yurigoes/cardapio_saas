@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
-import { Notas, Cobrancas, Afiliados, Backups, Arquivados, DisplayProfiles } from "./financeiro";
+import { Notas, Cobrancas, Afiliados, Backups, Arquivados, DisplayProfiles, Calculadora } from "./financeiro";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -21,7 +21,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis" | "calculadora";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -62,6 +62,7 @@ export default function AdminPage() {
     { id: "mapa",        label: "Mapa",        icon: Map },
     { id: "calendario",  label: "Calendário",  icon: CalendarDays },
     { id: "grade",       label: "Grade",       icon: Grid3x3 },
+    { id: "calculadora", label: "Calculadora", icon: BarChart3 },
     { id: "templates",   label: "Templates",   icon: Database, master: true },
     { id: "cupons",      label: "Cupons",      icon: Ticket, master: true },
     { id: "notas",       label: "NFs",         icon: FileSpreadsheet, master: true },
@@ -118,6 +119,7 @@ export default function AdminPage() {
         {aba === "afiliados"   && <Afiliados token={token} />}
         {aba === "backups"     && <Backups token={token} />}
         {aba === "perfis"      && <DisplayProfiles token={token} />}
+        {aba === "calculadora" && <Calculadora />}
         {aba === "arquivados"  && <Arquivados token={token} />}
         {aba === "auditoria"   && <Auditoria token={token} />}
         {aba === "noxibo"      && <NoXibo token={token} />}
@@ -293,6 +295,7 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
   const [hi, setHi] = useState(""); const [hf, setHf] = useState("");
   const [cupom, setCupom] = useState("");
   const [diasSemana, setDiasSemana] = useState<number[]>([1, 2, 3, 4, 5, 6, 7]); // ISO 1=Seg..7=Dom
+  const [formato, setFormato] = useState<"simples" | "encarte_totem" | "encarte_gondola">("simples");
   const [selLocais, setSelLocais] = useState<string[]>([]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   function toggleDia(d: number) { setDiasSemana(s => s.includes(d) ? s.filter(x => x !== d) : [...s, d].sort((a, b) => a - b)); }
@@ -322,6 +325,7 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
       hora_inicio: hi || undefined, hora_fim: hf || undefined,
       cupom_codigo: cupom.trim() || undefined,
       dias_semana: diasSemana.length === 7 ? undefined : diasSemana.join(","),
+      formato,
       valor: valor || 0, locais: selLocais,
     };
     const r = await aapi(token, "/api/admin/campanhas", { method: "POST", body: JSON.stringify(body) });
@@ -332,6 +336,19 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
 
   return (
     <Modal onClose={onClose} title="Nova campanha" wide>
+      <label className="mb-1 block text-sm text-slate-300">Formato da campanha</label>
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        {([
+          ["simples",          "Simples",     "1 arte fullscreen — campanhas normais"],
+          ["encarte_totem",    "Totem entrada", "Vídeo/imagem vertical pra entrada de loja"],
+          ["encarte_gondola",  "Ponta gôndola", "Várias artes em sequência (rotaciona todas, depois cede pra outros)"],
+        ] as const).map(([k, lbl, desc]) => (
+          <button type="button" key={k} onClick={() => setFormato(k)} className={`rounded-xl border px-3 py-2 text-left ${formato === k ? "border-brand bg-brand/15" : "border-white/10 hover:bg-white/5"}`}>
+            <div className="text-sm font-medium">{lbl}</div>
+            <div className="text-[10px] text-slate-400">{desc}</div>
+          </button>
+        ))}
+      </div>
       <label className="mb-1 block text-sm text-slate-300">Anunciante</label>
       <select value={contaId} onChange={e => setContaId(e.target.value)} className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
         <option value="">{anuncs.length ? "Selecione…" : "Cadastre um anunciante antes"}</option>

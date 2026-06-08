@@ -534,3 +534,126 @@ function EditProfileModal({ profile, busy, onClose, onSave }: { profile: Profile
     </Modal>
   );
 }
+
+// ─── Calculadora de inserções ──────────────────────────────────────────────
+// Dois modos:
+//  A) "Por grade de horário": informo hora_inicio + hora_fim + intervalo desejado
+//     entre exibições → calcula inserções/dia
+//  B) "Por meta": informo inserções/dia + segundos → calcula tempo ocupado e
+//     se cabe na grade
+export function Calculadora() {
+  const [modo, setModo] = useState<"grade" | "meta">("grade");
+  const [hi, setHi] = useState("08:00");
+  const [hf, setHf] = useState("22:00");
+  const [intervaloMin, setIntervaloMin] = useState("5");   // a cada quantos minutos toca
+  const [insercoes, setInsercoes] = useState("250");
+  const [segundos, setSegundos] = useState("10");
+  const [rotacao, setRotacao] = useState("3");             // qtos clientes/anúncios revezam na mesma TV
+
+  function parseHora(s: string): number {
+    const [h, m] = s.split(":").map(n => parseInt(n, 10));
+    return (h ?? 0) * 60 + (m ?? 0);
+  }
+  const minDia = Math.max(0, parseHora(hf) - parseHora(hi));
+  const segDia = minDia * 60;
+
+  let resultado: { ins: number; tempoOcupadoSeg: number; ocupacaoPct: number; aviso?: string } = { ins: 0, tempoOcupadoSeg: 0, ocupacaoPct: 0 };
+
+  if (modo === "grade") {
+    const intervalo = Math.max(1, Number(intervaloMin));
+    const segs = Math.max(1, Number(segundos));
+    const ins = Math.floor(minDia / intervalo);
+    const tempo = ins * segs;
+    const pct = segDia > 0 ? (tempo / segDia) * 100 : 0;
+    resultado = {
+      ins,
+      tempoOcupadoSeg: tempo,
+      ocupacaoPct: Math.round(pct * 10) / 10,
+      aviso: pct > 50 ? "⚠ Mais de 50% do tempo — risco de fadiga visual." : undefined,
+    };
+  } else {
+    const ins = Math.max(1, Number(insercoes));
+    const segs = Math.max(1, Number(segundos));
+    const tempo = ins * segs;
+    const pct = segDia > 0 ? (tempo / segDia) * 100 : 0;
+    resultado = {
+      ins,
+      tempoOcupadoSeg: tempo,
+      ocupacaoPct: Math.round(pct * 10) / 10,
+      aviso: pct > 100 ? "❌ Não cabe na grade — diminua inserções ou estenda o horário." : pct > 80 ? "⚠ Grade muito cheia (>80%)." : undefined,
+    };
+  }
+
+  const totalAnunciantes = Math.max(1, Number(rotacao));
+  const insPorAnunciante = Math.floor(resultado.ins / totalAnunciantes);
+  const fmtTempo = (s: number) => {
+    const m = Math.floor(s / 60), sg = s % 60;
+    if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
+    return `${m}min ${sg}s`;
+  };
+
+  return (
+    <div>
+      <h2 className="mb-4 text-lg font-semibold">Calculadora de inserções</h2>
+      <p className="mb-4 text-sm text-slate-400">Use pra dimensionar campanhas. Dois modos: a partir da grade de horários ou a partir de uma meta de inserções.</p>
+
+      <div className="mb-4 flex gap-2">
+        {(["grade", "meta"] as const).map(m => (
+          <button key={m} onClick={() => setModo(m)} className={`rounded-xl border px-4 py-2 text-sm font-medium ${modo === m ? "border-brand bg-brand/15 text-brand-light" : "border-white/10 text-slate-400 hover:bg-white/5"}`}>
+            {m === "grade" ? "Por grade de horário" : "Por meta de inserções"}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <h3 className="mb-3 text-sm font-semibold">Entrada</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Horário início" value={hi} onChange={setHi} placeholder="08:00" />
+            <Field label="Horário fim" value={hf} onChange={setHf} placeholder="22:00" />
+          </div>
+          <Field label="Segundos por inserção" value={segundos} onChange={setSegundos} type="number" />
+          {modo === "grade" ? (
+            <Field label="Intervalo entre exibições (min)" value={intervaloMin} onChange={setIntervaloMin} type="number" />
+          ) : (
+            <Field label="Inserções/dia desejadas" value={insercoes} onChange={setInsercoes} type="number" />
+          )}
+          <Field label="Quantos anunciantes/clientes revezam na mesma TV" value={rotacao} onChange={setRotacao} type="number" />
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <h3 className="mb-3 text-sm font-semibold">Resultado</h3>
+          <div className="space-y-3 text-sm">
+            <Linha label="Janela de horário" v={`${fmtTempo(segDia)}`} />
+            <Linha label="Inserções/dia" v={String(resultado.ins)} destaque />
+            <Linha label="Tempo total ocupado" v={fmtTempo(resultado.tempoOcupadoSeg)} />
+            <Linha label="Ocupação da grade" v={`${resultado.ocupacaoPct}%`} />
+            <div className="border-t border-white/10 pt-3">
+              <p className="text-xs text-slate-500">Dividindo entre {totalAnunciantes} cliente(s):</p>
+              <Linha label="Inserções/dia por cliente" v={String(insPorAnunciante)} destaque />
+            </div>
+            {resultado.aviso && <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${resultado.aviso.startsWith("❌") ? "bg-red-500/10 text-red-300" : "bg-amber-500/10 text-amber-200"}`}>{resultado.aviso}</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-xs text-slate-400">
+        <p className="mb-2 font-medium text-slate-200">💡 Dicas por nicho</p>
+        <ul className="ml-4 list-disc space-y-1">
+          <li><strong>Mercado/Atacadão (encarte)</strong>: 15–20s por inserção, intervalo de 3–5 min, das 7h às 22h → ~180–300 inserções/dia. Roda em &lt;30% da grade — sobra pra outros clientes.</li>
+          <li><strong>Ponta de gôndola</strong>: use formato <em>encarte_gondola</em>, 8–12s por item, sequência de 6–10 promos. Cada execução da playlist conta como 1 inserção.</li>
+          <li><strong>Restaurante (cardápio digital)</strong>: 8–12s por item, intervalo curto (1–2 min), horário curto (12h–14h e 19h–22h).</li>
+          <li><strong>Posto/conveniência</strong>: 15s, intervalo 2–3 min, 24h (se a tela for externa).</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+function Linha({ label, v, destaque }: { label: string; v: string; destaque?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <span className="text-slate-400">{label}</span>
+      <span className={destaque ? "text-lg font-bold text-brand-light" : "font-medium text-slate-200"}>{v}</span>
+    </div>
+  );
+}
