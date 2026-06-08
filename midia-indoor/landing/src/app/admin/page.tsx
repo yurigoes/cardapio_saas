@@ -404,16 +404,18 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
         <Field label="Valor (R$)" value={valor} onChange={setValor} type="number" />
         <Field label="Cupom (opcional)" value={cupom} onChange={v => setCupom(v.toUpperCase())} placeholder="ex: PROMO10" />
       </div>
-      <label className="mb-1 block text-sm text-slate-300">Locais ({selLocais.length} selecionados)</label>
-      <div className="mb-3 max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-2">
-        {locais.map(l => (
-          <label key={l.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
-            <input type="checkbox" checked={selLocais.includes(l.id)} onChange={() => toggleLocal(l.id)} />
-            <span>{l.nome}{l.cidade ? <span className="text-slate-500"> · {l.cidade}</span> : null}</span>
-          </label>
-        ))}
-        {!locais.length && <p className="p-2 text-xs text-slate-500">Cadastre locais antes.</p>}
-      </div>
+      <label className="mb-1 block text-sm text-slate-300">Locais ({selLocais.length} selecionado{selLocais.length === 1 ? "" : "s"} de {locais.length})</label>
+      <LocaisDropdown locais={locais} selecionados={selLocais} onToggle={toggleLocal} onTodos={() => setSelLocais(locais.map(l => l.id))} onNenhum={() => setSelLocais([])} />
+      {selLocais.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1">
+          {locais.filter(l => selLocais.includes(l.id)).map(l => (
+            <span key={l.id} className="flex items-center gap-1 rounded-full bg-brand/20 px-2 py-0.5 text-xs text-brand-light">
+              {l.nome}
+              <button type="button" onClick={() => toggleLocal(l.id)} className="hover:text-white"><X className="h-3 w-3" /></button>
+            </span>
+          ))}
+        </div>
+      )}
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
       <button onClick={salvar} disabled={busy || !contaId || !selLocais.length} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar campanha</button>
     </Modal>
@@ -2028,4 +2030,58 @@ async function carregarPdfJs(): Promise<void> {
   // @ts-expect-error
   window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   _pdfJsLoaded = true;
+}
+
+// ─── Dropdown checklist de locais ───────────────────────────────────────────
+function LocaisDropdown({ locais, selecionados, onToggle, onTodos, onNenhum }: { locais: Local[]; selecionados: string[]; onToggle: (id: string) => void; onTodos: () => void; onNenhum: () => void }) {
+  const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function fora(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);
+    }
+    if (aberto) document.addEventListener("mousedown", fora);
+    return () => document.removeEventListener("mousedown", fora);
+  }, [aberto]);
+
+  const filtrados = locais.filter(l =>
+    !busca || l.nome.toLowerCase().includes(busca.toLowerCase()) || (l.cidade ?? "").toLowerCase().includes(busca.toLowerCase())
+  );
+  const resumo = selecionados.length === 0
+    ? "Clique para escolher os locais…"
+    : selecionados.length === 1
+      ? locais.find(l => l.id === selecionados[0])?.nome ?? "1 local"
+      : `${selecionados.length} locais selecionados`;
+
+  return (
+    <div ref={ref} className="relative mb-3">
+      <button type="button" onClick={() => setAberto(s => !s)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-sm outline-none hover:bg-white/10">
+        <span className={selecionados.length ? "text-white" : "text-slate-400"}>{resumo}</span>
+        <ChevronRight className={`h-4 w-4 text-slate-400 transition-transform ${aberto ? "rotate-90" : ""}`} />
+      </button>
+      {aberto && (
+        <div className="absolute z-30 mt-1 w-full rounded-xl border border-white/10 bg-[#12121c] shadow-xl">
+          <div className="border-b border-white/10 p-2">
+            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar local…" autoFocus className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-sm outline-none" />
+            <div className="mt-2 flex justify-between text-xs">
+              <button type="button" onClick={onTodos} className="text-brand-light hover:underline">Marcar todos</button>
+              <button type="button" onClick={onNenhum} className="text-slate-400 hover:underline">Desmarcar todos</button>
+            </div>
+          </div>
+          <div className="max-h-64 overflow-y-auto p-1">
+            {filtrados.map(l => (
+              <label key={l.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
+                <input type="checkbox" checked={selecionados.includes(l.id)} onChange={() => onToggle(l.id)} className="h-4 w-4 accent-brand" />
+                <span className="flex-1">{l.nome}{l.cidade ? <span className="text-slate-500"> · {l.cidade}</span> : null}</span>
+                {l.largura && l.altura && <span className="text-[10px] text-slate-500">{l.largura}×{l.altura}</span>}
+              </label>
+            ))}
+            {!filtrados.length && <p className="p-3 text-center text-xs text-slate-500">{busca ? "Nenhum local encontrado." : "Cadastre locais antes."}</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
