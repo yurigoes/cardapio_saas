@@ -444,6 +444,24 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_midia_backups_data ON midia_backups(criado_em DESC);
   `);
 
+  // ─── Grupos de locais (multi-TV, ex: 8 pontas de gôndola) ──────────────
+  //   - Um "local-grupo" é uma agregação que aponta pra N "locais-filhos".
+  //   - tipo='grupo' → exibe múltiplas telas como uma unidade na campanha.
+  //   - sincronia=true → cria SyncGroup no Xibo (mesmo conteúdo no mesmo
+  //     instante em todas as telas, modo dominó).
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS tipo TEXT NOT NULL DEFAULT 'individual';`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS sincronia BOOLEAN NOT NULL DEFAULT false;`);
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_local_grupo_membros (
+      grupo_id   UUID NOT NULL REFERENCES midia_locais(id) ON DELETE CASCADE,
+      membro_id  UUID NOT NULL REFERENCES midia_locais(id) ON DELETE CASCADE,
+      ordem      INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (grupo_id, membro_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_lgm_grupo ON midia_local_grupo_membros(grupo_id);
+    CREATE INDEX IF NOT EXISTS idx_lgm_membro ON midia_local_grupo_membros(membro_id);
+  `);
+
   // Sync periódico Xibo → SaaS (contadores de telas por local)
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS telas_total  INTEGER NOT NULL DEFAULT 0;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS telas_online INTEGER NOT NULL DEFAULT 0;`);

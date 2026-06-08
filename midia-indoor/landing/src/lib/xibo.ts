@@ -88,6 +88,53 @@ export async function criarFolder(nome: string, parentId?: number): Promise<numb
   return id;
 }
 
+/**
+ * Cria um Display Group "agregador" que contém OUTROS display groups (não displays direto).
+ * Útil pra "Local-grupo": ao criar campanha apontando pro agregador, o Xibo
+ * propaga pra todos os display groups membros (que por sua vez têm 1 display cada).
+ *
+ * Opção sincronia=true → cria como SyncGroup (mesmo conteúdo no mesmo instante).
+ */
+export async function criarDisplayGroupAgregador(nome: string, descricao = "", sincronia = false): Promise<number> {
+  const body = new URLSearchParams({ displayGroup: nome, description: descricao, isDynamic: "0" });
+  if (sincronia) { body.set("isSyncGroup", "1"); body.set("syncGroupId", "1"); }
+  const r = await xibo<{ displayGroupId?: number; data?: { displayGroupId: number } }>(`/api/displaygroup`, { method: "POST", body });
+  const id = r.displayGroupId ?? r.data?.displayGroupId;
+  if (!id) throw new Error("Xibo: não criou agregador");
+  return id;
+}
+
+/** Atualiza membros de um display group agregador (anexa filhos, remove os não listados). */
+export async function setMembrosDoAgregador(grupoId: number, displayGroupIdsFilhos: number[]): Promise<void> {
+  // Xibo aceita assign/unassign de displayGroupIds no próprio displaygroup.
+  // Endpoint: POST /api/displaygroup/{id}/displayGroup/assign  body: displayGroupId[]
+  // Pega o estado atual primeiro
+  let atuais: number[] = [];
+  try {
+    const r = await xibo<{ displayGroups?: Array<{ displayGroupId: number }> } | Array<{ displayGroups?: Array<{ displayGroupId: number }> }>>(
+      `/api/displaygroup?displayGroupId=${grupoId}&embed=displayGroups`
+    );
+    const arr = Array.isArray(r) ? r : [r];
+    atuais = (arr[0]?.displayGroups ?? []).map(g => g.displayGroupId);
+  } catch (e) { console.warn("[setMembrosDoAgregador] listar atuais falhou:", (e as Error).message); }
+
+  const adicionar = displayGroupIdsFilhos.filter(id => !atuais.includes(id));
+  const remover   = atuais.filter(id => !displayGroupIdsFilhos.includes(id));
+
+  if (adicionar.length) {
+    const body = new URLSearchParams();
+    for (const id of adicionar) body.append("displayGroupId[]", String(id));
+    try { await xibo(`/api/displaygroup/${grupoId}/displayGroup/assign`, { method: "POST", body }); }
+    catch (e) { console.warn("[setMembrosDoAgregador] assign falhou:", (e as Error).message); }
+  }
+  if (remover.length) {
+    const body = new URLSearchParams();
+    for (const id of remover) body.append("displayGroupId[]", String(id));
+    try { await xibo(`/api/displaygroup/${grupoId}/displayGroup/unassign`, { method: "POST", body }); }
+    catch (e) { console.warn("[setMembrosDoAgregador] unassign falhou:", (e as Error).message); }
+  }
+}
+
 // ─── Ativação de display por código (Add by Code do Xibo) ──────────────────
 /**
  * Ativa uma TV pelo código exibido no player Xibo recém-instalado.

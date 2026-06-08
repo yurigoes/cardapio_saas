@@ -11,6 +11,7 @@ import {
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
 import { Notas, Cobrancas, Afiliados, Backups, Arquivados, DisplayProfiles, Calculadora, CalculadoraInline } from "./financeiro";
+import { GruposDeLocais, NovoGrupoLocaisModal } from "./grupos-locais";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -223,7 +224,7 @@ function Badge({ s }: { s: string }) {
 }
 
 // ─── Tipos compartilhados ────────────────────────────────────────────────────
-interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; telas_total?: number; telas_online?: number; sync_em?: string | null; }
+interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; telas_total?: number; telas_online?: number; sync_em?: string | null; tipo?: string; sincronia?: boolean; qtd_membros?: number | null; }
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
 interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; arte_status?: string; arte_rejeicao_motivo?: string | null; hora_inicio?: string | null; hora_fim?: string | null; desconto?: string | null; dias_semana?: string | null; formato?: string; }
@@ -306,7 +307,7 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
   useEffect(() => {
     aapi(token, "/api/admin/anunciantes").then(r => r.json()).then(d => d.ok && setAnuncs(d.anunciantes));
     aapi(token, "/api/admin/pacotes").then(r => r.json()).then(d => d.ok && setPacotes(d.pacotes.filter((p: Pacote) => p.ativo)));
-    aapi(token, "/api/admin/locais").then(r => r.json()).then(d => d.ok && setLocais(d.locais.filter((l: Local) => l.ativo)));
+    aapi(token, "/api/admin/locais/selecionaveis").then(r => r.json()).then(d => d.ok && setLocais(d.locais));
   }, [token]);
 
   // Ao escolher pacote, sugere datas a partir de hoje
@@ -722,6 +723,7 @@ function AnuncModal({ token, onClose, onSaved }: { token: string; onClose: () =>
 function Locais({ token }: { token: string }) {
   const [lista, setLista] = useState<Local[]>([]);
   const [novo, setNovo] = useState(false);
+  const [novoGrupo, setNovoGrupo] = useState(false);
   const load = useCallback(async () => { const r = await aapi(token, "/api/admin/locais"); const d = await r.json(); if (d.ok) setLista(d.locais); }, [token]);
   useEffect(() => { load(); }, [load]);
   async function toggle(l: Local) { await aapi(token, "/api/admin/locais", { method: "PATCH", body: JSON.stringify({ id: l.id, ativo: !l.ativo }) }); load(); }
@@ -729,13 +731,20 @@ function Locais({ token }: { token: string }) {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-bold">Locais (inventário)</h2>
-        <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo local</button>
+        <div className="flex gap-2">
+          <button onClick={() => setNovoGrupo(true)} className="flex items-center gap-2 rounded-xl border border-amber-500/40 px-4 py-2 text-sm font-semibold text-amber-300 hover:bg-amber-500/10"><Plus className="h-4 w-4" /> Novo grupo (ex: 8 gôndolas)</button>
+          <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo local</button>
+        </div>
       </div>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {lista.map(l => <LocalCard key={l.id} token={token} local={l} onChange={load} onToggle={() => toggle(l)} />)}
         {!lista.length && <p className="text-sm text-slate-500">Nenhum local. Cadastre seus pontos de mídia.</p>}
       </div>
+
+      <GruposDeLocais token={token} locaisDisponiveis={lista} />
+
       {novo && <LocalModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
+      {novoGrupo && <NovoGrupoLocaisModal token={token} locais={lista} onClose={() => setNovoGrupo(false)} onSaved={() => { setNovoGrupo(false); load(); }} />}
     </div>
   );
 }
@@ -2074,8 +2083,13 @@ function LocaisDropdown({ locais, selecionados, onToggle, onTodos, onNenhum }: {
             {filtrados.map(l => (
               <label key={l.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
                 <input type="checkbox" checked={selecionados.includes(l.id)} onChange={() => onToggle(l.id)} className="h-4 w-4 accent-brand" />
-                <span className="flex-1">{l.nome}{l.cidade ? <span className="text-slate-500"> · {l.cidade}</span> : null}</span>
-                {l.largura && l.altura && <span className="text-[10px] text-slate-500">{l.largura}×{l.altura}</span>}
+                <span className="flex-1">
+                  {l.tipo === "grupo" && <span className="mr-1.5 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">GRUPO</span>}
+                  {l.nome}
+                  {l.cidade ? <span className="text-slate-500"> · {l.cidade}</span> : null}
+                  {l.tipo === "grupo" && l.qtd_membros != null && <span className="ml-1 text-[10px] text-amber-300">({l.qtd_membros} telas{l.sincronia ? ", sync" : ""})</span>}
+                </span>
+                {l.tipo !== "grupo" && l.largura > 0 && l.altura > 0 && <span className="text-[10px] text-slate-500">{l.largura}×{l.altura}</span>}
               </label>
             ))}
             {!filtrados.length && <p className="p-3 text-center text-xs text-slate-500">{busca ? "Nenhum local encontrado." : "Cadastre locais antes."}</p>}
