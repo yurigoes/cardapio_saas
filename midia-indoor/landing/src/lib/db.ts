@@ -483,6 +483,11 @@ export async function ensureSchema(): Promise<void> {
   // RustDesk: ID do app pra acesso remoto (capturado no provisionamento)
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS rustdesk_id TEXT;`);
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS rustdesk_senha TEXT;`);
+  // Monitor conectado via HDMI (capturado por EDID quando possivel, ou cadastrado manual)
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS monitor_modelo TEXT;`);
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS monitor_serial TEXT;`);
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS monitor_resolucao TEXT;`);
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS monitor_polegadas INT;`);
 
   // ─── Multi-tenant / White-label (operadores DOOH revendendo o SaaS) ────
   //   - Cada operador é uma "tenant" com domínio próprio + branding

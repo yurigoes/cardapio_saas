@@ -39,6 +39,10 @@ const novo = z.object({
   garantia_ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   nota_fiscal: z.string().max(80).optional(),
   observacao:  z.string().max(1000).optional(),
+  monitor_modelo:    z.string().max(120).optional(),
+  monitor_serial:    z.string().max(80).optional(),
+  monitor_resolucao: z.string().max(20).optional(),
+  monitor_polegadas: z.coerce.number().int().min(7).max(150).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -52,9 +56,9 @@ export async function POST(req: NextRequest) {
   const token = crypto.randomBytes(6).toString("hex").toUpperCase(); // 12 chars
 
   const r = await db().query<{ id: string; qr_token: string }>(
-    `INSERT INTO midia_inventario (tipo, nome, mac, serial, fabricante, modelo, local_id, xibo_display_id, qr_token, valor, comprado_em, garantia_ate, nota_fiscal, observacao)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, qr_token`,
-    [b.tipo, b.nome, b.mac?.toUpperCase() ?? null, b.serial ?? null, b.fabricante ?? null, b.modelo ?? null, b.local_id ?? null, b.xibo_display_id ?? null, token, b.valor ?? null, b.comprado_em ?? null, b.garantia_ate ?? null, b.nota_fiscal ?? null, b.observacao ?? null]
+    `INSERT INTO midia_inventario (tipo, nome, mac, serial, fabricante, modelo, local_id, xibo_display_id, qr_token, valor, comprado_em, garantia_ate, nota_fiscal, observacao, monitor_modelo, monitor_serial, monitor_resolucao, monitor_polegadas)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id, qr_token`,
+    [b.tipo, b.nome, b.mac?.toUpperCase() ?? null, b.serial ?? null, b.fabricante ?? null, b.modelo ?? null, b.local_id ?? null, b.xibo_display_id ?? null, token, b.valor ?? null, b.comprado_em ?? null, b.garantia_ate ?? null, b.nota_fiscal ?? null, b.observacao ?? null, b.monitor_modelo ?? null, b.monitor_serial ?? null, b.monitor_resolucao ?? null, b.monitor_polegadas ?? null]
   );
 
   logAudit(req, { autor_tipo: "admin", autor_id: master.sub, autor_nome: master.nome, acao: "inventario.criar", entidade: "inventario", entidade_id: r.rows[0].id, detalhes: { nome: b.nome, mac: b.mac } });

@@ -13,6 +13,8 @@ interface ItemInv {
   xibo_display_id: number | null; qr_token: string; ip_local: string | null;
   valor: string | null; nota_fiscal: string | null; observacao: string | null; ativo: boolean;
   rustdesk_id: string | null; rustdesk_senha: string | null;
+  monitor_modelo: string | null; monitor_serial: string | null;
+  monitor_resolucao: string | null; monitor_polegadas: number | null;
 }
 interface LocalSimples { id: string; nome: string; cidade?: string | null; }
 
@@ -120,6 +122,10 @@ function NovoItemModal({ token, locais, onClose, onSaved }: { token: string; loc
   const [valor, setValor] = useState("");
   const [nf, setNf] = useState("");
   const [obs, setObs] = useState("");
+  const [monitorModelo, setMonitorModelo] = useState("");
+  const [monitorSerial, setMonitorSerial] = useState("");
+  const [monitorResolucao, setMonitorResolucao] = useState("");
+  const [monitorPolegadas, setMonitorPolegadas] = useState("");
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
 
   async function salvar() {
@@ -128,6 +134,8 @@ function NovoItemModal({ token, locais, onClose, onSaved }: { token: string; loc
       tipo, nome, mac: mac || undefined, serial: serial || undefined, fabricante: fabricante || undefined,
       modelo: modelo || undefined, local_id: localId || undefined, valor: valor ? Number(valor) : undefined,
       nota_fiscal: nf || undefined, observacao: obs || undefined,
+      monitor_modelo: monitorModelo || undefined, monitor_serial: monitorSerial || undefined,
+      monitor_resolucao: monitorResolucao || undefined, monitor_polegadas: monitorPolegadas ? Number(monitorPolegadas) : undefined,
     })});
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
@@ -173,6 +181,17 @@ function NovoItemModal({ token, locais, onClose, onSaved }: { token: string; loc
           <Field label="Valor (R$)" value={valor} onChange={setValor} type="number" />
           <Field label="Nota fiscal" value={nf} onChange={setNf} placeholder="000123" />
         </div>
+        {tipo === "box" || tipo === "tv" ? (
+          <div className="mb-3 mt-2 rounded-lg border border-white/10 bg-white/5 p-3">
+            <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-400">Monitor / TV conectado via HDMI (opcional)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Modelo" value={monitorModelo} onChange={setMonitorModelo} placeholder="ex: Samsung UN43J5290" />
+              <Field label="Serial do monitor" value={monitorSerial} onChange={setMonitorSerial} mono />
+              <Field label="Resolução" value={monitorResolucao} onChange={setMonitorResolucao} placeholder="1920x1080" mono />
+              <Field label="Polegadas" value={monitorPolegadas} onChange={setMonitorPolegadas} type="number" placeholder="43" />
+            </div>
+          </div>
+        ) : null}
         <Field label="Observação" value={obs} onChange={setObs} />
         {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
         <button onClick={salvar} disabled={busy || !nome} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
