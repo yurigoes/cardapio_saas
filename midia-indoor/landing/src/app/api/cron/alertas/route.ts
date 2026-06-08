@@ -21,7 +21,7 @@ async function processar(): Promise<{ telasOff: string[]; aVencer: string[]; sem
   const displays = await listarDisplaysFull().catch(() => []);
   const agora = Date.now();
   const telasOff = displays
-    .filter(d => d.loggedIn === 0 && d.lastAccessed && (agora - new Date(d.lastAccessed.replace(" ", "T")).getTime()) > 3600_000)
+    .filter(d => d.loggedIn === 0 && d.lastAccessed && (agora - new Date(String(d.lastAccessed).replace(" ", "T")).getTime()) > 3600_000)
     .map(d => d.display);
 
   const [aVencer, semArte, pgtoPendente] = await Promise.all([

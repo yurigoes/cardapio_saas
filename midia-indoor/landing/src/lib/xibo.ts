@@ -422,7 +422,6 @@ export interface XiboDisplayFull extends XiboDisplay {
   displayGroups?: { displayGroupId: number; displayGroup: string; isDisplaySpecific?: number }[];
   macAddress?: string;
   clientAddress?: string;
-  lastAccessed?: string | number;
 }
 
 /** Manda o(s) display(s) do grupo coletarem o conteúdo agora (push via XMR). */
