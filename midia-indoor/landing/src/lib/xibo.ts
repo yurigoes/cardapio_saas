@@ -968,7 +968,7 @@ export async function excluirCampanha(campaignId: number): Promise<void> {
   await xibo(`/api/campaign/${campaignId}`, { method: "DELETE" });
 }
 
-export interface StatLinha { type: string; layoutId?: number; numberPlays: number; duration: number; }
+export interface StatLinha { type: string; layoutId?: number; displayId?: number; start?: string | number; end?: string | number; numberPlays: number; duration: number; }
 
 /** Proof-of-play: total de exibições de uma campanha num período. */
 export async function statsCampanha(campaignId: number, fromDt: string, toDt: string): Promise<{ plays: number; duracao: number; linhas: number }> {
