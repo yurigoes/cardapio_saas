@@ -444,6 +444,42 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_midia_backups_data ON midia_backups(criado_em DESC);
   `);
 
+  // ─── Templates de campanha (salvos pra reusar) ────────────────────────
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_campanha_templates (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      nome          TEXT NOT NULL,
+      descricao     TEXT,
+      formato       TEXT NOT NULL DEFAULT 'simples',
+      tipo          TEXT,
+      dias          INTEGER,
+      insercoes_dia INTEGER,
+      segundos      INTEGER,
+      hora_inicio   TEXT,
+      hora_fim      TEXT,
+      dias_semana   TEXT,
+      valor         NUMERIC(10,2),
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // ─── Notificações in-app (sininho) ─────────────────────────────────────
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_notificacoes (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      destino       TEXT NOT NULL DEFAULT 'master',   -- master | conta:<uuid>
+      tipo          TEXT NOT NULL,                    -- arte-aprovacao | campanha-vence | tela-offline | pagamento | sistema
+      titulo        TEXT NOT NULL,
+      mensagem      TEXT,
+      link          TEXT,                              -- ex: /admin?aba=campanhas&id=X
+      icone         TEXT,
+      lida          BOOLEAN NOT NULL DEFAULT false,
+      lida_em       TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_notif_destino ON midia_notificacoes(destino, lida, created_at DESC);
+  `);
+
   // ─── Grupos de locais (multi-TV, ex: 8 pontas de gôndola) ──────────────
   //   - Um "local-grupo" é uma agregação que aponta pra N "locais-filhos".
   //   - tipo='grupo' → exibe múltiplas telas como uma unidade na campanha.

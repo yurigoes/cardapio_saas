@@ -48,6 +48,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!/^(image|video)\//.test(arquivo.type)) return NextResponse.json({ ok: false, error: "só imagem ou vídeo" }, { status: 415 });
 
     await anexarArte(params.id, arquivo, arquivo.name, arquivo.type, { precisaAprovacao: true, enviadaPor: auth.email });
+    // notifica o master
+    try {
+      const { notificar } = await import("@/lib/notificacoes");
+      const camp = await db().query<{ nome: string }>(`SELECT nome FROM midia_campanhas WHERE id=$1`, [params.id]).then(r => r.rows[0]);
+      await notificar({ tipo: "arte-aprovacao", titulo: "Nova arte pra aprovar", mensagem: `${auth.empresa} enviou arte de "${camp?.nome ?? ""}"`, icone: "🎨" });
+    } catch { /* não-crítico */ }
     return NextResponse.json({ ok: true, msg: "Arte enviada — aguardando aprovação" });
   } catch (err) {
     console.error("[painel/campanhas arte]", err);

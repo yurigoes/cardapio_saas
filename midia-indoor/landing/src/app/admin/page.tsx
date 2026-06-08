@@ -12,6 +12,7 @@ import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Noti
 import { aplicarCorBranding } from "@/components/Branding";
 import { Notas, Cobrancas, Afiliados, Backups, Arquivados, DisplayProfiles, Calculadora, CalculadoraInline } from "./financeiro";
 import { GruposDeLocais, NovoGrupoLocaisModal } from "./grupos-locais";
+import { NotifBell } from "./notif-bell";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -85,6 +86,7 @@ export default function AdminPage() {
           </div>
           <div className="flex items-center gap-3 text-sm">
             <a href="/guia" target="_blank" rel="noopener" className="flex items-center gap-1 text-slate-400 hover:text-white"><LifeBuoy className="h-4 w-4" /> Guia</a>
+            <NotifBell token={token} />
             <span className="text-slate-400">{nome} · <span className="capitalize">{role}</span></span>
             <button onClick={sair} className="flex items-center gap-1 text-slate-400 hover:text-white"><LogOut className="h-4 w-4" /> Sair</button>
           </div>
@@ -556,6 +558,15 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
               </button>
               <button onClick={() => acao("encerrar", "encerrar")} disabled={!!busy} className="flex items-center gap-2 rounded-xl border border-red-500/30 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50">
                 {busy === "encerrar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4" />} Encerrar
+              </button>
+              <button onClick={async () => {
+                setBusy("dup");
+                const r = await aapi(token, `/api/admin/campanhas/${camp.id}/duplicar`, { method: "POST" });
+                const d = await r.json(); setBusy("");
+                notify(d.ok ? "Campanha duplicada — abra a nova" : (d.error || "Erro"), d.ok ? "success" : "error");
+                if (d.ok) { onChange(); onClose(); }
+              }} disabled={!!busy} className="flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5 disabled:opacity-50">
+                {busy === "dup" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Duplicar
               </button>
               {camp.status === "no_ar" && (
                 <button onClick={async () => { setBusy("rel-email"); const r = await aapi(token, `/api/admin/campanhas/${camp.id}/relatorio-email`, { method: "POST" }); const d = await r.json(); setBusy(""); notify(d.ok ? "Relatório enviado por e-mail" : (d.error || "Erro"), d.ok ? "success" : "error"); }} disabled={!!busy} className="flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5 disabled:opacity-50">
