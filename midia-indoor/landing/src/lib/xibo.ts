@@ -240,12 +240,28 @@ export async function autorizarDisplay(displayId: number): Promise<void> {
   await xibo(`/api/display/authorise/${displayId}`, { method: "PUT" });
 }
 
-/** Manda comando "Clear Statistics and Cache" pro player (precisa XMR ou aguarda próximo poll). */
+/** Manda comando "Clear Statistics and Cache" pro player.
+ *  Em Xibo 3.3 isso vai pelo displayGroup do display (action/clearStatsAndLogs).
+ */
 export async function clearCache(displayId: number): Promise<void> {
-  await xibo(`/api/display/${displayId}/action/clearStatsAndLogs`, { method: "POST" }).catch(async () => {
-    // versões antigas usavam URL diferente
-    await xibo(`/api/display/${displayId}/clearCache`, { method: "POST" });
-  });
+  // Descobre o display group próprio do display
+  const disp = (await listarDisplaysFull()).find(d => d.displayId === displayId);
+  const proprio = disp?.displayGroups?.find(g => g.isDisplaySpecific === 1) ?? disp?.displayGroups?.[0];
+  if (!proprio) throw new Error("display sem grupo");
+
+  // Tenta endpoints conhecidos em ordem
+  const tentativas: Array<{ path: string; method: "POST" | "PUT" }> = [
+    { path: `/api/displaygroup/${proprio.displayGroupId}/action/clearStatsAndLogs`, method: "POST" },
+    { path: `/api/displaygroup/${proprio.displayGroupId}/action/changeLayout`, method: "POST" }, // não é clear, mas força sync
+  ];
+  let ultimoErro = "";
+  for (const t of tentativas) {
+    try {
+      await xibo(t.path, { method: t.method });
+      return;
+    } catch (e) { ultimoErro = (e as Error).message; }
+  }
+  throw new Error(`não encontrei endpoint clear-cache (último: ${ultimoErro})`);
 }
 
 /** Atualiza a duração (segundos) do widget principal de um layout. */
