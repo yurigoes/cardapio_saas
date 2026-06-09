@@ -525,6 +525,26 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_screen_req_status ON midia_screenshot_requests(status, requested_at);
   `);
 
+  // InfinityPay - link de pagamento gerado por campanha
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_infinity_links (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      campanha_id     UUID NOT NULL REFERENCES midia_campanhas(id) ON DELETE CASCADE,
+      valor_centavos  BIGINT NOT NULL,
+      url             TEXT,
+      slug            TEXT,
+      status          TEXT NOT NULL DEFAULT 'pendente',  -- pendente|pago|falha
+      transaction_nsu TEXT,
+      capture_method  TEXT,
+      paid_amount_centavos BIGINT,
+      receipt_url     TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      paid_at         TIMESTAMPTZ,
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_inf_camp ON midia_infinity_links(campanha_id, status);
+  `);
+
   // Kits do inventario (TV + box + cabos = 1 kit) com depreciacao
   await p.query(`
     CREATE TABLE IF NOT EXISTS midia_inventario_kits (
