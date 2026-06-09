@@ -515,6 +515,11 @@ approve-mode = 'password'
   Step "Habilitando 'Iniciar na Inicializacao' + ignorar otimizacao bateria"
   Habilitar-RustDeskStartOnBoot -device $device
 
+  # ---------- Bloqueia notificacao persistente (foreground service) ----------
+  Step "Bloqueando notificacao persistente do RustDesk"
+  adb -s $device shell 'su -c "appops set com.carriez.flutter_hbb POST_NOTIFICATION ignore"' | Out-Null
+  Ok "Notificacao persistente bloqueada (servico continua rodando em background)"
+
   Ok "RustDesk pronto - senha permanente '$senha', servico ativo"
 }
 
@@ -576,33 +581,29 @@ function Ativar-RustDeskServicoRetrato([string]$device) {
 
 # Sequencia de taps em RESOLUCAO PAISAGEM 1280x720 que ativa o servico do RustDesk.
 # Coords mapeadas em sessao com TV BOX-3 RK322x.
+# IMPORTANTE: show-scam-warning='N' ja esta no toml, entao o SCAM warning NAO aparece.
+# Sequencia pos-toml: Iniciar Servico -> Aviso "Habilitar Captura" OK -> MediaProjection
+# "INICIAR AGORA" -> Controle de Entrada -> Configuracoes -> RustDesk Input -> Toggle -> OK
 function Ativar-RustDeskServicoPaisagem([string]$device) {
   adb -s $device shell "am start -n com.carriez.flutter_hbb/.MainActivity" | Out-Null
-  Start-Sleep -Seconds 5
+  Start-Sleep -Seconds 6
   # Tab "Compartilhar Tela" (3a do rodape, em paisagem)
   adb -s $device shell "input tap 800 685" | Out-Null
-  Start-Sleep -Seconds 3
+  Start-Sleep -Seconds 4
   # Botao azul "Iniciar Servico"
   adb -s $device shell "input tap 407 165" | Out-Null
-  Start-Sleep -Seconds 3
-  # SCAM warning (so aparece 1a vez) - tap "Nao mostrar novamente" + Eu concordo
-  # Em paisagem coords sao: checkbox ~x=380 y=375, "Eu concordo" ~x=970 y=425
-  adb -s $device shell "input tap 380 375" | Out-Null
-  Start-Sleep -Seconds 1
-  Start-Sleep -Seconds 4
-  adb -s $device shell "input tap 970 425" | Out-Null
-  Start-Sleep -Seconds 3
-  # Aviso "Habilitar Captura" - botao OK
-  adb -s $device shell "input tap 877 427" | Out-Null
-  Start-Sleep -Seconds 4
-  # MediaProjection "Nao mostrar novamente" + INICIAR AGORA
-  # Coords previstas baseadas no padrao Android - se nao aparecer, pula
-  adb -s $device shell "input tap 250 470" | Out-Null
-  Start-Sleep -Seconds 1
-  adb -s $device shell "input tap 1115 510" | Out-Null
   Start-Sleep -Seconds 5
-  # Toggle Controle de Entrada
-  adb -s $device shell "input tap 1217 496" | Out-Null
+  # Aviso "Habilitar Captura de Tela ira automaticamente inicializar o servico" - botao OK
+  adb -s $device shell "input tap 877 427" | Out-Null
+  Start-Sleep -Seconds 5
+  # MediaProjection do Android: checkbox "Nao mostrar novamente" + "INICIAR AGORA"
+  # Coords mapeadas em campo: checkbox x=270 y=360, INICIAR AGORA x=963 y=408
+  adb -s $device shell "input tap 270 360" | Out-Null  # checkbox "Nao mostrar de novo"
+  Start-Sleep -Seconds 1
+  adb -s $device shell "input tap 963 408" | Out-Null  # "INICIAR AGORA"
+  Start-Sleep -Seconds 6
+  # Toggle Controle de Entrada (y=487 quando card Permissoes nao tem botao Iniciar)
+  adb -s $device shell "input tap 1217 487" | Out-Null
   Start-Sleep -Seconds 3
   # "Abrir Configuracoes do Sistema"
   adb -s $device shell "input tap 775 458" | Out-Null

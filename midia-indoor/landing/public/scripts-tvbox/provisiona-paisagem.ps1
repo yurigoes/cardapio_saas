@@ -136,6 +136,11 @@ show-scam-warning = 'N'
   Habilitar-RustDeskStartOnBoot-Paisagem -device $device
   Ok "RustDesk vai subir sozinho no boot, sem icone sobreposto"
 
+  # Bloqueia notificacao persistente do RustDesk via appops (foreground service notif)
+  Step "Bloqueando notificacao persistente do RustDesk (testado em campo)"
+  adb -s $device shell 'su -c "appops set com.carriez.flutter_hbb POST_NOTIFICATION ignore"' | Out-Null
+  Ok "Notificacao persistente bloqueada"
+
   # Captura ID via screenshot - APROVEITA que ainda nao subiu Xibo
   $rdId = Capturar-RustDeskId -device $device -pngOut $shotPath
 } else {
