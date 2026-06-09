@@ -111,12 +111,30 @@ export async function POST(req: NextRequest) {
           try { await setDefaultLayout(b.displayId, localInfo.splash_layout_id); }
           catch (e) { console.warn("[vincular] não atribuiu splash:", (e as Error).message); }
         }
+        // ATUALIZA midia_telas.local_id (essencial pro plano de veiculacao saber
+        // qual tela pertence a qual local). Atualiza qualquer linha com esse
+        // xibo_display_id (1 display ↔ 1 tela).
+        await db().query(
+          `UPDATE midia_telas SET local_id = $1, updated_at = NOW() WHERE xibo_display_id = $2`,
+          [b.local_id, b.displayId]
+        );
+        // Se o local virou ponta_gondola depois de vincular, regenera layouts
+        try {
+          const { regenerarSeNecessario } = await import("@/lib/veiculacao");
+          await regenerarSeNecessario(b.local_id);
+        } catch (e) { console.warn("[vincular] regen veiculacao:", (e as Error).message); }
         break;
       }
       case "desvincular": {
         if (!b.local_id) return NextResponse.json({ ok: false, error: "local_id obrigatório" }, { status: 400 });
         const dg = await dgDoLocal(b.local_id);
         if (dg) await removerDisplayDoGrupo(b.displayId, dg);
+        // Limpa local_id no DB
+        await db().query(
+          `UPDATE midia_telas SET local_id = NULL, updated_at = NOW()
+            WHERE xibo_display_id = $1 AND local_id = $2`,
+          [b.displayId, b.local_id]
+        );
         break;
       }
       case "renomear":
