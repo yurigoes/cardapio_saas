@@ -371,15 +371,27 @@ export async function regenerarLayoutDasTelasGondola(localId: string): Promise<{
        FROM midia_telas WHERE local_id = $1 AND xibo_display_id IS NOT NULL`, [localId]
   ).then(r => r.rows);
 
+  // CRITICO PRA SYNC: usa MESMA duracao em TODAS as telas. Pega a mediana das
+  // duracoes configuradas (ou 10s default) pra evitar drift por slots de
+  // tamanhos diferentes. Anuncios mantem suas duracoes proprias (mas tambem
+  // sao iguais entre telas porque vem da mesma midia_campanhas).
+  const dursPorTela = telas.filter(t => t.gondola_media_id).map(t => t.gondola_duracao_seg || 10);
+  dursPorTela.sort((a, b) => a - b);
+  const duracaoComum = dursPorTela[Math.floor(dursPorTela.length / 2)] || 10;
+  if (dursPorTela.some(d => d !== duracaoComum)) {
+    console.warn(`[veiculacao] local ${localId}: duracoes diferentes entre telas (${dursPorTela.join(",")}s) — normalizando pra ${duracaoComum}s pra evitar drift`);
+  }
+
   let n = 0;
+  const novosLayouts: number[] = [];
   for (const tela of telas) {
     if (!tela.gondola_media_id || !tela.xibo_display_id) continue;
     const itens: Array<{ mediaId: number; duracaoSeg?: number }> = [];
     if (anuncios.length === 0) {
-      itens.push({ mediaId: tela.gondola_media_id, duracaoSeg: tela.gondola_duracao_seg });
+      itens.push({ mediaId: tela.gondola_media_id, duracaoSeg: duracaoComum });
     } else {
       for (const a of anuncios) {
-        itens.push({ mediaId: tela.gondola_media_id, duracaoSeg: tela.gondola_duracao_seg });
+        itens.push({ mediaId: tela.gondola_media_id, duracaoSeg: duracaoComum });
         itens.push({ mediaId: a.xibo_media_id, duracaoSeg: a.segundos > 0 ? a.segundos : 10 });
       }
     }
@@ -394,10 +406,21 @@ export async function regenerarLayoutDasTelasGondola(localId: string): Promise<{
         try { await excluirLayout(tela.gondola_layout_id); } catch { /* ignore */ }
       }
       await p.query(`UPDATE midia_telas SET gondola_layout_id = $1, updated_at = NOW() WHERE id = $2`, [novo.layoutId, tela.id]);
+      novosLayouts.push(novo.layoutId);
       n++;
     } catch (e) {
       console.warn(`[veiculacao] tela ${tela.id} regen falhou:`, (e as Error).message);
     }
+  }
+
+  // Dispara collectNow + sync relogio em todas as TVs juntas pra alinhar inicio
+  // Importa lazy pra evitar ciclo de import
+  try {
+    const { sincronizarRelogioDoGrupo } = await import("./sync-relogio");
+    await sincronizarRelogioDoGrupo(dg);
+    console.log(`[veiculacao] sync relogio + collect disparado pro grupo ${dg} (${n} telas)`);
+  } catch (e) {
+    console.warn("[veiculacao] sync-relogio pos-regen falhou:", (e as Error).message);
   }
 
   return { ok: true, telas_regeneradas: n };

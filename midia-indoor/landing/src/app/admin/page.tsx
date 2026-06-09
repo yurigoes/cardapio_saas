@@ -1014,6 +1014,12 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
     notify(`Plano alterado pra ${PLANO_VEICULACAO_LABEL[novo]}`, "success");
     setEditPlano(false); onChange();
   }
+  async function syncRelogio() {
+    const r = await aapi(token, `/api/admin/locais/${local.id}/sync-relogio`, { method: "POST" });
+    const d = await r.json();
+    notify(d.ok ? "Comando de sync de relógio disparado · TVs devem alinhar em ~10s" : (d.error || "Erro"), d.ok ? "success" : "error");
+  }
+  const [verTelas, setVerTelas] = useState(false);
   return (
     <div className={`rounded-2xl border p-4 ${local.ativo ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.02] opacity-60"}`}>
       <div className="flex items-start justify-between">
@@ -1080,9 +1086,103 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
         <button onClick={() => setOcup(true)} className="flex items-center justify-center gap-1 rounded-lg bg-brand/15 py-1.5 text-xs font-medium text-brand-light hover:bg-brand/25"><BarChart3 className="h-3.5 w-3.5" /> Ocupação</button>
         <button onClick={() => setAtivar(true)} className="flex items-center justify-center gap-1 rounded-lg border border-emerald-500/30 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/10"><MonitorPlay className="h-3.5 w-3.5" /> Ativar TV por código</button>
       </div>
+      {plano === "ponta_gondola" && (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button onClick={() => setVerTelas(true)} className="flex items-center justify-center gap-1 rounded-lg border border-cyan-500/30 py-1.5 text-xs font-medium text-cyan-300 hover:bg-cyan-500/10"><Tv className="h-3.5 w-3.5" /> Mídias por gôndola</button>
+          <button onClick={syncRelogio} className="flex items-center justify-center gap-1 rounded-lg border border-amber-500/30 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/10" title="Força resync de NTP nas TVs (reduz drift no slot de anúncio)"><Zap className="h-3.5 w-3.5" /> Sincronizar relógios</button>
+        </div>
+      )}
       {ocup && <OcupacaoModal token={token} local={local} onClose={() => setOcup(false)} />}
       {ativar && <AtivarPorCodigoModal token={token} local={local} onClose={() => setAtivar(false)} onSaved={() => { setAtivar(false); onChange(); }} />}
       {editEncarte && <EncarteModal token={token} local={local} onClose={() => setEditEncarte(false)} onSaved={() => { setEditEncarte(false); onChange(); }} busy={busyEncarte} setBusy={setBusyEncarte} />}
+      {verTelas && <TelasDoLocalModal token={token} local={local} onClose={() => setVerTelas(false)} />}
+    </div>
+  );
+}
+
+interface TelaGondola { id: string; nome: string; xibo_display_id: number | null; status: string | null; gondola_media_id: number | null; gondola_nome: string | null; gondola_duracao_seg: number; online: boolean | null; ultimo_acesso: string | null; }
+function TelasDoLocalModal({ token, local, onClose }: { token: string; local: Local; onClose: () => void }) {
+  const [telas, setTelas] = useState<TelaGondola[] | null>(null);
+  const load = useCallback(async () => {
+    const r = await aapi(token, `/api/admin/locais/${local.id}/telas`);
+    const d = await r.json();
+    if (d.ok) setTelas(d.telas);
+  }, [token, local.id]);
+  useEffect(() => { load(); }, [load]);
+  return (
+    <Modal title={`Mídias por gôndola — ${local.nome}`} onClose={onClose} wide>
+      {!telas ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : telas.length === 0 ? (
+        <p className="text-sm text-slate-400">
+          Nenhuma tela vinculada a este local ainda.
+          Use “Ativar TV por código” no card do local pra parear.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-400">
+            Cada gôndola pode ter sua própria mídia (produto/preço). O sistema intercala
+            <code className="ml-1 rounded bg-white/10 px-1 text-[10px]">[mídia da tela → anúncio → mídia da tela → próximo anúncio → ...]</code>
+            em loop, com mesma duração em todas pra reduzir drift.
+          </p>
+          {telas.map(t => <TelaGondolaCard key={t.id} token={token} tela={t} onChange={load} />)}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function TelaGondolaCard({ token, tela, onChange }: { token: string; tela: TelaGondola; onChange: () => void }) {
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const [dur, setDur] = useState(String(tela.gondola_duracao_seg));
+  const fileRef = useRef<HTMLInputElement>(null);
+  async function enviar(f: File) {
+    setBusy(true); setErr("");
+    const fd = new FormData(); fd.append("file", f); fd.append("duracao_seg", dur);
+    const r = await fetch(`/api/admin/telas/${tela.id}/gondola`, { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    const d = await r.json(); setBusy(false);
+    if (fileRef.current) fileRef.current.value = "";
+    if (!d.ok) { setErr(d.error || "Erro"); notify(d.error || "Erro", "error"); return; }
+    notify(`Mídia atualizada em ${tela.nome}`, "success"); onChange();
+  }
+  async function salvarDur() {
+    const r = await aapi(token, `/api/admin/telas/${tela.id}/gondola`, { method: "PATCH", body: JSON.stringify({ gondola_duracao_seg: Number(dur) }) });
+    const d = await r.json();
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify("Duração ajustada", "success"); onChange();
+  }
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 font-medium">
+            <span className="truncate">{tela.nome}</span>
+            {tela.online === true && <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300">● online</span>}
+            {tela.online === false && <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-300">● offline</span>}
+            {tela.online === null && <span className="rounded bg-slate-500/15 px-1.5 py-0.5 text-[10px] text-slate-300">não pareada</span>}
+          </p>
+          <p className="text-xs text-slate-500">
+            Display Xibo: <code>{tela.xibo_display_id ?? "—"}</code>
+            {tela.ultimo_acesso && <span className="ml-2">· último acesso: {tela.ultimo_acesso}</span>}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Mídia da gôndola: {tela.gondola_nome ? <span className="text-cyan-300">{tela.gondola_nome}</span> : <span className="text-slate-500">não enviada</span>}
+            {tela.gondola_media_id && <span className="ml-1 text-slate-500">· {tela.gondola_duracao_seg}s</span>}
+          </p>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-cyan-500/30 px-3 py-1.5 text-xs text-cyan-300 hover:bg-cyan-500/10">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          {tela.gondola_nome ? "Trocar mídia" : "Enviar mídia da gôndola"}
+          <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) enviar(f); }} />
+        </label>
+        <div className="flex items-center gap-1 text-xs">
+          <span className="text-slate-400">Duração:</span>
+          <input type="number" value={dur} onChange={e => setDur(e.target.value)} className="w-16 rounded border border-white/10 bg-white/5 px-2 py-1 text-xs" />
+          <span className="text-slate-500">s</span>
+          <button onClick={salvarDur} className="rounded border border-white/10 px-2 py-1 text-[11px] hover:bg-white/10">salvar</button>
+        </div>
+      </div>
+      {err && <p className="mt-1 text-xs text-red-400">{err}</p>}
     </div>
   );
 }
