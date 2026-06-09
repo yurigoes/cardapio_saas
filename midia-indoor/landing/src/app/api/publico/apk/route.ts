@@ -20,11 +20,12 @@ export async function GET(_req: NextRequest) {
     if (!row?.data) {
       return new NextResponse("APK não disponível. O master ainda não fez upload.", { status: 404 });
     }
-    return new NextResponse(row.data, {
+    const bytes = new Uint8Array(row.data);
+    return new NextResponse(bytes, {
       headers: {
         "Content-Type": "application/vnd.android.package-archive",
         "Content-Disposition": `attachment; filename="${row.filename ?? "xibo-player.apk"}"`,
-        "Content-Length": String(row.size ?? row.data.length),
+        "Content-Length": String(row.size ?? bytes.byteLength),
         "Cache-Control": "public, max-age=300",
       },
     });
