@@ -9,7 +9,7 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { Loader2, Printer, ArrowLeft } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 
@@ -22,7 +22,15 @@ function qrImgUrl(data: string, sizePx = 200) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${sizePx}x${sizePx}&data=${encodeURIComponent(data)}&format=png&margin=2`;
 }
 
-export default function EtiquetasMassa() {
+export default function EtiquetasMassaPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-white"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>}>
+      <EtiquetasMassa />
+    </Suspense>
+  );
+}
+
+function EtiquetasMassa() {
   const params = useSearchParams();
   const router = useRouter();
   const [itens, setItens] = useState<ItemInv[]>([]);
