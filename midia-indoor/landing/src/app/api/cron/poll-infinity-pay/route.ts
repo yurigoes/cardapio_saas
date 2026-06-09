@@ -9,7 +9,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
-import { confirmarPagamento } from "@/app/api/webhooks/infinity-pay/route";
+import { confirmarPagamento } from "@/lib/infinity-pay-confirm";
 
 export const dynamic = "force-dynamic";
 
