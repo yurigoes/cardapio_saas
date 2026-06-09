@@ -51,7 +51,7 @@ interface XiboOpts {
   timeoutMs?: number;
 }
 
-async function xibo<T = unknown>(path: string, opts: XiboOpts = {}): Promise<T> {
+export async function xibo<T = unknown>(path: string, opts: XiboOpts = {}): Promise<T> {
   return _xiboOnce<T>(path, opts, false);
 }
 
