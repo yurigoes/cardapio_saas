@@ -86,31 +86,49 @@ export default function AdminPage() {
   ];
 
   return (
-    <main className="min-h-screen bg-[#0a0a12] text-white">
-      <NotifyHost />
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0a0a12]/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-2 text-brand-light">
-            <Tv className="h-5 w-5" /><span className="font-bold">Admin · Three Digital Mídia</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <a href="/guia" target="_blank" rel="noopener" className="flex items-center gap-1 text-slate-400 hover:text-white"><LifeBuoy className="h-4 w-4" /> Guia</a>
-            <NotifBell token={token} />
-            <span className="text-slate-400">{nome} · <span className="capitalize">{role}</span></span>
-            <button onClick={sair} className="flex items-center gap-1 text-slate-400 hover:text-white"><LogOut className="h-4 w-4" /> Sair</button>
-          </div>
-        </div>
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 pb-2">
-          {abas.filter(a => !a.master || isMaster).map(a => (
-            <button key={a.id} onClick={() => setAba(a.id)}
-              className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition ${aba === a.id ? "bg-brand text-white" : "text-slate-400 hover:bg-white/5"}`}>
-              <a.icon className="h-4 w-4" /> {a.label}
-            </button>
-          ))}
-        </nav>
-      </header>
+    <main className="relative min-h-screen overflow-x-hidden bg-[#05060f] text-white">
+      {/* Fundo sutil de gradiente */}
+      <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top_right,#2d1b69_0%,#1a0a4a_15%,transparent_50%)]" />
+      <div className="pointer-events-none fixed inset-0 z-0 opacity-30" style={{
+        backgroundImage: "radial-gradient(circle at center, rgba(255,255,255,0.04) 1px, transparent 1px)",
+        backgroundSize: "32px 32px",
+      }} />
 
-      <div className="mx-auto max-w-6xl px-6 py-8">
+      <div className="relative z-10">
+        <NotifyHost />
+        <header className="sticky top-0 z-40 border-b border-white/10 bg-[#05060f]/85 backdrop-blur-2xl backdrop-saturate-150">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-dark shadow-lg shadow-brand/30">
+                <Tv className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-bold leading-tight">Three Digital Mídia</p>
+                <p className="text-[10px] uppercase tracking-wider text-slate-500">Admin · {role}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-sm">
+              <a href="/guia" target="_blank" rel="noopener" className="hidden items-center gap-1 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/5 md:flex"><LifeBuoy className="h-3.5 w-3.5" /> Guia</a>
+              <NotifBell token={token} />
+              <span className="hidden text-xs text-slate-400 md:inline">{nome}</span>
+              <button onClick={sair} className="flex items-center gap-1 rounded-lg border border-red-500/20 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-500/10"><LogOut className="h-3.5 w-3.5" /> Sair</button>
+            </div>
+          </div>
+          <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-2 scrollbar-thin scrollbar-thumb-white/10">
+            {abas.filter(a => !a.master || isMaster).map(a => (
+              <button key={a.id} onClick={() => setAba(a.id)}
+                className={`group relative flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  aba === a.id
+                    ? "bg-gradient-to-br from-brand to-brand-dark text-white shadow-md shadow-brand/40"
+                    : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                }`}>
+                <a.icon className="h-3.5 w-3.5" /> {a.label}
+              </button>
+            ))}
+          </nav>
+        </header>
+
+      <div className="mx-auto max-w-7xl px-6 py-8">
         {aba === "dashboard"   && <Dashboard token={token} />}
         {aba === "campanhas"   && <Campanhas token={token} isMaster={isMaster} />}
         {aba === "anunciantes" && <Anunciantes token={token} isMaster={isMaster} />}
@@ -138,6 +156,7 @@ export default function AdminPage() {
         {aba === "arquivados"  && <Arquivados token={token} />}
         {aba === "auditoria"   && <Auditoria token={token} />}
         {aba === "noxibo"      && <NoXibo token={token} />}
+        </div>
       </div>
     </main>
   );
@@ -232,49 +251,119 @@ function Dashboard({ token }: { token: string }) {
     ultimas: { empresa: string; nome: string; status: string; status_pagamento: string; valor: string; created_at: string }[];
   } | null>(null);
   useEffect(() => { aapi(token, "/api/admin/dashboard").then(r => r.json()).then(x => x.ok && setD(x)); }, [token]);
-  if (!d) return <Loader2 className="h-6 w-6 animate-spin text-slate-500" />;
+  if (!d) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>;
   return (
-    <div>
+    <div className="space-y-6">
       <HealthcheckBar token={token} />
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <Kpi label="Anunciantes" value={String(d.kpis.anunciantes)} />
-        <Kpi label="Campanhas no ar" value={String(d.kpis.campanhas_no_ar)} />
-        <Kpi label="Receita recebida" value={brl(d.kpis.receita_paga)} />
-        <Kpi label="A receber" value={brl(d.kpis.a_receber)} />
-        <Kpi label="Locais ativos" value={String(d.kpis.locais)} />
+
+      {/* KPIs premium */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Kpi label="Anunciantes"      value={String(d.kpis.anunciantes)}      icon="👥" color="cyan" />
+        <Kpi label="Campanhas no ar"  value={String(d.kpis.campanhas_no_ar)}  icon="📡" color="emerald" />
+        <Kpi label="Receita recebida" value={brl(d.kpis.receita_paga)}        icon="💰" color="violet" />
+        <Kpi label="A receber"        value={brl(d.kpis.a_receber)}           icon="⏳" color="amber" />
+        <Kpi label="Locais ativos"    value={String(d.kpis.locais)}           icon="📍" color="blue" />
       </div>
 
-      {d.a_vencer.length > 0 && (
-        <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-          <p className="mb-2 text-sm font-semibold text-amber-300">Campanhas a vencer (7 dias)</p>
-          <div className="flex flex-wrap gap-2">
-            {d.a_vencer.map((c, i) => <span key={i} className="rounded bg-white/5 px-2 py-1 text-xs">{c.empresa}: {c.nome} <span className="text-amber-300">→ {String(c.data_fim).slice(0, 10)}</span></span>)}
+      {/* Cards lado a lado: a vencer + ultimas campanhas */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Campanhas a vencer */}
+        {d.a_vencer.length > 0 ? (
+          <div className="lg:col-span-1 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 to-orange-500/5 p-5 backdrop-blur-md">
+            <div className="mb-3 flex items-center gap-2">
+              <div className="rounded-lg bg-amber-500/20 p-1.5"><span className="text-base">⚠️</span></div>
+              <p className="text-sm font-semibold text-amber-200">A vencer em 7 dias</p>
+              <span className="ml-auto rounded-full bg-amber-500/30 px-2 py-0.5 text-xs font-bold text-amber-100">{d.a_vencer.length}</span>
+            </div>
+            <ul className="space-y-2">
+              {d.a_vencer.slice(0, 6).map((c, i) => (
+                <li key={i} className="flex items-start justify-between gap-2 rounded-lg bg-black/20 p-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium">{c.empresa}</p>
+                    <p className="truncate text-[11px] text-slate-400">{c.nome}</p>
+                  </div>
+                  <span className="text-xs font-mono text-amber-300">{String(c.data_fim).slice(8, 10)}/{String(c.data_fim).slice(5, 7)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="lg:col-span-1 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-5 backdrop-blur-md">
+            <div className="flex h-full items-center justify-center text-center">
+              <div>
+                <div className="mb-2 text-3xl">✨</div>
+                <p className="text-sm font-semibold text-emerald-300">Tudo em dia</p>
+                <p className="mt-1 text-xs text-slate-400">Nenhuma campanha vence nos próximos 7 dias</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Últimas campanhas */}
+        <div className="lg:col-span-2 overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
+          <div className="border-b border-white/10 bg-white/5 px-5 py-3">
+            <p className="text-sm font-semibold">Últimas campanhas</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Anunciante / Campanha</th>
+                  <th className="px-4 py-2 font-medium">Valor</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Pgto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.ultimas.map((c, i) => (
+                  <tr key={i} className="border-t border-white/5 transition hover:bg-white/[0.03]">
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{c.empresa}</div>
+                      <div className="text-xs text-slate-400">{c.nome}</div>
+                    </td>
+                    <td className="px-4 py-3 font-medium">{brl(Number(c.valor))}</td>
+                    <td className="px-4 py-3"><Badge s={c.status} /></td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        c.status_pagamento === "pago"   ? "bg-emerald-500/15 text-emerald-300"
+                        : c.status_pagamento === "isento" ? "bg-slate-500/15 text-slate-300"
+                        : "bg-amber-500/15 text-amber-300"
+                      }`}>{c.status_pagamento}</span>
+                    </td>
+                  </tr>
+                ))}
+                {!d.ultimas.length && <tr><td colSpan={4} className="p-8 text-center text-slate-500">Nenhuma campanha ainda.</td></tr>}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
-
-      <h2 className="mt-8 mb-3 text-lg font-bold">Últimas campanhas</h2>
-      <div className="overflow-hidden rounded-xl border border-white/10">
-        <table className="w-full text-sm">
-          <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Anunciante / Campanha</th><th className="p-3">Valor</th><th className="p-3">Status</th><th className="p-3">Pgto</th></tr></thead>
-          <tbody>
-            {d.ultimas.map((c, i) => (
-              <tr key={i} className="border-t border-white/5">
-                <td className="p-3"><div className="font-medium">{c.empresa}</div><div className="text-xs text-slate-400">{c.nome}</div></td>
-                <td className="p-3">{brl(Number(c.valor))}</td>
-                <td className="p-3"><Badge s={c.status} /></td>
-                <td className="p-3"><span className={`text-xs ${c.status_pagamento === "pago" ? "text-emerald-300" : c.status_pagamento === "isento" ? "text-slate-400" : "text-amber-300"}`}>{c.status_pagamento}</span></td>
-              </tr>
-            ))}
-            {!d.ultimas.length && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhuma campanha ainda.</td></tr>}
-          </tbody>
-        </table>
       </div>
     </div>
   );
 }
-function Kpi({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-2xl border border-white/10 bg-white/5 p-5"><p className="text-sm text-slate-400">{label}</p><p className="mt-1 text-2xl font-black text-brand-light">{value}</p></div>;
+
+const KPI_CORES = {
+  cyan:    { bg: "from-cyan-500/15 to-cyan-500/5",       border: "border-cyan-500/25",     text: "text-cyan-300",    icon: "bg-cyan-500/20" },
+  emerald: { bg: "from-emerald-500/15 to-emerald-500/5", border: "border-emerald-500/25",  text: "text-emerald-300", icon: "bg-emerald-500/20" },
+  violet:  { bg: "from-violet-500/15 to-violet-500/5",   border: "border-violet-500/25",   text: "text-violet-300",  icon: "bg-violet-500/20" },
+  amber:   { bg: "from-amber-500/15 to-amber-500/5",     border: "border-amber-500/25",    text: "text-amber-300",   icon: "bg-amber-500/20" },
+  blue:    { bg: "from-blue-500/15 to-blue-500/5",       border: "border-blue-500/25",     text: "text-blue-300",    icon: "bg-blue-500/20" },
+};
+
+function Kpi({ label, value, icon, color }: { label: string; value: string; icon?: string; color?: keyof typeof KPI_CORES }) {
+  const c = color ? KPI_CORES[color] : KPI_CORES.violet;
+  return (
+    <div className={`group relative overflow-hidden rounded-2xl border ${c.border} bg-gradient-to-br ${c.bg} p-5 backdrop-blur-md transition hover:scale-[1.02] hover:shadow-lg`}>
+      <div className={`absolute -right-6 -top-6 h-20 w-20 rounded-full ${c.icon} blur-2xl opacity-0 transition group-hover:opacity-100`} />
+      <div className="relative flex items-start justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
+          <p className={`mt-2 text-2xl font-black ${c.text}`}>{value}</p>
+        </div>
+        {icon && <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${c.icon} text-xl`}>{icon}</div>}
+      </div>
+    </div>
+  );
 }
 function Badge({ s }: { s: string }) {
   const m: Record<string, string> = { ativo: "text-emerald-300", ativa: "text-emerald-300", pendente: "text-amber-300", suspenso: "text-red-300", cancelado: "text-slate-400" };
