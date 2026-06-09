@@ -163,11 +163,15 @@ async function handle(req: NextRequest) {
       if (l.status === 4) hipoteses.push({ gravidade: "alta", texto: `Layout '${l.layout}' (id ${l.layoutId}) esta em ERROR`, acao: "Layout corrompido — recriar via soft-recreate" });
       if (l.publishedStatusId === 2) hipoteses.push({ gravidade: "media", texto: `Layout '${l.layout}' esta em DRAFT (nao publicado)`, acao: "Publish do layout faltando" });
     }
-    if (ad.startDt && new Date(ad.startDt).getTime() > now) {
-      hipoteses.push({ gravidade: "media", texto: `Ad Campaign '${ad.campaign}' so comeca em ${ad.startDt}`, acao: "Aguarde o periodo OU edite data_inicio pra agora" });
+    // Xibo retorna startDt/endDt como Unix timestamp em SEGUNDOS (nao ms).
+    // Converte pra ms antes de comparar com Date.now() — senao da false positive "1970 expirou".
+    const startMs = ad.startDt ? Number(ad.startDt) * 1000 : null;
+    const endMs   = ad.endDt   ? Number(ad.endDt)   * 1000 : null;
+    if (startMs && startMs > now) {
+      hipoteses.push({ gravidade: "media", texto: `Ad Campaign '${ad.campaign}' so comeca em ${new Date(startMs).toISOString()}`, acao: "Aguarde o periodo OU edite data_inicio pra agora" });
     }
-    if (ad.endDt && new Date(ad.endDt).getTime() < now) {
-      hipoteses.push({ gravidade: "alta", texto: `Ad Campaign '${ad.campaign}' JA EXPIROU em ${ad.endDt}`, acao: "Estender data_fim ou encerrar" });
+    if (endMs && endMs < now) {
+      hipoteses.push({ gravidade: "alta", texto: `Ad Campaign '${ad.campaign}' JA EXPIROU em ${new Date(endMs).toISOString()}`, acao: "Estender data_fim ou encerrar" });
     }
   }
 
