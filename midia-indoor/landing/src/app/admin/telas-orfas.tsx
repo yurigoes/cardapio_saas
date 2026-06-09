@@ -170,11 +170,12 @@ function AdicionarTvManualModal({ token, locais, onClose, onSaved }: { token: st
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#12121c] p-6" onClick={e => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-white/10 bg-[#12121c]" onClick={e => e.stopPropagation()}>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 p-5">
           <h3 className="text-lg font-bold">Adicionar TV manualmente</h3>
           <button onClick={onClose}><X className="h-5 w-5 text-slate-400" /></button>
         </div>
+        <div className="overflow-y-auto p-5">
         <p className="mb-4 text-xs text-slate-400">Use quando a TV ainda nao se registrou sozinha no Xibo (ex: provisionada offline) ou pra cadastrar TVs antigas no inventário.</p>
         <div className="grid gap-3 md:grid-cols-2">
           <CampoTV label="Nome / identificacao *" value={nome} set={setNome} placeholder="ex: TD-LOJA-01" />
@@ -203,6 +204,7 @@ function AdicionarTvManualModal({ token, locais, onClose, onSaved }: { token: st
         <button onClick={salvar} disabled={busy || !nome} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 font-semibold hover:bg-brand-dark disabled:opacity-50">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Adicionar TV
         </button>
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw, Monitor, Copy, Pencil, Camera } from "lucide-react";
 import { notify, confirmModal } from "@/components/Notify";
 
@@ -22,19 +22,10 @@ interface ItemInv {
 }
 interface LocalSimples { id: string; nome: string; cidade?: string | null; }
 
-declare global { interface Window { QRCode?: { toCanvas: (canvas: HTMLCanvasElement, text: string, opts: object, cb: (err?: Error) => void) => void } } }
-let _qrLoaded = false;
-async function carregarQRCode(): Promise<void> {
-  if (_qrLoaded || typeof window === "undefined") return;
-  if (window.QRCode) { _qrLoaded = true; return; }
-  await new Promise<void>((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js";
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("falha QRCode"));
-    document.head.appendChild(s);
-  });
-  _qrLoaded = true;
+/** URL de imagem QR gerada server-side por api.qrserver.com (sem dependencia JS).
+ *  Funciona sempre, mesmo se CSP bloquear scripts externos. */
+function qrImgUrl(data: string, sizePx = 300): string {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${sizePx}x${sizePx}&data=${encodeURIComponent(data)}&format=png&margin=4`;
 }
 
 export function Inventario({ token }: { token: string }) {
@@ -240,8 +231,9 @@ function EditarItemModal({ token, item, locais, onClose, onSaved }: { token: str
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#12121c] p-6" onClick={e => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between"><h3 className="font-bold">Editar item · {item.qr_token}</h3><button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button></div>
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-white/10 bg-[#12121c]" onClick={e => e.stopPropagation()}>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 p-5"><h3 className="font-bold">Editar item · {item.qr_token}</h3><button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button></div>
+        <div className="overflow-y-auto p-5">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Nome" value={nome} onChange={setNome} />
           <Field label="MAC" value={mac} onChange={v => setMac(v.toUpperCase())} mono />
@@ -261,6 +253,7 @@ function EditarItemModal({ token, item, locais, onClose, onSaved }: { token: str
         <button onClick={salvar} disabled={busy || !nome} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar alterações
         </button>
+        </div>
       </div>
     </div>
   );
@@ -300,8 +293,9 @@ function NovoItemModal({ token, locais, onClose, onSaved }: { token: string; loc
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#12121c] p-6" onClick={e => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between"><h3 className="font-bold">Novo item no inventário</h3><button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button></div>
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-white/10 bg-[#12121c]" onClick={e => e.stopPropagation()}>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 p-5"><h3 className="font-bold">Novo item no inventário</h3><button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button></div>
+        <div className="overflow-y-auto p-5">
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs text-slate-400">Tipo</label>
@@ -352,6 +346,7 @@ function NovoItemModal({ token, locais, onClose, onSaved }: { token: string; loc
         <button onClick={salvar} disabled={busy || !nome} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Adicionar ao inventário
         </button>
+        </div>
       </div>
     </div>
   );
@@ -391,44 +386,18 @@ function RemotoBtn({ id, senha }: { id: string; senha: string | null }) {
 }
 
 function QRCodeModal({ item, onClose }: { item: ItemInv; onClose: () => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [origem, setOrigem] = useState("");
+  useEffect(() => { if (typeof window !== "undefined") setOrigem(window.location.origin); }, []);
+  const targetUrl = origem ? `${origem}/q/${item.qr_token}` : "";
+  const qrUrl = origem ? qrImgUrl(targetUrl, 320) : "";
 
-  useEffect(() => {
-    if (typeof window !== "undefined") setOrigem(window.location.origin);
-    let cancelled = false;
-    (async () => {
-      try {
-        await carregarQRCode();
-        // pequeno delay pra garantir que canvas montou no DOM
-        await new Promise(r => setTimeout(r, 50));
-        if (cancelled) return;
-        if (canvasRef.current && window.QRCode) {
-          const url = `${window.location.origin}/q/${item.qr_token}`;
-          window.QRCode.toCanvas(canvasRef.current, url, { width: 300, margin: 2 }, (err) => {
-            if (err) console.error("QR error:", err);
-          });
-        } else {
-          console.warn("QR: canvas ou lib indisponivel", { canvas: !!canvasRef.current, lib: !!window.QRCode });
-        }
-      } catch (e) {
-        console.error("QR carga falhou:", e);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [item.qr_token]);
-
-  async function imprimir() {
+  function imprimir() {
+    if (!origem) { notify("Aguarde a página carregar", "error"); return; }
     const url = `${origem}/q/${item.qr_token}`;
+    // Usa imagem direto da API (sem depender de lib JS no popup)
+    const qrSrc = qrImgUrl(url, 400);
 
-    // Gera o QR como dataURL pra embutir direto na etiqueta (sem depender de script no iframe)
-    await carregarQRCode();
-    if (!window.QRCode) { notify("Falha ao carregar gerador de QR", "error"); return; }
-    const tmpCanvas = document.createElement("canvas");
-    await new Promise<void>(res => window.QRCode!.toCanvas(tmpCanvas, url, { width: 320, margin: 0 }, () => res()));
-    const qrDataUrl = tmpCanvas.toDataURL("image/png");
-
-    const html = `<!DOCTYPE html><html><head><title>Etiqueta · ${item.nome}</title>
+    const html = `<!DOCTYPE html><html><head><title>Etiqueta · ${escapeHtml(item.nome)}</title>
 <meta charset="utf-8">
 <style>
   @page { size: 90mm 60mm; margin: 0; }
@@ -443,8 +412,11 @@ function QRCodeModal({ item, onClose }: { item: ItemInv; onClose: () => void }) 
   .info .escaneie { font-size: 6pt; color: #999; margin-top: 2mm; }
   .qr { width: 35mm; height: 35mm; flex-shrink: 0; }
   .qr img { width: 100%; height: 100%; display: block; }
+  .btn-print { position: fixed; top: 10px; right: 10px; background: #7c3aed; color: white; border: 0; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  @media print { .btn-print { display: none; } }
 </style></head>
 <body>
+  <button class="btn-print" onclick="window.print()">Imprimir agora</button>
   <div class="etiqueta">
     <div class="info">
       <p class="marca">THREE DIGITAL · INVENTÁRIO</p>
@@ -455,23 +427,23 @@ function QRCodeModal({ item, onClose }: { item: ItemInv; onClose: () => void }) 
       ${item.modelo ? `<p>${escapeHtml((item.fabricante ?? "") + " " + item.modelo).trim()}</p>` : ""}
       <p class="escaneie">↗ Escaneie pra ver detalhes</p>
     </div>
-    <div class="qr"><img src="${qrDataUrl}" alt="QR"></div>
+    <div class="qr"><img src="${qrSrc}" alt="QR" crossorigin="anonymous"></div>
   </div>
-  <script>window.onload = () => { setTimeout(() => { window.print(); setTimeout(() => window.close(), 500); }, 100); }</script>
+  <script>
+    // Espera a imagem do QR carregar e dispara o print automaticamente
+    const img = document.querySelector('.qr img');
+    if (img.complete) setTimeout(() => window.print(), 200);
+    else img.addEventListener('load', () => setTimeout(() => window.print(), 200));
+    img.addEventListener('error', () => alert('Falha ao carregar QR. Clica em Imprimir agora.'));
+  </script>
 </body></html>`;
 
-    // Usa iframe oculto (nao requer popup unblock)
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;width:0;height:0;border:0;left:-1000px;top:-1000px;";
-    document.body.appendChild(iframe);
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) { document.body.removeChild(iframe); notify("Falha ao gerar etiqueta", "error"); return; }
-    doc.open(); doc.write(html); doc.close();
-    iframe.contentWindow?.focus();
-    setTimeout(() => {
-      try { iframe.contentWindow?.print(); } catch (e) { console.error(e); }
-      setTimeout(() => { try { document.body.removeChild(iframe); } catch {} }, 2000);
-    }, 300);
+    const w = window.open("", "_blank", "width=720,height=480");
+    if (!w) {
+      notify("Popup bloqueado! Permita popups deste site no navegador e tente de novo.", "error");
+      return;
+    }
+    w.document.open(); w.document.write(html); w.document.close();
   }
 
   return (
@@ -480,7 +452,12 @@ function QRCodeModal({ item, onClose }: { item: ItemInv; onClose: () => void }) 
         <div className="mb-4 flex items-center justify-between"><h3 className="font-bold">QR · {item.nome}</h3><button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button></div>
         <div className="flex flex-col items-center gap-3">
           <div className="rounded-xl bg-white p-3">
-            <canvas ref={canvasRef} />
+            {qrUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={qrUrl} alt={`QR ${item.qr_token}`} width={300} height={300} className="block" />
+            ) : (
+              <div className="flex h-[300px] w-[300px] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
+            )}
           </div>
           <p className="text-center text-xs text-slate-400">URL: <code className="text-brand-light">{origem}/q/{item.qr_token}</code></p>
           <button onClick={imprimir} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark">
