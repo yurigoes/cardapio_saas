@@ -710,6 +710,83 @@ export async function criarLayoutDeMidia(opts: {
   return { layoutId, mediaId, campaignId };
 }
 
+/**
+ * Cria um Layout com PLAYLIST INTERLEAVED a partir de mediaIds JA EXISTENTES no Xibo.
+ * Diferente de criarLayoutLoop (que faz upload), aqui so referenciamos a library.
+ * Usado pelo plano de veiculacao 'encarte_totem' e 'ponta_gondola' que precisam
+ * intercalar [ancora, anuncio_1, ancora, anuncio_2, ancora, anuncio_3, ...].
+ */
+export async function criarLayoutInterleave(opts: {
+  nome: string; folderId: number; width: number; height: number;
+  itens: Array<{ mediaId: number; duracaoSeg?: number }>;
+}): Promise<{ layoutId: number; campaignId?: number }> {
+  if (!opts.itens.length) throw new Error("interleave: nenhum item");
+  const resolutionId = await getResolution(opts.width, opts.height);
+  const draftBody = new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" });
+  const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: draftBody });
+  const publishId  = draft.parentId ?? draft.layoutId;
+  const playlistId = draft.regions?.[0]?.regionPlaylist?.playlistId;
+  if (!playlistId) throw new Error("Xibo: layout sem playlist de regiao");
+
+  // Atribui cada media na ordem. /api/playlist/library/assign/{playlistId} aceita
+  // mediaId[] e mantem a ordem de envio. Chamamos UMA por vez pra garantir ordem
+  // mesmo em CMS com bug de ordering em batch.
+  for (const item of opts.itens) {
+    const ab = new URLSearchParams();
+    ab.append("media[]", String(item.mediaId));
+    if (item.duracaoSeg && item.duracaoSeg > 0) {
+      ab.set("duration", String(item.duracaoSeg));
+      ab.set("useDuration", "1");
+    }
+    try {
+      await xibo(`/api/playlist/library/assign/${playlistId}`, { method: "POST", body: ab });
+    } catch (e) {
+      // Fallback: alguns CMS exigem mediaId (singular) em vez de media[]
+      try {
+        const ab2 = new URLSearchParams({ mediaId: String(item.mediaId) });
+        if (item.duracaoSeg && item.duracaoSeg > 0) {
+          ab2.set("duration", String(item.duracaoSeg));
+          ab2.set("useDuration", "1");
+        }
+        await xibo(`/api/playlist/library/assign/${playlistId}`, { method: "POST", body: ab2 });
+      } catch (e2) {
+        console.warn(`[interleave] assign media ${item.mediaId} falhou:`, (e2 as Error).message);
+        throw e2;
+      }
+    }
+  }
+
+  await xibo(`/api/layout/publish/${publishId}`, { method: "PUT", body: new URLSearchParams({ publishNow: "1" }) });
+
+  // Resolve layout publicado
+  let layoutId = publishId; let campaignId = draft.campaignId;
+  try {
+    const arr = await xibo<Array<{ layoutId: number; campaignId?: number; publishedStatusId?: number; layout?: string }>>(
+      `/api/layout?layout=${encodeURIComponent(opts.nome)}&embed=campaigns&retired=0`
+    );
+    const lista = Array.isArray(arr) ? arr : [];
+    const pub = lista.find(l => l.publishedStatusId === 1 && l.layout === opts.nome) ?? lista.find(l => l.layout === opts.nome) ?? lista[0];
+    if (pub) { layoutId = pub.layoutId; campaignId = pub.campaignId ?? campaignId; }
+  } catch (e) { console.warn("[interleave] nao resolveu publicado:", (e as Error).message); }
+  return { layoutId, campaignId };
+}
+
+/** Faz upload de UMA midia na library do Xibo (sem layout). Retorna mediaId. */
+export async function uploadMediaSimples(
+  arquivo: Buffer | Blob, nomeArquivo: string, folderId: number
+): Promise<number> {
+  const form = new FormData();
+  const blob = arquivo instanceof Blob ? arquivo : new Blob([new Uint8Array(arquivo)]);
+  const nomeUnico = `${Date.now().toString(36)}-${nomeArquivo}`;
+  form.append("files", blob, nomeUnico);
+  form.append("name", nomeUnico);
+  form.append("folderId", String(folderId));
+  const up = await xibo<{ files: Array<{ mediaId?: number; error?: string }> }>("/api/library", { method: "POST", body: form });
+  const mediaId = up.files?.[0]?.mediaId;
+  if (!mediaId) throw new Error(`Xibo: upload falhou — ${up.files?.[0]?.error ?? "sem mediaId"}`);
+  return mediaId;
+}
+
 /** Agenda um layout (via campaignId do layout) num display group, sempre ativo. Retorna o eventId. */
 export async function agendarLayoutNoGrupo(campaignId: number, displayGroupId: number): Promise<number | undefined> {
   const agora = new Date();

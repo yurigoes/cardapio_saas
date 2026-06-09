@@ -346,6 +346,17 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
         }
       } catch (e) { console.warn("[lancar] e-mail no ar falhou:", (e as Error).message); }
     }
+
+    // Hook plano de veiculacao: pra locais 'encarte_totem' ou 'ponta_gondola',
+    // regenera o layout intercalado pra incluir esse novo anuncio na rotacao.
+    try {
+      const { regenerarSeNecessario } = await import("./veiculacao");
+      const locaisIds = await p.query<{ local_id: string }>(
+        `SELECT local_id FROM midia_campanha_locais WHERE campanha_id = $1`, [campanhaId]
+      ).then(r => r.rows.map(x => x.local_id));
+      for (const lid of locaisIds) { await regenerarSeNecessario(lid); }
+    } catch (e) { console.warn("[lancar] regen veiculacao:", (e as Error).message); }
+
     return { ok: true, xiboCampaignId };
   } catch (err) {
     console.error("[lancarCampanha]", err);
@@ -416,10 +427,23 @@ export async function encerrarCampanha(campanhaId: string): Promise<{ ok: boolea
     if (camp.xibo_layout_id)   { try { await excluirLayout(camp.xibo_layout_id); }   catch (e) { console.warn("[encerrar] layout:", (e as Error).message); } }
     if (camp.xibo_media_id)    { try { await excluirMidia(camp.xibo_media_id); }      catch (e) { console.warn("[encerrar] mídia:", (e as Error).message); } }
 
+    // Antes de marcar encerrada, captura locais (pra regen veiculacao DEPOIS)
+    const locaisIds = await db().query<{ local_id: string }>(
+      `SELECT local_id FROM midia_campanha_locais WHERE campanha_id = $1`, [campanhaId]
+    ).then(r => r.rows.map(x => x.local_id));
+
     await db().query(
       `UPDATE midia_campanhas SET status = 'encerrada', xibo_campaign_id = NULL, xibo_layout_id = NULL, xibo_media_id = NULL, archived_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [campanhaId]
     );
+
+    // Hook veiculacao: agora que a campanha saiu do 'no_ar', remove dos layouts
+    // intercalados de encarte/gondola dos locais que ela cobria.
+    try {
+      const { regenerarSeNecessario } = await import("./veiculacao");
+      for (const lid of locaisIds) { await regenerarSeNecessario(lid); }
+    } catch (e) { console.warn("[encerrar] regen veiculacao:", (e as Error).message); }
+
     return { ok: true };
   } catch (err) {
     console.error("[encerrarCampanha]", err);

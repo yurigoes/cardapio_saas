@@ -266,6 +266,36 @@ export async function ensureSchema(): Promise<void> {
   // Sem isso, Xibo retorna 422 "Por favor indique uma largura" ao criar Resolution.
   await p.query(`UPDATE midia_locais SET largura = 1080 WHERE largura IS NULL OR largura < 120;`);
   await p.query(`UPDATE midia_locais SET altura  = 1920 WHERE altura  IS NULL OR altura  < 120;`);
+
+  // Plano de veiculacao: como o local intercala conteudo entre anuncios.
+  //   'publicidade'    — so anuncios, sem ancora (default — comportamento atual)
+  //   'encarte_totem'  — encarte 1:1: [encarte > anuncio_n > encarte > anuncio_n+1 > ...]
+  //   'ponta_gondola'  — cada display tem midia propria; intercala com anuncios em sync
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS plano_veiculacao TEXT NOT NULL DEFAULT 'publicidade';`);
+
+  // Encarte do local (totem). Mestre define em Local → "Midia Encarte" com periodo
+  // de vigencia. Quando vigente, eh intercalado 1:1 com os anuncios.
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_layout_id INTEGER;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_media_id INTEGER;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_nome TEXT;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_inicio DATE;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_fim DATE;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_duracao_seg INTEGER NOT NULL DEFAULT 10;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_arquivo_bytes BYTEA;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_arquivo_mime TEXT;`);
+  // Layout consolidado intercalado (gerado por regenerarLayoutDoLocal) — virou
+  // o conteudo base do local quando plano_veiculacao != 'publicidade'.
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS interleave_layout_id INTEGER;`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS interleave_event_id INTEGER;`);
+
+  // Ponta de gondola: cada tela individual tem sua propria midia (cada gondola
+  // mostra produto diferente). Anuncios intercalam em sync entre todas.
+  await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS gondola_layout_id INTEGER;`);
+  await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS gondola_media_id INTEGER;`);
+  await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS gondola_nome TEXT;`);
+  await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS gondola_duracao_seg INTEGER NOT NULL DEFAULT 10;`);
+  await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS gondola_arquivo_bytes BYTEA;`);
+  await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS gondola_arquivo_mime TEXT;`);
   // Geo + audiência estimada
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS lat NUMERIC(10,6);`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS lng NUMERIC(10,6);`);

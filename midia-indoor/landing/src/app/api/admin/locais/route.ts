@@ -83,17 +83,23 @@ const patch = z.object({
   lng: z.coerce.number().optional().nullable(),
   passantes_dia: z.coerce.number().int().min(0).optional(),
   ativo: z.boolean().optional(),
+  plano_veiculacao: z.enum(["publicidade", "encarte_totem", "ponta_gondola"]).optional(),
 });
 
 export async function PATCH(req: NextRequest) {
-  if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
+  const key = req.nextUrl.searchParams.get("key") ?? req.headers.get("x-cron-key");
+  const cronSecret = process.env.CRON_SECRET ?? "";
+  const viaKey = cronSecret && key === cronSecret;
+  if (!viaKey && !(await exigirMaster(req))) {
+    return NextResponse.json({ ok: false, error: "apenas master (ou ?key=CRON_SECRET)" }, { status: 403 });
+  }
   const parsed = patch.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ ok: false, error: "dados inválidos" }, { status: 400 });
   const b = parsed.data;
 
   const sets: string[] = []; const vals: unknown[] = [];
   const add = (c: string, v: unknown) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
-  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "orientacao", "lat", "lng", "passantes_dia", "ativo"] as const)
+  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "orientacao", "lat", "lng", "passantes_dia", "ativo", "plano_veiculacao"] as const)
     if (b[k] !== undefined) add(k, b[k]);
   if (!sets.length) return NextResponse.json({ ok: false, error: "nada para atualizar" }, { status: 400 });
 
