@@ -157,7 +157,9 @@ export async function regenerarLayoutDoLocal(localId: string): Promise<{
     return { ok: false, regenerado: false, erro: `criar layout falhou: ${(e as Error).message}` };
   }
 
-  // Agenda no grupo do local (default forever) — substitui o anterior
+  // Agenda no grupo do local — substitui o anterior. O agendamento eh
+  // "fallback" se Ad Campaigns nao cobrirem; ESSENCIAL pra player ter algo
+  // pra tocar enquanto Xibo CampaignSchedulerTask nao roda.
   if (local.interleave_event_id) {
     try { await excluirEvento(local.interleave_event_id); } catch { /* ignore */ }
   }
@@ -166,6 +168,22 @@ export async function regenerarLayoutDoLocal(localId: string): Promise<{
     try { eventId = await agendarLayoutNoGrupo(novo.campaignId, dg); }
     catch (e) { console.warn(`[veiculacao] agendar layout falhou:`, (e as Error).message); }
   }
+
+  // CRITICO: seta layout intercalado como DEFAULT LAYOUT de cada display do grupo.
+  // Sem isso, splash continua ativo nos gaps de evento, e o player alterna
+  // entre splash e encarte (sintoma reportado). Com Default Layout = intercalado,
+  // ele roda continuamente sempre que nao houver Ad Campaign mais prioritaria.
+  try {
+    const displays = await listarDisplaysDoGrupo(dg);
+    for (const d of displays) {
+      try {
+        await setDefaultLayout(d.displayId, novo.layoutId);
+        console.log(`[veiculacao] display ${d.displayId}: Default Layout = ${novo.layoutId}`);
+      } catch (e) {
+        console.warn(`[veiculacao] setDefaultLayout(${d.displayId}) falhou:`, (e as Error).message);
+      }
+    }
+  } catch (e) { console.warn(`[veiculacao] listarDisplaysDoGrupo(${dg}) falhou:`, (e as Error).message); }
 
   // Apaga layout intercalado anterior (limpa lixo no Xibo)
   if (local.interleave_layout_id) {
