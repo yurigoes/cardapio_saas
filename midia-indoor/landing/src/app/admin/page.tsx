@@ -387,7 +387,7 @@ function Badge({ s }: { s: string }) {
 }
 
 // ─── Tipos compartilhados ────────────────────────────────────────────────────
-interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; telas_total?: number; telas_online?: number; sync_em?: string | null; tipo?: string; sincronia?: boolean; qtd_membros?: number | null; plano_veiculacao?: "publicidade" | "encarte_totem" | "ponta_gondola"; encarte_nome?: string | null; encarte_inicio?: string | null; encarte_fim?: string | null; encarte_duracao_seg?: number | null; }
+interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; telas_total?: number; telas_online?: number; sync_em?: string | null; tipo?: string; sincronia?: boolean; qtd_membros?: number | null; plano_veiculacao?: "publicidade" | "encarte_totem" | "ponta_gondola"; encarte_nome?: string | null; encarte_inicio?: string | null; encarte_fim?: string | null; encarte_duracao_seg?: number | null; encarte_paginas?: number; }
 const PLANO_VEICULACAO_LABEL: Record<string, string> = { publicidade: "Publicidade (default)", encarte_totem: "Encarte de totem (1:1)", ponta_gondola: "Ponta de gôndola" };
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
@@ -1051,8 +1051,9 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
         <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2">
           <p className="text-xs text-amber-200">
             🎯 <strong>Encarte:</strong> {local.encarte_nome ? <span>{local.encarte_nome}</span> : <span className="text-amber-300/70">não enviado</span>}
+            {(local.encarte_paginas ?? 0) > 1 && <span className="ml-1 rounded bg-amber-500/30 px-1 text-[10px] font-bold">{local.encarte_paginas} pág</span>}
             {local.encarte_inicio && local.encarte_fim && <span className="ml-1 text-amber-300/70">· {local.encarte_inicio.slice(0,10)} → {local.encarte_fim.slice(0,10)}</span>}
-            {local.encarte_duracao_seg && <span className="ml-1 text-amber-300/70">· {local.encarte_duracao_seg}s</span>}
+            {local.encarte_duracao_seg && <span className="ml-1 text-amber-300/70">· {local.encarte_duracao_seg}s/pág</span>}
           </p>
           <button onClick={() => setEditEncarte(true)} className="mt-1 inline-flex items-center gap-1 rounded border border-amber-500/30 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-500/10">
             {busyEncarte ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />} {local.encarte_nome ? "Trocar encarte" : "Enviar encarte"}
@@ -1089,44 +1090,73 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
 function EncarteModal({ token, local, onClose, onSaved, busy, setBusy }: { token: string; local: Local; onClose: () => void; onSaved: () => void; busy: boolean; setBusy: (v: boolean) => void }) {
   const hoje = new Date().toISOString().slice(0, 10);
   const em30 = new Date(Date.now() + 30 * 86400e3).toISOString().slice(0, 10);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [inicio, setInicio] = useState(local.encarte_inicio?.slice(0, 10) ?? hoje);
   const [fim, setFim] = useState(local.encarte_fim?.slice(0, 10) ?? em30);
   const [dur, setDur] = useState(String(local.encarte_duracao_seg ?? 10));
   const [err, setErr] = useState("");
+  function onPick(list: FileList | null) {
+    if (!list) return;
+    setFiles(Array.from(list));
+  }
+  function remover(i: number) { setFiles(f => f.filter((_, idx) => idx !== i)); }
+  function mover(i: number, dir: -1 | 1) {
+    setFiles(f => {
+      const arr = [...f]; const j = i + dir;
+      if (j < 0 || j >= arr.length) return arr;
+      [arr[i], arr[j]] = [arr[j], arr[i]]; return arr;
+    });
+  }
   async function enviar() {
-    if (!file) { setErr("Selecione um arquivo"); return; }
+    if (!files.length) { setErr("Selecione 1+ arquivos"); return; }
     setBusy(true); setErr("");
     const fd = new FormData();
-    fd.append("file", file);
+    for (const f of files) fd.append("file", f); // mesmo nome — backend usa getAll('file')
     fd.append("inicio", inicio);
     fd.append("fim", fim);
     fd.append("duracao_seg", dur);
     const r = await fetch(`/api/admin/locais/${local.id}/encarte`, { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: fd });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
-    notify(`Encarte atualizado · layout intercalado regenerado`, "success");
+    notify(`Encarte atualizado · ${d.paginas} página(s) · layout regenerado`, "success");
     onSaved();
   }
   return (
-    <Modal onClose={onClose} title={`Encarte do ${local.nome}`}>
-      <p className="mb-3 text-xs text-slate-400">
-        O encarte vai aparecer <strong>intercalado 1:1</strong> com cada anúncio rotacionado no local:
-        <code className="ml-1 rounded bg-white/10 px-1 text-[10px]">encarte → anúncio_1 → encarte → anúncio_2 → encarte → ...</code>
+    <Modal onClose={onClose} title={`Encarte do ${local.nome}`} wide>
+      <p className="mb-2 text-xs text-slate-400">
+        Cada anúncio é intercalado com <strong>todo o bloco de páginas</strong>:
       </p>
-      <label className="mb-1 block text-sm text-slate-300">Arquivo (imagem ou vídeo)</label>
-      <input type="file" accept="image/*,video/*" onChange={e => setFile(e.target.files?.[0] ?? null)}
-        className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm file:mr-2 file:rounded file:border-0 file:bg-brand/30 file:px-3 file:py-1 file:text-xs file:text-brand-light hover:file:bg-brand/50" />
+      <code className="mb-3 block rounded bg-white/10 px-2 py-1 text-[10px] text-slate-300">
+        [pág 1 → pág 2 → … → pág N] → anúncio_1 → [pág 1 → pág 2 → … → pág N] → anúncio_2 → …
+      </code>
+      <label className="mb-1 block text-sm text-slate-300">Arquivos do encarte (imagens/vídeos)</label>
+      <input type="file" accept="image/*,video/*" multiple onChange={e => onPick(e.target.files)}
+        className="mb-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm file:mr-2 file:rounded file:border-0 file:bg-brand/30 file:px-3 file:py-1 file:text-xs file:text-brand-light hover:file:bg-brand/50" />
+      {files.length > 0 && (
+        <div className="mb-3 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-2">
+          {files.map((f, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <span className="w-6 rounded bg-amber-500/20 px-1 text-center text-amber-300 font-bold">{i + 1}</span>
+              <span className="flex-1 truncate">{f.name}</span>
+              <span className="text-slate-500">{(f.size / 1024 / 1024).toFixed(2)} MB</span>
+              <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className="rounded border border-white/10 px-1 disabled:opacity-30">↑</button>
+              <button type="button" onClick={() => mover(i, 1)} disabled={i === files.length - 1} className="rounded border border-white/10 px-1 disabled:opacity-30">↓</button>
+              <button type="button" onClick={() => remover(i)} className="rounded border border-red-500/30 px-1 text-red-300 hover:bg-red-500/10"><X className="h-3 w-3" /></button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Início (vigência)" value={inicio} onChange={setInicio} type="date" />
         <Field label="Fim (vigência)" value={fim} onChange={setFim} type="date" />
       </div>
       <Field label="Duração de exibição (segundos)" value={dur} onChange={setDur} type="number" />
-      <p className="mb-3 text-xs text-slate-500">Aplica-se a imagens (vídeos usam a duração nativa).</p>
+      <p className="mb-3 text-xs text-slate-500">Aplica em <strong>todas as páginas</strong> (imagens). Vídeos usam a duração nativa.</p>
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
-      <button onClick={enviar} disabled={busy || !file} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {local.encarte_nome ? "Trocar encarte" : "Enviar encarte"}
+      <button onClick={enviar} disabled={busy || !files.length} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {files.length > 1 ? `Enviar ${files.length} páginas` : local.encarte_nome ? "Trocar encarte" : "Enviar encarte"}
       </button>
+      <p className="mt-2 text-[11px] text-slate-500">⚠ Reenviar substitui <strong>todas</strong> as páginas anteriores (replace-mode).</p>
     </Modal>
   );
 }

@@ -2,13 +2,17 @@
  * PUT /api/admin/locais/[id]/encarte
  *
  * Multipart form:
- *  - file: arquivo (image/video) do encarte
+ *  - file: 1+ arquivos (use o MESMO nome 'file' pra cada um). A ordem do upload
+ *          define a ordem das paginas no bloco intercalado.
  *  - inicio?: 'YYYY-MM-DD' (default = hoje)
  *  - fim?:    'YYYY-MM-DD' (default = sem fim)
- *  - duracao_seg?: numero (default 10s p/ imagens)
+ *  - duracao_seg?: numero (default 10s p/ imagens — aplica em TODAS as paginas)
  *
- * Substitui o encarte do local, marca plano_veiculacao='encarte_totem'
- * (se ainda nao for) e regenera o layout intercalado imediatamente.
+ * Substitui TODAS as paginas anteriores do encarte (replace-mode). Marca
+ * plano_veiculacao='encarte_totem' e regenera o layout intercalado imediatamente.
+ *
+ * Layout resultante:
+ *   [pag1, pag2, ..., pagN, anuncio_1, pag1, pag2, ..., pagN, anuncio_2, ...]
  */
 import { NextRequest, NextResponse } from "next/server";
 import { exigirMaster } from "@/lib/admin-auth";
@@ -25,19 +29,23 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 
   const form = await req.formData();
-  const file = form.get("file");
-  if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "file ausente" }, { status: 400 });
+  const fileEntries = form.getAll("file").filter((v): v is File => v instanceof File);
+  if (!fileEntries.length) return NextResponse.json({ ok: false, error: "nenhum arquivo enviado (use form-data com 'file')" }, { status: 400 });
 
   const inicio = (form.get("inicio") as string | null) || null;
   const fim    = (form.get("fim")    as string | null) || null;
   const dur    = form.get("duracao_seg");
   const duracaoSeg = dur ? Math.max(1, Math.min(600, parseInt(String(dur), 10) || 10)) : undefined;
 
-  const buf = Buffer.from(await file.arrayBuffer());
-  const r = await definirEncarteDoLocal(params.id, {
-    arquivo: buf, nomeArquivo: file.name, mime: file.type,
-    inicio, fim, duracaoSeg,
-  });
+  const arquivos = await Promise.all(
+    fileEntries.map(async f => ({
+      arquivo: Buffer.from(await f.arrayBuffer()),
+      nomeArquivo: f.name,
+      mime: f.type,
+    }))
+  );
+
+  const r = await definirEncarteDoLocal(params.id, { arquivos, inicio, fim, duracaoSeg });
   if (!r.ok) return NextResponse.json({ ok: false, error: r.erro }, { status: 400 });
-  return NextResponse.json({ ok: true, mediaId: r.mediaId, regenerado: r.regenerado });
+  return NextResponse.json({ ok: true, paginas: r.paginas, regenerado: r.regenerado });
 }

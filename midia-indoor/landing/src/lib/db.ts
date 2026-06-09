@@ -283,6 +283,23 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_duracao_seg INTEGER NOT NULL DEFAULT 10;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_arquivo_bytes BYTEA;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS encarte_arquivo_mime TEXT;`);
+  // Multi-paginas do encarte: bloco completo [pag1, pag2, ..., pagN] intercalado
+  // 1:1 com cada anuncio. Substitui o uso de encarte_media_id single (mantido
+  // por compat). Ordem = coluna 'ordem' ASC.
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_encarte_paginas (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      local_id        UUID NOT NULL REFERENCES midia_locais(id) ON DELETE CASCADE,
+      ordem           INTEGER NOT NULL DEFAULT 0,
+      nome            TEXT,
+      xibo_media_id   INTEGER NOT NULL,
+      duracao_seg     INTEGER NOT NULL DEFAULT 10,
+      arquivo_bytes   BYTEA,
+      arquivo_mime    TEXT,
+      criada_em       TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_encarte_paginas_local ON midia_encarte_paginas(local_id, ordem);
+  `);
   // Layout consolidado intercalado (gerado por regenerarLayoutDoLocal) — virou
   // o conteudo base do local quando plano_veiculacao != 'publicidade'.
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS interleave_layout_id INTEGER;`);

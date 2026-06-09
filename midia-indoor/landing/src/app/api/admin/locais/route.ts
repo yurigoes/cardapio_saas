@@ -16,9 +16,12 @@ export async function GET(req: NextRequest) {
   try {
     await ensureSchema();
     const rows = await db().query(
-      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, splash_nome, capacidade_dia, orientacao, lat, lng, passantes_dia, created_at, tipo,
-              plano_veiculacao, encarte_nome, encarte_inicio, encarte_fim, encarte_duracao_seg
-         FROM midia_locais WHERE archived_at IS NULL AND (tipo IS NULL OR tipo='individual') ORDER BY cidade NULLS LAST, nome`
+      `SELECT l.id, l.nome, l.cidade, l.endereco, l.descricao, l.largura, l.altura, l.xibo_display_group_id, l.ativo, l.conteudo_nome, l.splash_nome, l.capacidade_dia, l.orientacao, l.lat, l.lng, l.passantes_dia, l.created_at, l.tipo,
+              l.plano_veiculacao, l.encarte_nome, l.encarte_inicio, l.encarte_fim, l.encarte_duracao_seg,
+              (SELECT COUNT(*)::int FROM midia_encarte_paginas p WHERE p.local_id = l.id) AS encarte_paginas
+         FROM midia_locais l
+        WHERE l.archived_at IS NULL AND (l.tipo IS NULL OR l.tipo='individual')
+        ORDER BY l.cidade NULLS LAST, l.nome`
     ).then(r => r.rows);
     return NextResponse.json({ ok: true, locais: rows });
   } catch (err) {

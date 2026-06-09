@@ -44,14 +44,26 @@ interface LocalRow {
   interleave_layout_id: number | null; interleave_event_id: number | null;
 }
 
+interface EncartePagina {
+  id: string; ordem: number; xibo_media_id: number; duracao_seg: number; nome: string | null;
+}
+
+async function listarPaginasEncarte(localId: string): Promise<EncartePagina[]> {
+  const r = await db().query<EncartePagina>(
+    `SELECT id, ordem, xibo_media_id, duracao_seg, nome
+       FROM midia_encarte_paginas WHERE local_id = $1 ORDER BY ordem ASC, criada_em ASC`,
+    [localId]
+  );
+  return r.rows;
+}
+
 interface AnuncioAtivo {
   campanha_id: string; nome: string;
   xibo_media_id: number;
   segundos: number;
 }
 
-function encarteVigente(local: LocalRow): boolean {
-  if (!local.encarte_media_id) return false;
+function dentroDaVigencia(local: LocalRow): boolean {
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   if (local.encarte_inicio && new Date(local.encarte_inicio).getTime() > hoje.getTime()) return false;
   if (local.encarte_fim && new Date(local.encarte_fim).getTime() < hoje.getTime()) return false;
@@ -118,8 +130,19 @@ export async function regenerarLayoutDoLocal(localId: string): Promise<{
   }
 
   // ENCARTE_TOTEM
-  if (!encarteVigente(local)) {
-    console.log(`[veiculacao] local ${localId} encarte fora de vigencia ou ausente — pulando regen`);
+  if (!dentroDaVigencia(local)) {
+    console.log(`[veiculacao] local ${localId} encarte fora de vigencia — pulando regen`);
+    return { ok: true, regenerado: false };
+  }
+
+  // Multi-paginas (tabela midia_encarte_paginas). Fallback pra encarte_media_id legacy.
+  let paginas = await listarPaginasEncarte(localId);
+  if (paginas.length === 0 && local.encarte_media_id) {
+    // compat: usuario tinha encarte single antes da migration multi-paginas
+    paginas = [{ id: "legacy", ordem: 0, xibo_media_id: local.encarte_media_id, duracao_seg: local.encarte_duracao_seg, nome: "legacy" }];
+  }
+  if (paginas.length === 0) {
+    console.log(`[veiculacao] local ${localId} sem paginas de encarte — pulando regen`);
     return { ok: true, regenerado: false };
   }
 
@@ -132,14 +155,16 @@ export async function regenerarLayoutDoLocal(localId: string): Promise<{
 
   const anuncios = await listarAnunciosAtivosNoLocal(localId);
 
-  // Monta sequencia: [encarte, ad1, encarte, ad2, encarte, ad3, ...]
-  // Se 0 anuncios: [encarte] (so encarte rodando)
+  // Monta sequencia: BLOCO completo de paginas entre cada anuncio.
+  // [pag1, pag2, ..., pagN, ad1, pag1, pag2, ..., pagN, ad2, ...]
+  // Se 0 anuncios: so o bloco em loop infinito do Xibo.
   const itens: Array<{ mediaId: number; duracaoSeg?: number }> = [];
+  const bloco = paginas.map(p => ({ mediaId: p.xibo_media_id, duracaoSeg: p.duracao_seg }));
   if (anuncios.length === 0) {
-    itens.push({ mediaId: local.encarte_media_id!, duracaoSeg: local.encarte_duracao_seg });
+    itens.push(...bloco);
   } else {
     for (const a of anuncios) {
-      itens.push({ mediaId: local.encarte_media_id!, duracaoSeg: local.encarte_duracao_seg });
+      itens.push(...bloco);
       itens.push({ mediaId: a.xibo_media_id, duracaoSeg: a.segundos > 0 ? a.segundos : 10 });
     }
   }
@@ -201,47 +226,70 @@ export async function regenerarLayoutDoLocal(localId: string): Promise<{
 }
 
 /**
- * Faz upload do encarte do local. Salva blob (pra soft-recreate igual aos anuncios)
- * + cria media no Xibo + dispara regenerar layout intercalado.
+ * Faz upload do encarte do local (1 ou mais paginas). REPLACE-mode: cada chamada
+ * substitui TODAS as paginas anteriores (mais simples que append+reorder por ora).
+ * Cada arquivo vira uma linha em midia_encarte_paginas. Tambem atualiza vigencia.
  */
 export async function definirEncarteDoLocal(localId: string, opts: {
-  arquivo: Buffer | Blob; nomeArquivo: string; mime?: string;
+  arquivos: Array<{ arquivo: Buffer | Blob; nomeArquivo: string; mime?: string }>;
   inicio?: string | null; fim?: string | null; duracaoSeg?: number;
-}): Promise<{ ok: boolean; erro?: string; mediaId?: number; regenerado?: boolean }> {
+}): Promise<{ ok: boolean; erro?: string; paginas?: number; regenerado?: boolean }> {
   await ensureSchema();
   const p = db();
   const local = await carregarLocal(localId);
   if (!local) return { ok: false, erro: "local nao encontrado" };
+  if (!opts.arquivos.length) return { ok: false, erro: "nenhum arquivo enviado" };
 
-  // Upload na library do Xibo
-  let mediaId: number;
-  try {
-    mediaId = await uploadMediaSimples(opts.arquivo, opts.nomeArquivo, ROOT_FOLDER);
-  } catch (e) {
-    return { ok: false, erro: `upload Xibo falhou: ${(e as Error).message}` };
+  // Upload cada arquivo no Xibo (mantem se algum falhar, mas registra)
+  const novasPaginas: Array<{ mediaId: number; nome: string; blob: Buffer | null; mime: string | null }> = [];
+  for (const a of opts.arquivos) {
+    try {
+      const mediaId = await uploadMediaSimples(a.arquivo, a.nomeArquivo, ROOT_FOLDER);
+      const blob = Buffer.isBuffer(a.arquivo)
+        ? (a.arquivo.length <= 100 * 1024 * 1024 ? a.arquivo : null)
+        : (a.arquivo.size <= 100 * 1024 * 1024 ? Buffer.from(await a.arquivo.arrayBuffer()) : null);
+      novasPaginas.push({ mediaId, nome: a.nomeArquivo, blob, mime: a.mime ?? null });
+    } catch (e) {
+      console.warn(`[veiculacao] upload encarte pagina '${a.nomeArquivo}' falhou:`, (e as Error).message);
+    }
+  }
+  if (!novasPaginas.length) return { ok: false, erro: "todos os uploads falharam" };
+
+  const duracao = opts.duracaoSeg && opts.duracaoSeg > 0 ? opts.duracaoSeg : (local.encarte_duracao_seg || 10);
+
+  // REPLACE-mode: apaga paginas antigas + insere as novas (ordem = ordem do array)
+  await p.query(`DELETE FROM midia_encarte_paginas WHERE local_id = $1`, [localId]);
+  for (let i = 0; i < novasPaginas.length; i++) {
+    const pg = novasPaginas[i];
+    await p.query(
+      `INSERT INTO midia_encarte_paginas (local_id, ordem, nome, xibo_media_id, duracao_seg, arquivo_bytes, arquivo_mime)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [localId, i, pg.nome, pg.mediaId, duracao, pg.blob, pg.mime]
+    );
   }
 
-  // Blob no DB pra soft-recreate
-  const blob = Buffer.isBuffer(opts.arquivo)
-    ? (opts.arquivo.length <= 100 * 1024 * 1024 ? opts.arquivo : null)
-    : (opts.arquivo.size <= 100 * 1024 * 1024 ? Buffer.from(await opts.arquivo.arrayBuffer()) : null);
-
+  // Atualiza metadados no local (vigencia + duracao default + nome resumo) e
+  // atualiza fields legacy single (compat). Marca plano = encarte_totem.
+  const nomeResumo = novasPaginas.length === 1
+    ? novasPaginas[0].nome
+    : `${novasPaginas.length} páginas (${novasPaginas[0].nome}…)`;
   await p.query(
     `UPDATE midia_locais
         SET encarte_media_id = $1, encarte_nome = $2,
-            encarte_inicio = $3, encarte_fim = $4,
-            encarte_duracao_seg = COALESCE($5, encarte_duracao_seg),
+            encarte_inicio = COALESCE($3, encarte_inicio),
+            encarte_fim    = COALESCE($4, encarte_fim),
+            encarte_duracao_seg = $5,
             encarte_arquivo_bytes = $6, encarte_arquivo_mime = $7,
             plano_veiculacao = CASE WHEN plano_veiculacao = 'publicidade' THEN 'encarte_totem' ELSE plano_veiculacao END,
             updated_at = NOW()
       WHERE id = $8`,
-    [mediaId, opts.nomeArquivo, opts.inicio ?? null, opts.fim ?? null,
-     opts.duracaoSeg ?? null, blob, opts.mime ?? null, localId]
+    [novasPaginas[0].mediaId, nomeResumo, opts.inicio ?? null, opts.fim ?? null,
+     duracao, novasPaginas[0].blob, novasPaginas[0].mime, localId]
   );
 
-  // Dispara regeneracao imediata se vigente
+  // Dispara regeneracao imediata
   const r = await regenerarLayoutDoLocal(localId);
-  return { ok: true, mediaId, regenerado: r.regenerado };
+  return { ok: true, paginas: novasPaginas.length, regenerado: r.regenerado };
 }
 
 /** Faz upload da midia ponta de uma TELA (gondola). */
