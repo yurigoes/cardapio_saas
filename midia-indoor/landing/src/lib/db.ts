@@ -498,6 +498,21 @@ export async function ensureSchema(): Promise<void> {
   // APK do Player armazenado direto no banco (BYTEA) - assim nao precisa volume montado
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_data BYTEA;`);
 
+  // Screenshots de TVs via agente ADB local
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_screenshots (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      inventario_id UUID REFERENCES midia_inventario(id) ON DELETE CASCADE,
+      mac         TEXT NOT NULL,
+      data        BYTEA NOT NULL,
+      mime        TEXT NOT NULL DEFAULT 'image/png',
+      size        INTEGER NOT NULL,
+      taken_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_screenshots_mac ON midia_screenshots(mac, taken_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_screenshots_inv ON midia_screenshots(inventario_id, taken_at DESC);
+  `);
+
   // ─── Multi-tenant / White-label (operadores DOOH revendendo o SaaS) ────
   //   - Cada operador é uma "tenant" com domínio próprio + branding
   //   - Detecção: middleware compara host da requisição com tenant.dominios

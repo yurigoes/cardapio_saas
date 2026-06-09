@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw, Monitor, Copy, Pencil } from "lucide-react";
+import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw, Monitor, Copy, Pencil, Camera } from "lucide-react";
 import { notify, confirmModal } from "@/components/Notify";
 
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -43,6 +43,7 @@ export function Inventario({ token }: { token: string }) {
   const [novo, setNovo] = useState(false);
   const [verQR, setVerQR] = useState<ItemInv | null>(null);
   const [editar, setEditar] = useState<ItemInv | null>(null);
+  const [verPrint, setVerPrint] = useState<ItemInv | null>(null);
   const [filtro, setFiltro] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -98,6 +99,9 @@ export function Inventario({ token }: { token: string }) {
                 <td className="p-3 text-xs font-mono">{i.rustdesk_id ?? "—"}</td>
                 <td className="p-3 text-right">
                   <div className="flex justify-end gap-1">
+                    {(i.tipo === "box" || i.tipo === "tv" || i.tipo === "tv-box") && i.mac && (
+                      <button onClick={() => setVerPrint(i)} className="rounded border border-cyan-400/40 p-1.5 text-cyan-300 hover:bg-cyan-500/10" title="Ver print da tela"><Camera className="h-3.5 w-3.5" /></button>
+                    )}
                     {i.rustdesk_id && <RemotoBtn id={i.rustdesk_id} senha={i.rustdesk_senha} />}
                     <button onClick={() => setEditar(i)} className="rounded border border-amber-400/40 p-1.5 text-amber-300 hover:bg-amber-500/10" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
                     <button onClick={() => setVerQR(i)} className="rounded border border-brand/40 p-1.5 text-brand-light hover:bg-brand/10" title="QR Code"><QrCode className="h-3.5 w-3.5" /></button>
@@ -114,6 +118,70 @@ export function Inventario({ token }: { token: string }) {
       {novo && <NovoItemModal token={token} locais={locais} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
       {verQR && <QRCodeModal item={verQR} onClose={() => setVerQR(null)} />}
       {editar && <EditarItemModal token={token} item={editar} locais={locais} onClose={() => setEditar(null)} onSaved={() => { setEditar(null); load(); }} />}
+      {verPrint && <PrintModal token={token} item={verPrint} onClose={() => setVerPrint(null)} />}
+    </div>
+  );
+}
+
+function PrintModal({ token, item, onClose }: { token: string; item: ItemInv; onClose: () => void }) {
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [takenAt, setTakenAt] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
+
+  async function carregar() {
+    setCarregando(true); setErro(""); setImgUrl(null);
+    try {
+      const r = await fetch(`/api/admin/inventario/screenshot?id=${item.id}&t=${Date.now()}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) {
+        const txt = await r.text();
+        setErro(txt || "Sem print disponível");
+        setCarregando(false);
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      setImgUrl(url);
+      setTakenAt(r.headers.get("X-Taken-At"));
+    } catch (e) { setErro(String(e)); }
+    setCarregando(false);
+  }
+  useEffect(() => { carregar(); }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+      <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-[#12121c] p-6" onClick={e => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold">📷 Print · {item.nome}</h3>
+            {takenAt && <p className="text-xs text-slate-400">Capturado {new Date(takenAt).toLocaleString("pt-BR")}</p>}
+            {!takenAt && imgUrl === null && !carregando && <p className="text-xs text-amber-300">Sem print disponível ainda</p>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={carregar} disabled={carregando} className="rounded-lg border border-white/15 p-2 hover:bg-white/5"><RefreshCw className={`h-4 w-4 ${carregando ? "animate-spin" : ""}`} /></button>
+            <button onClick={onClose}><X className="h-5 w-5 text-slate-400" /></button>
+          </div>
+        </div>
+
+        {carregando ? (
+          <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-slate-500" /></div>
+        ) : erro ? (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 text-center">
+            <p className="text-sm font-semibold text-amber-200">Sem print disponível ainda</p>
+            <p className="mt-2 text-xs text-slate-400">{erro}</p>
+            <div className="mt-4 rounded-lg bg-black/30 p-3 text-left text-xs">
+              <p className="mb-2 font-semibold text-cyan-300">📥 Como capturar:</p>
+              <p className="mb-2 text-slate-300">No PC da rede local (mesma LAN das TVs):</p>
+              <code className="block rounded bg-black/40 p-2 font-mono text-emerald-300">A:\Sistemas\xibo-mod\tirar-prints.ps1</code>
+              <p className="mt-2 text-slate-400">Ou loop a cada 5 min:</p>
+              <code className="block rounded bg-black/40 p-2 font-mono text-emerald-300">.\tirar-prints.ps1 -Loop -IntervaloSegundos 300</code>
+            </div>
+          </div>
+        ) : imgUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imgUrl} alt="Screenshot" className="mx-auto max-h-[70vh] rounded-xl border border-white/10" />
+        ) : null}
+      </div>
     </div>
   );
 }
