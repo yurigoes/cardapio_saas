@@ -72,19 +72,7 @@ function Painel() {
   if (loading) return <div className="flex min-h-screen items-center justify-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>;
 
   if (!token || !me) {
-    return (
-      <div className="mx-auto max-w-sm px-6 py-24">
-        <div className="mb-8 flex items-center justify-center gap-2 text-brand-light"><Tv className="h-6 w-6" /><span className="font-bold">Three Digital Mídia</span></div>
-        <h1 className="text-center text-2xl font-bold">Área do anunciante</h1>
-        <form onSubmit={entrar} className="mt-8 space-y-4">
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="E-mail" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none focus:border-brand/50" />
-          <input type="password" value={senha} onChange={e => setSenha(e.target.value)} required placeholder="Senha" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none focus:border-brand/50" />
-          {logErr && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">{logErr}</p>}
-          <button disabled={logBusy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 font-semibold hover:bg-brand-dark disabled:opacity-50">{logBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Entrar</button>
-        </form>
-        <p className="mt-4 text-center text-xs text-slate-500">Acesso fornecido pela Three Digital. Sem login? <Link href="/" className="text-brand-light hover:underline">Fale conosco</Link></p>
-      </div>
-    );
+    return <LoginAnunciante onSubmit={entrar} email={email} setEmail={setEmail} senha={senha} setSenha={setSenha} busy={logBusy} err={logErr} />;
   }
 
   return (
@@ -461,5 +449,32 @@ function NovoUsuarioModal({ token, onClose, onSaved }: { token: string; onClose:
         <button onClick={salvar} disabled={busy || !nome || !email || senha.length < 6} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar</button>
       </div>
     </div>
+  );
+}
+
+
+function LoginAnunciante({ onSubmit, email, setEmail, senha, setSenha, busy, err }: { onSubmit: (e: React.FormEvent) => void; email: string; setEmail: (v: string) => void; senha: string; setSenha: (v: string) => void; busy: boolean; err: string }) {
+  const [bgUrl, setBgUrl] = useState("");
+  useEffect(() => {
+    const v = Math.floor(Date.now() / 60000);
+    fetch(`/api/publico/login-wallpaper?v=${v}`, { method: "HEAD" })
+      .then(r => { if (r.ok) setBgUrl(`/api/publico/login-wallpaper?v=${v}`); })
+      .catch(() => {});
+  }, []);
+  const bgStyle: React.CSSProperties = bgUrl ? { backgroundImage: `url(${bgUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : {};
+  return (
+    <main className="relative flex min-h-screen items-center justify-center bg-[#0a0a12] px-4 text-white md:justify-end md:px-12 lg:px-20" style={bgStyle}>
+      <form onSubmit={onSubmit} className="relative z-10 w-full max-w-sm rounded-3xl border border-white/25 bg-white/10 px-7 py-9 shadow-[0_8px_40px_rgba(0,0,0,0.45)] ring-1 ring-white/10 backdrop-blur-2xl backdrop-saturate-150">
+        <div className="mb-7 flex items-center justify-center gap-2 text-white">
+          <Tv className="h-7 w-7 text-brand-light" />
+          <span className="text-lg font-bold drop-shadow">Anunciante · Three Digital</span>
+        </div>
+        <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="E-mail" className="mb-3 w-full rounded-xl border border-white/20 bg-white/15 px-4 py-3 text-sm text-white placeholder-white/60 outline-none transition focus:border-brand-light focus:bg-white/25" />
+        <input type="password" value={senha} onChange={e => setSenha(e.target.value)} required placeholder="Senha" className="mb-3 w-full rounded-xl border border-white/20 bg-white/15 px-4 py-3 text-sm text-white placeholder-white/60 outline-none transition focus:border-brand-light focus:bg-white/25" />
+        {err && <p className="mb-3 rounded-lg border border-red-300/40 bg-red-500/20 px-4 py-2 text-sm text-red-100">{err}</p>}
+        <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Entrar</button>
+        <p className="mt-4 text-center text-xs text-white/70">Sem login? <Link href="/" className="font-semibold text-brand-light hover:underline">Fale conosco</Link></p>
+      </form>
+    </main>
   );
 }

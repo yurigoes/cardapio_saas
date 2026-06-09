@@ -16,6 +16,7 @@ import { NotifBell } from "./notif-bell";
 import { HealthcheckBar } from "./healthcheck-bar";
 import { Tenants } from "./tenants";
 import { PlayerApkUploader } from "./player-apk";
+import { Seguranca2FA } from "./seguranca-2fa";
 import { TelasOrfas } from "./telas-orfas";
 import { Inventario } from "./inventario";
 
@@ -148,23 +149,28 @@ function Splash() {
 
 function Login({ onLogin }: { onLogin: (t: string, role: string, nome: string) => void }) {
   const [email, setEmail] = useState(""); const [senha, setSenha] = useState("");
+  const [otp, setOtp] = useState(""); const [needs2fa, setNeeds2fa] = useState(false);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const [bgUrl, setBgUrl] = useState<string>("");
 
   useEffect(() => {
-    // Cache-bust por minuto pra refletir trocas sem hard reload
     const v = Math.floor(Date.now() / 60000);
     fetch(`/api/publico/login-wallpaper?v=${v}`, { method: "HEAD" })
       .then(r => { if (r.ok) setBgUrl(`/api/publico/login-wallpaper?v=${v}`); })
-      .catch(() => { /* sem wallpaper, fallback dark */ });
+      .catch(() => {});
   }, []);
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setErr("");
     try {
-      const r = await fetch("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, senha }) });
+      const payload: { email: string; senha: string; otp?: string } = { email, senha };
+      if (otp) payload.otp = otp;
+      const r = await fetch("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await r.json();
-      if (!d.ok) { setErr(d.error || "Credenciais inválidas"); return; }
+      if (!d.ok) {
+        if (d.needs_2fa) { setNeeds2fa(true); setErr(d.error || "Informe o código 2FA"); return; }
+        setErr(d.error || "Credenciais inválidas"); return;
+      }
       localStorage.setItem(TOKEN_KEY, d.token);
       localStorage.setItem("midia_admin_role", d.admin.role);
       localStorage.setItem("midia_admin_nome", d.admin.nome);
@@ -195,6 +201,13 @@ function Login({ onLogin }: { onLogin: (t: string, role: string, nome: string) =
           type="password" value={senha} onChange={e => setSenha(e.target.value)} required placeholder="Senha"
           className="mb-3 w-full rounded-xl border border-white/20 bg-white/15 px-4 py-3 text-sm text-white placeholder-white/60 outline-none transition focus:border-brand-light focus:bg-white/25"
         />
+        {needs2fa && (
+          <input
+            type="text" inputMode="numeric" maxLength={6} value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
+            placeholder="Código 2FA (6 dígitos)" autoFocus
+            className="mb-3 w-full rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3 text-center font-mono text-lg tracking-[0.5em] text-white placeholder-white/40 outline-none transition focus:border-amber-300"
+          />
+        )}
         {err && (
           <p className="mb-3 rounded-lg border border-red-300/40 bg-red-500/20 px-4 py-2 text-sm text-red-100">
             {err}
@@ -1493,6 +1506,10 @@ function Marca({ token }: { token: string }) {
               <a href="/scripts-tvbox.zip" className="rounded-lg border border-violet-400/40 px-3 py-1.5 text-xs font-semibold text-violet-100 hover:bg-violet-500/20">Baixar scripts (.zip)</a>
             </div>
           </div>
+        </div>
+
+        <div className="border-t border-white/10 pt-4">
+          <Seguranca2FA token={token} />
         </div>
 
         <div className="border-t border-white/10 pt-4">

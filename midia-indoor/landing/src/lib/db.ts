@@ -492,6 +492,9 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS monitor_serial TEXT;`);
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS monitor_resolucao TEXT;`);
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS monitor_polegadas INT;`);
+  // 2FA (TOTP) pra admins
+  await p.query(`ALTER TABLE midia_admins ADD COLUMN IF NOT EXISTS totp_secret TEXT;`);
+  await p.query(`ALTER TABLE midia_admins ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;`);
 
   // ─── Multi-tenant / White-label (operadores DOOH revendendo o SaaS) ────
   //   - Cada operador é uma "tenant" com domínio próprio + branding
