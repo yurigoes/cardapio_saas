@@ -1,9 +1,10 @@
 /**
- * POST /api/painel/campanhas/[id]/cobrar-infinity
- * Cria (ou reaproveita) um link de pagamento InfinityPay pra campanha.
- * Resposta: { ok, link, order_nsu, status }
+ * POST /api/painel/campanhas/[id]/reativar
+ * Anunciante pede pra reativar uma campanha encerrada.
+ * Cria nova cobrança InfinityPay + marca a campanha como 'pendente_reativacao'.
+ * Após pagamento confirmado, fica 'aguardando_aprovacao' pro admin liberar.
  *
- * Reaproveita link pendente existente (idempotente).
+ * Body: { dias?: number } - dias desejados pra renovação (default = dias originais)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
@@ -17,25 +18,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!auth) return NextResponse.json({ ok: false, error: "não autenticado" }, { status: 401 });
   await ensureSchema();
 
-  // Dono da campanha?
   const camp = await db().query<{
-    id: string; nome: string; valor: string; status_pagamento: string;
+    id: string; nome: string; status: string; valor: string; dias: number; insercoes_dia: number; segundos: number;
   }>(
-    `SELECT id, nome, valor::text, status_pagamento FROM midia_campanhas WHERE id = $1 AND conta_id = $2`,
+    `SELECT id, nome, status, valor::text, dias, insercoes_dia, segundos FROM midia_campanhas WHERE id = $1 AND conta_id = $2`,
     [params.id, auth.sub]
   );
   const c = camp.rows[0];
   if (!c) return NextResponse.json({ ok: false, error: "Campanha não encontrada" }, { status: 404 });
-  if (c.status_pagamento === "pago") return NextResponse.json({ ok: false, error: "Campanha já está paga" }, { status: 400 });
-  if (c.status_pagamento === "isento") return NextResponse.json({ ok: false, error: "Campanha isenta de pagamento" }, { status: 400 });
+  if (!["encerrada", "pausada"].includes(c.status)) {
+    return NextResponse.json({ ok: false, error: `Campanha em status '${c.status}' não pode ser reativada` }, { status: 400 });
+  }
 
   const valor = Number(c.valor || 0);
-  if (valor <= 0) return NextResponse.json({ ok: false, error: "Valor da campanha inválido" }, { status: 400 });
+  if (valor <= 0) return NextResponse.json({ ok: false, error: "Valor da campanha inválido pra reativação" }, { status: 400 });
   const centavos = Math.round(valor * 100);
 
-  // Reaproveita link pendente
-  const existente = await db().query<{ id: string; url: string | null; slug: string | null }>(
-    `SELECT id, url, slug FROM midia_infinity_links
+  // Reaproveita link pendente de reativação se houver
+  const existente = await db().query<{ id: string; url: string | null }>(
+    `SELECT id, url FROM midia_infinity_links
        WHERE campanha_id = $1 AND status = 'pendente' AND url IS NOT NULL
        ORDER BY created_at DESC LIMIT 1`,
     [c.id]
@@ -44,29 +45,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ ok: true, link: existente.rows[0].url, order_nsu: existente.rows[0].id, reaproveitado: true });
   }
 
-  // Cria o registro local primeiro (order_nsu = nosso id)
   const rec = await db().query<{ id: string }>(
     `INSERT INTO midia_infinity_links (campanha_id, valor_centavos) VALUES ($1, $2) RETURNING id`,
     [c.id, centavos]
   );
   const orderNsu = rec.rows[0].id;
 
-  // Pega dados do anunciante pra customer
+  // Reseta status: aguardando pagamento (após pago, vira aguardando aprovação do admin)
+  await db().query(
+    `UPDATE midia_campanhas SET status = 'rascunho', status_pagamento = 'pendente' WHERE id = $1`,
+    [c.id]
+  );
+
   const conta = await db().query<{ nome: string; email: string; whatsapp: string | null }>(
     `SELECT nome, email, whatsapp FROM midia_contas WHERE id = $1`, [auth.sub]
   );
   const cust = conta.rows[0];
 
-  // SEMPRE usa DOMAIN do env. req.nextUrl.host dentro do container vê 0.0.0.0:3100.
-  // Fallback pra cabeçalho do proxy (Cloudflare/nginx) se DOMAIN não setado.
-  const dominio = process.env.DOMAIN
-    || req.headers.get("x-forwarded-host")
-    || req.headers.get("host")
-    || req.nextUrl.host;
+  const dominio = process.env.DOMAIN || req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host;
   const base = `https://${dominio}`;
 
   const r = await criarLinkInfinityPay({
-    items: [{ quantity: 1, price: centavos, description: `Campanha: ${c.nome}`.slice(0, 100) }],
+    items: [{ quantity: 1, price: centavos, description: `Reativação: ${c.nome}`.slice(0, 100) }],
     orderNsu,
     redirectUrl: `${base}/painel?paid=1`,
     webhookUrl: `${base}/api/webhooks/infinity-pay`,
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   if (!r.ok || !url) {
     await db().query(`UPDATE midia_infinity_links SET status='falha' WHERE id=$1`, [orderNsu]);
-    return NextResponse.json({ ok: false, error: r.error ?? "Falha ao gerar link InfinityPay (sem URL)" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: r.error ?? "Falha ao gerar link InfinityPay" }, { status: 500 });
   }
 
   await db().query(`UPDATE midia_infinity_links SET url=$1, slug=$2 WHERE id=$3`, [url, slug, orderNsu]);

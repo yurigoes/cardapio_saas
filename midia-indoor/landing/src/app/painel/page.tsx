@@ -27,7 +27,7 @@ const STATUS_LABEL: Record<string, { txt: string; cls: string }> = {
   aguardando_arte: { txt: "Aguardando arte", cls: "text-amber-300" },
   no_ar: { txt: "No ar", cls: "text-emerald-300" },
   pausada: { txt: "Pausada", cls: "text-amber-300" },
-  encerrada: { txt: "Encerrada", cls: "text-slate-500" },
+  encerrada: { txt: "🛑 Encerrada — reative pra voltar ao ar", cls: "text-slate-400" },
 };
 
 function api(token: string, path: string, init?: RequestInit) {
@@ -44,7 +44,29 @@ function Painel() {
   const [email, setEmail] = useState(""); const [senha, setSenha] = useState("");
   const [logBusy, setLogBusy] = useState(false); const [logErr, setLogErr] = useState("");
 
-  useEffect(() => { setToken(localStorage.getItem("midia_token")); }, []);
+  useEffect(() => {
+    setToken(localStorage.getItem("midia_token"));
+    // Confirma pagamento na hora se voltou da InfinityPay com ?paid=1&order_nsu=...
+    if (typeof window !== "undefined") {
+      const u = new URL(window.location.href);
+      const orderNsu = u.searchParams.get("order_nsu");
+      const paid = u.searchParams.get("paid");
+      if (paid === "1" && orderNsu) {
+        const qs = u.searchParams.toString();
+        fetch(`/api/webhooks/infinity-pay?${qs}`).then(r => r.json()).then(d => {
+          if (d.paid || d.already) {
+            notify("Pagamento confirmado!", "success");
+            // Limpa a URL pra não confirmar de novo em refresh
+            window.history.replaceState({}, "", "/painel");
+            // Recarrega lista
+            const tk = localStorage.getItem("midia_token");
+            if (tk) carregar(tk);
+          }
+        }).catch(() => {});
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const carregar = useCallback(async (tk: string) => {
     setLoading(true);
@@ -145,6 +167,13 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
     if (!d.ok || !d.link) { notify(d.error || "Erro ao gerar pagamento", "error"); return; }
     setPayModal({ link: d.link });
   }
+  async function reativar() {
+    setPayBusy(true);
+    const r = await api(token, `/api/painel/campanhas/${camp.id}/reativar`, { method: "POST" });
+    const d = await r.json(); setPayBusy(false);
+    if (!d.ok || !d.link) { notify(d.error || "Erro ao gerar pagamento", "error"); return; }
+    setPayModal({ link: d.link });
+  }
   // Polling de status quando modal aberto
   useEffect(() => {
     if (!payModal) return;
@@ -211,11 +240,17 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
       {err && <p className="mt-3 text-sm text-red-400">{err}</p>}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <label className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${precisaPagar ? "cursor-not-allowed bg-slate-700/50 text-slate-500" : "cursor-pointer bg-brand hover:bg-brand-dark"}`} title={precisaPagar ? "Pague primeiro pra enviar a arte" : ""}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          {camp.arte_nome ? "Trocar arte" : "Enviar arte"}
-          <input ref={inputRef} type="file" accept="image/*,video/*" className="hidden" disabled={busy || precisaPagar} onChange={e => { const f = e.target.files?.[0]; if (f) enviarArte(f); }} />
-        </label>
+        {camp.status === "encerrada" ? (
+          <button onClick={reativar} disabled={payBusy} className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 disabled:opacity-50">
+            {payBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Reativar campanha ({brl(Number(camp.valor))})
+          </button>
+        ) : (
+          <label className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${precisaPagar ? "cursor-not-allowed bg-slate-700/50 text-slate-500" : "cursor-pointer bg-brand hover:bg-brand-dark"}`} title={precisaPagar ? "Pague primeiro pra enviar a arte" : ""}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {camp.arte_nome ? "Trocar arte" : "Enviar arte"}
+            <input ref={inputRef} type="file" accept="image/*,video/*" className="hidden" disabled={busy || precisaPagar} onChange={e => { const f = e.target.files?.[0]; if (f) enviarArte(f); }} />
+          </label>
+        )}
         {camp.status === "no_ar" && (
           <button onClick={carregarRel} className="flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5"><BarChart3 className="h-4 w-4" /> Relatório de exibições</button>
         )}

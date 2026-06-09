@@ -26,12 +26,19 @@ export async function POST(req: NextRequest) {
   }).then(r => NextResponse.json(r));
 }
 
-// GET pra healthcheck e debug
+// GET pra healthcheck, debug E confirmação manual via redirect_url da InfinityPay.
+// Após o cliente pagar, InfinityPay redireciona pra ?paid=1&order_nsu=... — nosso
+// painel chama esse endpoint passando o order_nsu pra confirmar na hora.
 export async function GET(req: NextRequest) {
   const orderNsu = req.nextUrl.searchParams.get("order_nsu");
   if (orderNsu) {
     await ensureSchema();
-    const r = await confirmarPagamento(orderNsu, {});
+    const r = await confirmarPagamento(orderNsu, {
+      transactionNsu: req.nextUrl.searchParams.get("transaction_nsu"),
+      slug: req.nextUrl.searchParams.get("slug"),
+      captureMethod: req.nextUrl.searchParams.get("capture_method"),
+      receiptUrl: req.nextUrl.searchParams.get("receipt_url"),
+    });
     return NextResponse.json(r);
   }
   return NextResponse.json({ ok: true, hint: "POST com { order_nsu } da InfinityPay" });
