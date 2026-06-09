@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw, Monitor, Copy, Pencil, Camera } from "lucide-react";
+import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw, Monitor, Copy, Pencil, Camera, FileText } from "lucide-react";
 import { notify, confirmModal } from "@/components/Notify";
+import { KitsInventario } from "./kits-inventario";
 
 function aapi(token: string, path: string, init?: RequestInit) {
   return fetch(path, { ...init, headers: { ...(init?.headers ?? {}), "Content-Type": "application/json", Authorization: `Bearer ${token}` } });
@@ -37,6 +38,17 @@ export function Inventario({ token }: { token: string }) {
   const [verPrint, setVerPrint] = useState<ItemInv | null>(null);
   const [filtro, setFiltro] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [aba, setAba] = useState<"itens" | "kits">("itens");
+
+  function toggleSel(id: string) {
+    setSelecionados(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function imprimirSelecionados() {
+    const ids = selecionados.size > 0 ? Array.from(selecionados).join(",") : null;
+    const url = ids ? `/admin/etiquetas?ids=${ids}` : `/admin/etiquetas?all=1`;
+    window.open(url, "_blank");
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,21 +78,46 @@ export function Inventario({ token }: { token: string }) {
           <h2 className="text-lg font-semibold">📦 Inventário ({itens.length})</h2>
           <p className="text-xs text-slate-400">Controle de equipamentos: TVs, boxes, totens, cabos, suportes. Cada item gera um QR code pra colar fisicamente.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <input value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Buscar nome / MAC / serial..." className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm outline-none" />
-          <button onClick={load} disabled={loading} className="rounded-lg border border-white/15 p-1.5 hover:bg-white/5 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button>
+          <button onClick={load} disabled={loading} className="rounded-lg border border-white/15 p-1.5 hover:bg-white/5 disabled:opacity-50" title="Atualizar"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button>
+          <button onClick={imprimirSelecionados} className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20" title="Imprime etiquetas em PDF (8 por pagina A4)">
+            <FileText className="h-3.5 w-3.5" /> {selecionados.size > 0 ? `Etiquetas (${selecionados.size})` : "Todas etiquetas"}
+          </button>
           <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo item</button>
         </div>
       </div>
 
+      <div className="mb-4 flex gap-1 border-b border-white/10">
+        <button onClick={() => setAba("itens")} className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${aba === "itens" ? "border-brand text-white" : "border-transparent text-slate-400 hover:text-white"}`}>
+          📦 Itens ({itens.length})
+        </button>
+        <button onClick={() => setAba("kits")} className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${aba === "kits" ? "border-brand text-white" : "border-transparent text-slate-400 hover:text-white"}`}>
+          🧰 Kits / Totens
+        </button>
+      </div>
+
+      {aba === "kits" && <KitsInventario token={token} itensDisponiveis={itens} locais={locais} />}
+
+      {aba === "itens" && (
       <div className="overflow-x-auto rounded-xl border border-white/10">
         <table className="w-full text-sm">
           <thead className="bg-white/5 text-left text-slate-400">
-            <tr><th className="p-3">Tipo</th><th className="p-3">Nome</th><th className="p-3">MAC</th><th className="p-3">Serial</th><th className="p-3">Local</th><th className="p-3">Xibo</th><th className="p-3">RustDesk</th><th className="p-3"></th></tr>
+            <tr>
+              <th className="w-10 p-3">
+                <input type="checkbox" checked={selecionados.size === filtrados.length && filtrados.length > 0}
+                  onChange={e => setSelecionados(e.target.checked ? new Set(filtrados.map(i => i.id)) : new Set())}
+                  className="h-4 w-4 cursor-pointer accent-brand" />
+              </th>
+              <th className="p-3">Tipo</th><th className="p-3">Nome</th><th className="p-3">MAC</th><th className="p-3">Serial</th><th className="p-3">Local</th><th className="p-3">Xibo</th><th className="p-3">RustDesk</th><th className="p-3"></th>
+            </tr>
           </thead>
           <tbody>
             {filtrados.map(i => (
-              <tr key={i.id} className={`border-t border-white/5 ${!i.ativo ? "opacity-50" : ""}`}>
+              <tr key={i.id} className={`border-t border-white/5 ${!i.ativo ? "opacity-50" : ""} ${selecionados.has(i.id) ? "bg-cyan-500/5" : ""}`}>
+                <td className="p-3">
+                  <input type="checkbox" checked={selecionados.has(i.id)} onChange={() => toggleSel(i.id)} className="h-4 w-4 cursor-pointer accent-brand" />
+                </td>
                 <td className="p-3 text-xs uppercase">{i.tipo}</td>
                 <td className="p-3"><div className="font-medium">{i.nome}</div><div className="text-[10px] font-mono text-slate-500">{i.qr_token}</div></td>
                 <td className="p-3 font-mono text-xs">{i.mac ?? "—"}</td>
@@ -101,10 +138,11 @@ export function Inventario({ token }: { token: string }) {
                 </td>
               </tr>
             ))}
-            {!filtrados.length && <tr><td colSpan={8} className="p-6 text-center text-slate-500">Nenhum item.</td></tr>}
+            {!filtrados.length && <tr><td colSpan={9} className="p-6 text-center text-slate-500">Nenhum item.</td></tr>}
           </tbody>
         </table>
       </div>
+      )}
 
       {novo && <NovoItemModal token={token} locais={locais} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
       {verQR && <QRCodeModal item={verQR} onClose={() => setVerQR(null)} />}
