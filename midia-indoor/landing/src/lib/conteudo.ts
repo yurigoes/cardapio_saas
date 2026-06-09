@@ -33,10 +33,19 @@ export async function definirConteudoBase(localId: string, arquivos: { arquivo: 
       try { await excluirLayout(local.conteudo_layout_id); } catch (e) { console.warn("[conteudo] não apagou layout antigo:", (e as Error).message); }
     }
 
+    // Defensivo: locais antigos podem ter largura/altura=0/null (antes do
+    // schema com DEFAULT). Cai pra 1080x1920 retrato pra nao quebrar com 422.
+    const width  = local.largura && local.largura >= 120 ? local.largura : 1080;
+    const height = local.altura  && local.altura  >= 120 ? local.altura  : 1920;
+    if (width !== local.largura || height !== local.altura) {
+      console.warn(`[conteudo] local ${localId} com dimensoes invalidas (${local.largura}x${local.altura}) — usando ${width}x${height}`);
+      await p.query(`UPDATE midia_locais SET largura=$1, altura=$2 WHERE id=$3`, [width, height, localId]);
+    }
+
     const { layoutId, campaignId, enviados } = await criarLayoutLoop({
       nome: `Conteúdo — ${local.nome} ${Date.now().toString(36)}`,
       arquivos, folderId: ROOT_FOLDER,
-      width: local.largura, height: local.altura,
+      width, height,
     });
 
     // Agenda o layout no grupo do local (sempre ativo). Os anúncios interleiam por cima.
@@ -79,10 +88,18 @@ export async function definirSplashLocal(localId: string, arquivos: { arquivo: B
       try { await excluirLayout(local.splash_layout_id); } catch (e) { console.warn("[splash] layout antigo:", (e as Error).message); }
     }
 
+    // Mesma defensiva do conteudo base — corrige dimensoes invalidas in-place.
+    const width  = local.largura && local.largura >= 120 ? local.largura : 1080;
+    const height = local.altura  && local.altura  >= 120 ? local.altura  : 1920;
+    if (width !== local.largura || height !== local.altura) {
+      console.warn(`[splash] local ${localId} com dimensoes invalidas (${local.largura}x${local.altura}) — usando ${width}x${height}`);
+      await p.query(`UPDATE midia_locais SET largura=$1, altura=$2 WHERE id=$3`, [width, height, localId]);
+    }
+
     const { layoutId } = await criarLayoutLoop({
       nome: `Splash — ${local.nome} ${Date.now().toString(36)}`,
       arquivos, folderId: ROOT_FOLDER,
-      width: local.largura, height: local.altura,
+      width, height,
     });
 
     // Atribui como Default Layout em todas as telas do grupo do local

@@ -262,6 +262,10 @@ export async function ensureSchema(): Promise<void> {
   // Splash do local (tela de espera quando não há conteúdo agendado)
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_layout_id INTEGER;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_nome TEXT;`);
+  // Corrige locais com largura/altura zero ou nulas (legacy / antes do DEFAULT).
+  // Sem isso, Xibo retorna 422 "Por favor indique uma largura" ao criar Resolution.
+  await p.query(`UPDATE midia_locais SET largura = 1080 WHERE largura IS NULL OR largura < 120;`);
+  await p.query(`UPDATE midia_locais SET altura  = 1920 WHERE altura  IS NULL OR altura  < 120;`);
   // Geo + audiência estimada
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS lat NUMERIC(10,6);`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS lng NUMERIC(10,6);`);
@@ -289,6 +293,12 @@ export async function ensureSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_midia_campanha_artes_camp ON midia_campanha_artes(campanha_id);
   `);
+  // Backup binario da arte pra soft-recreate quando o Xibo perde o Layout/Media
+  // (limpeza, restore de backup antigo, migracao). Sem isso, a unica opcao seria
+  // pedir reupload ao anunciante — o que e ruim UX. Com isso, conseguimos
+  // recriar o layout transparentemente.
+  await p.query(`ALTER TABLE midia_campanha_artes ADD COLUMN IF NOT EXISTS arquivo_bytes BYTEA;`);
+  await p.query(`ALTER TABLE midia_campanha_artes ADD COLUMN IF NOT EXISTS arquivo_mime TEXT;`);
 
   // Multi-usuário por anunciante (operadores adicionais)
   await p.query(`

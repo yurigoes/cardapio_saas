@@ -606,14 +606,26 @@ export async function listarCampanhas(): Promise<XiboCampaignInfo[]> {
 }
 
 // ─── Resoluções ─────────────────────────────────────────────────────────────
-/** Acha (ou cria) uma resolução pelo tamanho e retorna o resolutionId. */
+/** Acha (ou cria) uma resolução pelo tamanho e retorna o resolutionId.
+ *  Recusa entradas invalidas — Xibo joga 422 "Por favor indique uma largura"
+ *  pra width/height <= 0, com mensagem ambigua. */
 export async function getResolution(width: number, height: number): Promise<number> {
-  const found = await xibo<Array<{ resolutionId: number }>>(`/api/resolution?width=${width}&height=${height}`);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 120 || height < 120) {
+    throw new Error(`dimensoes invalidas (${width}x${height}) — confira a largura/altura do local`);
+  }
+  const w = Math.round(width), h = Math.round(height);
+  const found = await xibo<Array<{ resolutionId: number }>>(`/api/resolution?width=${w}&height=${h}`);
   if (Array.isArray(found) && found[0]?.resolutionId) return found[0].resolutionId;
-  const body = new URLSearchParams({ resolution: `${width}x${height}`, width: String(width), height: String(height) });
+  // Xibo CMS 4.x exige 'resolution' (nome), 'width', 'height', e 'designerWidth'/'designerHeight'.
+  // Algumas versoes aceitam so width/height; passamos tudo pra cobrir os dois casos.
+  const body = new URLSearchParams({
+    resolution: `${w}x${h}`,
+    width: String(w), height: String(h),
+    designerWidth: String(w), designerHeight: String(h),
+  });
   const r = await xibo<{ resolutionId?: number; data?: { resolutionId: number } }>("/api/resolution", { method: "POST", body });
   const id = r.resolutionId ?? r.data?.resolutionId;
-  if (!id) throw new Error("Xibo: não criou resolução");
+  if (!id) throw new Error("Xibo: nao criou resolucao");
   return id;
 }
 

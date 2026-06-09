@@ -153,6 +153,16 @@ export async function enviarCampanhaNoAr(opts: { nome: string; email: string; ca
   });
 }
 
+/** Alerta operacional pro master (atendimento). Usado por crons/health-checks. */
+export async function enviarAlertaMaster(opts: { assunto: string; conteudoHtml: string; para?: string }): Promise<boolean> {
+  const dest = opts.para ?? process.env.MASTER_EMAIL ?? "atendimento@tthreedigital.com.br";
+  return enviar({
+    para: dest,
+    assunto: opts.assunto,
+    html: await wrap("Alerta operacional", opts.conteudoHtml),
+  });
+}
+
 /** E-mail de boas-vindas (enviado quando a conta é ativada). */
 export async function enviarBoasVindas(opts: { nome: string; email: string; empresa: string }): Promise<boolean> {
   const b = await getBranding();

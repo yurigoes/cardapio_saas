@@ -86,11 +86,22 @@ export async function anexarArte(campanhaId: string, arquivo: Buffer | Blob, nom
   });
 
   // Marca versões anteriores como inativas e registra a nova versão
+  // Salva o blob da arte pra permitir SOFT-RECREATE se o Xibo perder o layout.
+  // Cap defensivo de 100MB pra evitar storage runaway (artes DOOH tipicamente <20MB).
+  const blobMax = 100 * 1024 * 1024;
+  let blob: Buffer | null = null;
+  if (Buffer.isBuffer(arquivo)) {
+    blob = arquivo.length <= blobMax ? arquivo : null;
+  } else if (arquivo instanceof Blob) {
+    if (arquivo.size <= blobMax) blob = Buffer.from(await arquivo.arrayBuffer());
+  }
+  if (!blob) console.warn(`[anexarArte] arte ${nomeArquivo} excede ${blobMax}b ou tipo invalido — sem backup local`);
+
   await p.query(`UPDATE midia_campanha_artes SET ativa = false WHERE campanha_id = $1`, [campanhaId]);
   await p.query(
-    `INSERT INTO midia_campanha_artes (campanha_id, arte_nome, arte_tipo, xibo_layout_id, xibo_media_id, ativa, enviada_por)
-     VALUES ($1,$2,$3,$4,$5,true,$6)`,
-    [campanhaId, nomeArquivo, arteTipo, layoutId, mediaId, opts?.enviadaPor ?? null]
+    `INSERT INTO midia_campanha_artes (campanha_id, arte_nome, arte_tipo, xibo_layout_id, xibo_media_id, ativa, enviada_por, arquivo_bytes, arquivo_mime)
+     VALUES ($1,$2,$3,$4,$5,true,$6,$7,$8)`,
+    [campanhaId, nomeArquivo, arteTipo, layoutId, mediaId, opts?.enviadaPor ?? null, blob, mime ?? null]
   );
 
   const novoArteStatus = opts?.precisaAprovacao ? "aguardando_aprovacao" : "aprovada";
@@ -103,6 +114,78 @@ export async function anexarArte(campanhaId: string, arquivo: Buffer | Blob, nom
       WHERE id = $6`,
     [layoutId, mediaId, nomeArquivo, arteTipo, novoArteStatus, campanhaId]
   );
+}
+
+/**
+ * SOFT-RECREATE: re-cria o Layout no Xibo a partir do blob salvo localmente.
+ * Usado quando detectamos que o xibo_layout_id sumiu do Xibo (deletado por
+ * limpeza, restore de backup antigo, migracao). Retorna o novo layoutId,
+ * ou null se nao conseguir (sem blob salvo, ou Xibo offline).
+ *
+ * Atualiza midia_campanhas.xibo_layout_id + xibo_media_id + arte_status='aprovada'
+ * e cria nova linha em midia_campanha_artes apontando pro layout novo.
+ */
+export async function recriarArteNoXibo(campanhaId: string): Promise<{ ok: boolean; layoutId?: number; mediaId?: number; erro?: string }> {
+  await ensureSchema();
+  const p = db();
+
+  const camp = await carregar(campanhaId);
+  if (!camp) return { ok: false, erro: "campanha nao encontrada" };
+
+  // Pega a arte ATIVA mais recente que tenha blob salvo
+  const arte = await p.query<{ id: string; arte_nome: string | null; arte_tipo: string | null; arquivo_bytes: Buffer | null; arquivo_mime: string | null }>(
+    `SELECT id, arte_nome, arte_tipo, arquivo_bytes, arquivo_mime
+       FROM midia_campanha_artes
+      WHERE campanha_id = $1 AND arquivo_bytes IS NOT NULL
+      ORDER BY ativa DESC, criada_em DESC
+      LIMIT 1`,
+    [campanhaId]
+  ).then(r => r.rows[0]);
+  if (!arte || !arte.arquivo_bytes) {
+    return { ok: false, erro: "sem backup local da arte — reupload necessario" };
+  }
+
+  const folderId = await folderDoAnunciante(camp.conta_id);
+  const local = await p.query<{ largura: number; altura: number }>(
+    `SELECT l.largura, l.altura FROM midia_campanha_locais cl
+       JOIN midia_locais l ON l.id = cl.local_id
+      WHERE cl.campanha_id = $1 LIMIT 1`, [campanhaId]
+  ).then(r => r.rows[0]);
+  const width  = local?.largura ?? 1080;
+  const height = local?.altura ?? 1920;
+
+  try {
+    const { layoutId, mediaId } = await criarLayoutDeMidia({
+      nome: `${camp.nome} [${campanhaId.slice(0, 8)}] recreate ${Date.now().toString(36)}`,
+      arquivo: arte.arquivo_bytes,
+      nomeArquivo: arte.arte_nome ?? "arte",
+      folderId, width, height,
+      duracaoSeg: camp.segundos,
+    });
+
+    // Insere nova versao apontando pro layout novo (e desativa as anteriores)
+    await p.query(`UPDATE midia_campanha_artes SET ativa = false WHERE campanha_id = $1`, [campanhaId]);
+    await p.query(
+      `INSERT INTO midia_campanha_artes (campanha_id, arte_nome, arte_tipo, xibo_layout_id, xibo_media_id, ativa, enviada_por, arquivo_bytes, arquivo_mime)
+       VALUES ($1,$2,$3,$4,$5,true,$6,$7,$8)`,
+      [campanhaId, arte.arte_nome, arte.arte_tipo, layoutId, mediaId, "soft-recreate", arte.arquivo_bytes, arte.arquivo_mime]
+    );
+
+    await p.query(
+      `UPDATE midia_campanhas
+          SET xibo_layout_id = $1, xibo_media_id = $2, arte_status = 'aprovada',
+              updated_at = NOW()
+        WHERE id = $3`,
+      [layoutId, mediaId, campanhaId]
+    );
+
+    console.log(`[soft-recreate] campanha ${campanhaId} → novo layoutId ${layoutId}`);
+    return { ok: true, layoutId, mediaId };
+  } catch (e) {
+    const msg = (e as Error).message;
+    console.error(`[soft-recreate] falhou pra campanha ${campanhaId}:`, msg);
+    return { ok: false, erro: msg };
+  }
 }
 
 /** Reativa uma versão antiga de arte (ela vira a ativa novamente). */
@@ -132,6 +215,30 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
   const arteStatus = await db().query<{ arte_status: string }>(`SELECT arte_status FROM midia_campanhas WHERE id = $1`, [campanhaId]).then(r => r.rows[0]?.arte_status);
   if (arteStatus === "aguardando_aprovacao") return { ok: false, erro: "arte aguardando aprovação do master" };
   if (arteStatus === "rejeitada") return { ok: false, erro: "arte foi rejeitada — envie uma nova" };
+
+  // Valida que o Layout ainda existe no Xibo (pode ter sido deletado por
+  // limpeza/restore/migração — nesse caso o reassign joga 404 "Layout não
+  // encontrado"). Tenta SOFT-RECREATE: se tem blob da arte salvo, recria
+  // transparentemente. Senao, NULLifica e pede pra reenviar.
+  const layoutAindaExiste = await obterCampaignIdDoLayout(camp.xibo_layout_id);
+  if (layoutAindaExiste === null) {
+    console.warn(`[lancar] layout ${camp.xibo_layout_id} sumiu do Xibo — tentando soft-recreate`);
+    const recreate = await recriarArteNoXibo(campanhaId);
+    if (recreate.ok && recreate.layoutId) {
+      // Atualiza ref em memoria pra prosseguir com o lancamento
+      camp.xibo_layout_id = recreate.layoutId;
+      camp.xibo_media_id = recreate.mediaId ?? camp.xibo_media_id;
+      console.log(`[lancar] soft-recreate OK — novo layoutId ${recreate.layoutId}, prosseguindo`);
+    } else {
+      await db().query(
+        `UPDATE midia_campanhas SET xibo_layout_id = NULL, xibo_media_id = NULL,
+                                   arte_status = 'pendente', updated_at = NOW()
+          WHERE id = $1`,
+        [campanhaId]
+      );
+      return { ok: false, erro: "a arte foi removida do servidor de mídia e não tem backup local — reenvie a arte da campanha" };
+    }
+  }
 
   const p = db();
   // Display groups dos locais — cria na hora os que ainda não têm (ex: local
@@ -242,7 +349,28 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
     return { ok: true, xiboCampaignId };
   } catch (err) {
     console.error("[lancarCampanha]", err);
-    return { ok: false, erro: err instanceof Error ? err.message : "erro ao lançar" };
+    const msg = err instanceof Error ? err.message : "erro ao lançar";
+    // 404 "Layout não encontrado" — layout sumiu entre a validacao e o assign.
+    // Tenta soft-recreate de novo (e se falhar pede reupload).
+    if (/Layout n[aã]o encontrado/i.test(msg) || (/→ 404/.test(msg) && /layout/i.test(msg))) {
+      try {
+        const recreate = await recriarArteNoXibo(campanhaId);
+        if (recreate.ok) {
+          console.log(`[lancar] recuperado via soft-recreate apos 404 — relancando`);
+          return await lancarCampanha(campanhaId); // recurse uma vez
+        }
+      } catch (e) { console.warn("[lancar] soft-recreate no catch falhou:", (e as Error).message); }
+      try {
+        await db().query(
+          `UPDATE midia_campanhas SET xibo_layout_id = NULL, xibo_media_id = NULL,
+                                     arte_status = 'pendente', updated_at = NOW()
+            WHERE id = $1`,
+          [campanhaId]
+        );
+      } catch { /* best-effort */ }
+      return { ok: false, erro: "a arte foi removida do servidor de mídia e não tem backup local — reenvie a arte da campanha" };
+    }
+    return { ok: false, erro: msg };
   }
 }
 
