@@ -495,6 +495,8 @@ export async function ensureSchema(): Promise<void> {
   // 2FA (TOTP) pra admins
   await p.query(`ALTER TABLE midia_admins ADD COLUMN IF NOT EXISTS totp_secret TEXT;`);
   await p.query(`ALTER TABLE midia_admins ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  // APK do Player armazenado direto no banco (BYTEA) - assim nao precisa volume montado
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_data BYTEA;`);
 
   // ─── Multi-tenant / White-label (operadores DOOH revendendo o SaaS) ────
   //   - Cada operador é uma "tenant" com domínio próprio + branding
