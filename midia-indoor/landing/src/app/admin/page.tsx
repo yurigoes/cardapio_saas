@@ -175,18 +175,35 @@ function Login({ onLogin }: { onLogin: (t: string, role: string, nome: string) =
     ? { backgroundImage: `url(${bgUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
     : {};
   return (
-    <main className="relative flex min-h-screen items-center justify-center bg-[#0a0a12] text-white" style={bgStyle}>
-      {bgUrl && <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />}
-      <form onSubmit={entrar} className="relative z-10 w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0a12]/80 px-6 py-8 shadow-2xl backdrop-blur-md">
-        <div className="mb-8 flex items-center justify-center gap-2 text-brand-light">
-          <Tv className="h-7 w-7" /><span className="text-lg font-bold">Admin · Three Digital Mídia</span>
+    <main
+      className="relative flex min-h-screen items-center justify-center bg-[#0a0a12] px-4 text-white md:justify-end md:px-12 lg:px-20"
+      style={bgStyle}
+    >
+      <form
+        onSubmit={entrar}
+        className="relative z-10 w-full max-w-sm rounded-3xl border border-white/25 bg-white/10 px-7 py-9 shadow-[0_8px_40px_rgba(0,0,0,0.45)] ring-1 ring-white/10 backdrop-blur-2xl backdrop-saturate-150"
+      >
+        <div className="mb-7 flex items-center justify-center gap-2 text-white">
+          <Tv className="h-7 w-7 text-brand-light" />
+          <span className="text-lg font-bold drop-shadow">Admin · Three Digital Mídia</span>
         </div>
-        <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="E-mail"
-          className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none focus:border-brand/50" />
-        <input type="password" value={senha} onChange={e => setSenha(e.target.value)} required placeholder="Senha"
-          className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none focus:border-brand/50" />
-        {err && <p className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400">{err}</p>}
-        <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 font-semibold hover:bg-brand-dark disabled:opacity-50">
+        <input
+          type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="E-mail"
+          className="mb-3 w-full rounded-xl border border-white/20 bg-white/15 px-4 py-3 text-sm text-white placeholder-white/60 outline-none transition focus:border-brand-light focus:bg-white/25"
+        />
+        <input
+          type="password" value={senha} onChange={e => setSenha(e.target.value)} required placeholder="Senha"
+          className="mb-3 w-full rounded-xl border border-white/20 bg-white/15 px-4 py-3 text-sm text-white placeholder-white/60 outline-none transition focus:border-brand-light focus:bg-white/25"
+        />
+        {err && (
+          <p className="mb-3 rounded-lg border border-red-300/40 bg-red-500/20 px-4 py-2 text-sm text-red-100">
+            {err}
+          </p>
+        )}
+        <button
+          disabled={busy}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-dark disabled:opacity-50"
+        >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Entrar
         </button>
       </form>
