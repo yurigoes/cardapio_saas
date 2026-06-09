@@ -296,6 +296,15 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS gondola_duracao_seg INTEGER NOT NULL DEFAULT 10;`);
   await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS gondola_arquivo_bytes BYTEA;`);
   await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS gondola_arquivo_mime TEXT;`);
+  // Tela tem que saber a qual local pertence (pra ponta_gondola saber a tela
+  // ser regenerada quando muda anuncio do local). Tambem ip/mac pra diagnostico.
+  await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS local_id UUID REFERENCES midia_locais(id) ON DELETE SET NULL;`);
+  await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS ip TEXT;`);
+  await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS mac TEXT;`);
+  await p.query(`ALTER TABLE midia_telas ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_midia_telas_local ON midia_telas(local_id);`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_midia_telas_ip ON midia_telas(ip);`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_midia_telas_mac ON midia_telas(mac);`);
   // Geo + audiência estimada
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS lat NUMERIC(10,6);`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS lng NUMERIC(10,6);`);

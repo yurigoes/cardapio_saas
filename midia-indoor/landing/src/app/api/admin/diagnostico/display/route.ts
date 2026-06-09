@@ -68,17 +68,27 @@ async function handle(req: NextRequest) {
   const idQ = req.nextUrl.searchParams.get("displayId");
   let displayId: number | null = idQ ? Number(idQ) : null;
 
-  // Resolve displayId via DB se nao foi passado direto
+  // Resolve displayId: primeiro DB (midia_telas), depois fallback via Xibo (busca clientAddress/macAddress)
   if (!displayId) {
-    const where: string[] = []; const args: unknown[] = [];
-    if (ip)  { args.push(ip);  where.push(`ip = $${args.length}`); }
-    if (mac) { args.push(mac); where.push(`LOWER(mac) = LOWER($${args.length})`); }
-    if (!where.length) return NextResponse.json({ ok: false, error: "passe ip, mac ou displayId" }, { status: 400 });
-    const row = await db().query<{ xibo_display_id: number | null }>(
-      `SELECT xibo_display_id FROM midia_telas WHERE ${where.join(" OR ")} LIMIT 1`, args
-    ).then(r => r.rows[0]);
-    displayId = row?.xibo_display_id ?? null;
-    if (!displayId) return NextResponse.json({ ok: false, error: "display nao encontrado no DB (ou nao tem xibo_display_id)" }, { status: 404 });
+    if (ip || mac) {
+      const where: string[] = []; const args: unknown[] = [];
+      if (ip)  { args.push(ip);  where.push(`ip = $${args.length}`); }
+      if (mac) { args.push(mac); where.push(`LOWER(mac) = LOWER($${args.length})`); }
+      const row = await db().query<{ xibo_display_id: number | null }>(
+        `SELECT xibo_display_id FROM midia_telas WHERE ${where.join(" OR ")} LIMIT 1`, args
+      ).then(r => r.rows[0]).catch(() => null);
+      displayId = row?.xibo_display_id ?? null;
+    }
+    // Fallback Xibo: busca clientAddress=ip OU macAddress=mac diretamente nos displays
+    if (!displayId && (ip || mac)) {
+      const all = await listarDisplaysFull().catch(() => []);
+      const m = all.find(d =>
+        (ip  && d.clientAddress === ip) ||
+        (mac && (d.macAddress ?? "").toLowerCase() === mac.toLowerCase())
+      );
+      displayId = m?.displayId ?? null;
+    }
+    if (!displayId) return NextResponse.json({ ok: false, error: "display nao encontrado (passe displayId)" }, { status: 404 });
   }
 
   // 1) Estado do display no Xibo
