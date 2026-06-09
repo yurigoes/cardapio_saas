@@ -1,10 +1,14 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw, Monitor, Copy } from "lucide-react";
+import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw, Monitor, Copy, Pencil } from "lucide-react";
 import { notify, confirmModal } from "@/components/Notify";
 
 function aapi(token: string, path: string, init?: RequestInit) {
   return fetch(path, { ...init, headers: { ...(init?.headers ?? {}), "Content-Type": "application/json", Authorization: `Bearer ${token}` } });
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }
 
 interface ItemInv {
@@ -38,6 +42,7 @@ export function Inventario({ token }: { token: string }) {
   const [locais, setLocais] = useState<LocalSimples[]>([]);
   const [novo, setNovo] = useState(false);
   const [verQR, setVerQR] = useState<ItemInv | null>(null);
+  const [editar, setEditar] = useState<ItemInv | null>(null);
   const [filtro, setFiltro] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -94,6 +99,7 @@ export function Inventario({ token }: { token: string }) {
                 <td className="p-3 text-right">
                   <div className="flex justify-end gap-1">
                     {i.rustdesk_id && <RemotoBtn id={i.rustdesk_id} senha={i.rustdesk_senha} />}
+                    <button onClick={() => setEditar(i)} className="rounded border border-amber-400/40 p-1.5 text-amber-300 hover:bg-amber-500/10" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
                     <button onClick={() => setVerQR(i)} className="rounded border border-brand/40 p-1.5 text-brand-light hover:bg-brand/10" title="QR Code"><QrCode className="h-3.5 w-3.5" /></button>
                     <button onClick={() => excluir(i)} className="rounded border border-red-500/30 p-1.5 text-red-300 hover:bg-red-500/10" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
@@ -107,6 +113,58 @@ export function Inventario({ token }: { token: string }) {
 
       {novo && <NovoItemModal token={token} locais={locais} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
       {verQR && <QRCodeModal item={verQR} onClose={() => setVerQR(null)} />}
+      {editar && <EditarItemModal token={token} item={editar} locais={locais} onClose={() => setEditar(null)} onSaved={() => { setEditar(null); load(); }} />}
+    </div>
+  );
+}
+
+function EditarItemModal({ token, item, locais, onClose, onSaved }: { token: string; item: ItemInv; locais: LocalSimples[]; onClose: () => void; onSaved: () => void }) {
+  const [nome, setNome] = useState(item.nome);
+  const [mac, setMac] = useState(item.mac ?? "");
+  const [serial, setSerial] = useState(item.serial ?? "");
+  const [fabricante, setFabricante] = useState(item.fabricante ?? "");
+  const [modelo, setModelo] = useState(item.modelo ?? "");
+  const [localId, setLocalId] = useState(item.local_id ?? "");
+  const [xiboDisplayId, setXiboDisplayId] = useState(item.xibo_display_id?.toString() ?? "");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+
+  async function salvar() {
+    setBusy(true); setErr("");
+    const r = await aapi(token, "/api/admin/inventario", { method: "PATCH", body: JSON.stringify({
+      id: item.id, nome, mac, serial, fabricante, modelo,
+      local_id: localId || "",
+      xibo_display_id: xiboDisplayId ? Number(xiboDisplayId) : undefined,
+    })});
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro"); return; }
+    notify("Item atualizado", "success");
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#12121c] p-6" onClick={e => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between"><h3 className="font-bold">Editar item · {item.qr_token}</h3><button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button></div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Nome" value={nome} onChange={setNome} />
+          <Field label="MAC" value={mac} onChange={v => setMac(v.toUpperCase())} mono />
+          <Field label="Serial" value={serial} onChange={setSerial} mono />
+          <Field label="Display Xibo ID" value={xiboDisplayId} onChange={setXiboDisplayId} type="number" placeholder="ex: 12" />
+          <Field label="Fabricante" value={fabricante} onChange={setFabricante} />
+          <Field label="Modelo" value={modelo} onChange={setModelo} />
+        </div>
+        <div className="mt-3">
+          <label className="mb-1 block text-xs text-slate-400">Local</label>
+          <select value={localId} onChange={e => setLocalId(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+            <option value="">— sem local —</option>
+            {locais.map(l => <option key={l.id} value={l.id}>{l.nome}{l.cidade ? ` · ${l.cidade}` : ""}</option>)}
+          </select>
+        </div>
+        {err && <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
+        <button onClick={salvar} disabled={busy || !nome} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar alterações
+        </button>
+      </div>
     </div>
   );
 }
@@ -263,42 +321,60 @@ function QRCodeModal({ item, onClose }: { item: ItemInv; onClose: () => void }) 
     return () => { cancelled = true; };
   }, [item.qr_token]);
 
-  function imprimir() {
+  async function imprimir() {
     const url = `${origem}/q/${item.qr_token}`;
-    const html = `
-      <html><head><title>${item.nome} - QR</title>
-      <style>
-        body { font-family: system-ui, sans-serif; margin: 0; padding: 20px; }
-        .etiqueta { width: 90mm; height: 60mm; border: 1px solid #ddd; padding: 10mm; display: flex; gap: 5mm; align-items: center; box-sizing: border-box; page-break-after: always; }
-        .info { flex: 1; }
-        .info h1 { margin: 0; font-size: 14pt; color: #7c3aed; }
-        .info p { margin: 3px 0; font-size: 9pt; color: #333; }
-        .qr-area { width: 30mm; height: 30mm; }
-        .qr-area canvas { width: 100%; height: 100%; }
-        @media print { .etiqueta { border: none; } body { padding: 0; } }
-      </style></head>
-      <body>
-        <div class="etiqueta">
-          <div class="info">
-            <p style="font-size:7pt;letter-spacing:1px;color:#888;margin:0">THREE DIGITAL · INVENTÁRIO</p>
-            <h1>${item.nome}</h1>
-            <p><b>${item.tipo.toUpperCase()}</b> · ID: <code>${item.qr_token}</code></p>
-            ${item.mac ? `<p>MAC: <code>${item.mac}</code></p>` : ""}
-            ${item.serial ? `<p>Serial: <code>${item.serial}</code></p>` : ""}
-            ${item.modelo ? `<p>${item.fabricante ?? ""} ${item.modelo}</p>` : ""}
-            <p style="font-size:7pt;color:#999;margin-top:8mm">Escaneie pra ver detalhes</p>
-          </div>
-          <div class="qr-area"><canvas id="qr"></canvas></div>
-        </div>
-        <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-        <script>
-          window.QRCode.toCanvas(document.getElementById('qr'), '${url}', { width: 113, margin: 0 }, () => {
-            setTimeout(() => window.print(), 300);
-          });
-        </script>
-      </body></html>`;
-    const w = window.open("", "_blank", "width=600,height=500");
-    if (w) { w.document.write(html); w.document.close(); }
+
+    // Gera o QR como dataURL pra embutir direto na etiqueta (sem depender de script no iframe)
+    await carregarQRCode();
+    if (!window.QRCode) { notify("Falha ao carregar gerador de QR", "error"); return; }
+    const tmpCanvas = document.createElement("canvas");
+    await new Promise<void>(res => window.QRCode!.toCanvas(tmpCanvas, url, { width: 320, margin: 0 }, () => res()));
+    const qrDataUrl = tmpCanvas.toDataURL("image/png");
+
+    const html = `<!DOCTYPE html><html><head><title>Etiqueta · ${item.nome}</title>
+<meta charset="utf-8">
+<style>
+  @page { size: 90mm 60mm; margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 0; color: #1a1a2e; background: white; }
+  .etiqueta { width: 90mm; height: 60mm; padding: 5mm; display: flex; gap: 4mm; align-items: center; }
+  .info { flex: 1; min-width: 0; }
+  .info .marca { font-size: 6pt; letter-spacing: 1.2pt; color: #888; margin: 0 0 2mm 0; font-weight: 600; }
+  .info h1 { margin: 0 0 1.5mm 0; font-size: 13pt; color: #7c3aed; font-weight: 800; line-height: 1.1; word-wrap: break-word; }
+  .info p { margin: 0.8mm 0; font-size: 8pt; color: #333; line-height: 1.2; }
+  .info code { font-family: ui-monospace, monospace; font-size: 7.5pt; background: #f0f0f0; padding: 0.5mm 1mm; border-radius: 1pt; }
+  .info .escaneie { font-size: 6pt; color: #999; margin-top: 2mm; }
+  .qr { width: 35mm; height: 35mm; flex-shrink: 0; }
+  .qr img { width: 100%; height: 100%; display: block; }
+</style></head>
+<body>
+  <div class="etiqueta">
+    <div class="info">
+      <p class="marca">THREE DIGITAL · INVENTÁRIO</p>
+      <h1>${escapeHtml(item.nome)}</h1>
+      <p><b>${escapeHtml(item.tipo.toUpperCase())}</b> · <code>${item.qr_token}</code></p>
+      ${item.mac ? `<p>MAC: <code>${escapeHtml(item.mac)}</code></p>` : ""}
+      ${item.serial ? `<p>SN: <code>${escapeHtml(item.serial)}</code></p>` : ""}
+      ${item.modelo ? `<p>${escapeHtml((item.fabricante ?? "") + " " + item.modelo).trim()}</p>` : ""}
+      <p class="escaneie">↗ Escaneie pra ver detalhes</p>
+    </div>
+    <div class="qr"><img src="${qrDataUrl}" alt="QR"></div>
+  </div>
+  <script>window.onload = () => { setTimeout(() => { window.print(); setTimeout(() => window.close(), 500); }, 100); }</script>
+</body></html>`;
+
+    // Usa iframe oculto (nao requer popup unblock)
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;width:0;height:0;border:0;left:-1000px;top:-1000px;";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) { document.body.removeChild(iframe); notify("Falha ao gerar etiqueta", "error"); return; }
+    doc.open(); doc.write(html); doc.close();
+    iframe.contentWindow?.focus();
+    setTimeout(() => {
+      try { iframe.contentWindow?.print(); } catch (e) { console.error(e); }
+      setTimeout(() => { try { document.body.removeChild(iframe); } catch {} }, 2000);
+    }, 300);
   }
 
   return (
