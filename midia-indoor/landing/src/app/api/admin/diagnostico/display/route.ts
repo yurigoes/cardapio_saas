@@ -54,7 +54,13 @@ interface ScheduleEvt {
 interface Hipotese { gravidade: "alta" | "media" | "baixa"; texto: string; acao?: string; }
 
 async function handle(req: NextRequest) {
-  if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
+  // Aceita master cookie OU ?key=CRON_SECRET pra debug via curl/SSH na VPS
+  const key = req.nextUrl.searchParams.get("key") ?? req.headers.get("x-cron-key");
+  const cronSecret = process.env.CRON_SECRET ?? "";
+  const viaKey = cronSecret && key === cronSecret;
+  if (!viaKey && !(await exigirMaster(req))) {
+    return NextResponse.json({ ok: false, error: "apenas master (ou ?key=CRON_SECRET)" }, { status: 403 });
+  }
   await ensureSchema();
 
   const ip  = req.nextUrl.searchParams.get("ip");
