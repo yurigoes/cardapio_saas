@@ -1484,6 +1484,15 @@ function Marca({ token }: { token: string }) {
             <Field label="Versão (rótulo)" value={b.player_versao ?? ""} onChange={v => set("player_versao", v)} placeholder="ex: R301-self" />
           </div>
           <PlayerApkUploader token={token} />
+
+          <div className="mt-4 rounded-xl border border-violet-500/30 bg-violet-500/10 p-4">
+            <p className="mb-1 text-sm font-semibold text-violet-200">📖 Guia de provisionamento de TV box</p>
+            <p className="mb-3 text-xs text-violet-200/80">Passo-a-passo completo com download dos scripts PowerShell pra provisionar uma TV box do zero em ~10min (ADB + Player + RustDesk + boot animation + acesso remoto).</p>
+            <div className="flex flex-wrap gap-2">
+              <a href="/guia-tvbox" target="_blank" rel="noreferrer" className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700">Abrir guia</a>
+              <a href="/scripts-tvbox.zip" className="rounded-lg border border-violet-400/40 px-3 py-1.5 text-xs font-semibold text-violet-100 hover:bg-violet-500/20">Baixar scripts (.zip)</a>
+            </div>
+          </div>
         </div>
 
         <div className="border-t border-white/10 pt-4">

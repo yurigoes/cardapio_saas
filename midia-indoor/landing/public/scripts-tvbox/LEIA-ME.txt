@@ -1,0 +1,31 @@
+Three Digital - Scripts de Provisionamento de TV Box
+=====================================================
+
+Conteudo:
+- provisiona.ps1            -> wrapper interativo (pergunta retrato/paisagem)
+- provisiona-retrato.ps1    -> RK3229 em retrato 720x1280
+- provisiona-paisagem.ps1   -> RK3229 em paisagem 1280x720
+- _provisiona-comum.ps1     -> funcoes compartilhadas (NAO executar direto)
+
+Pre-requisitos:
+1. ADB (Android Debug Bridge) - instalar com: winget install Google.PlatformTools
+2. ffmpeg - instalar com: winget install Gyan.FFmpeg
+3. 7zip (opcional, melhora boot animation) - winget install 7zip.7zip
+4. APK do Player customizado (xibo-modificado.apk) - baixar no site
+5. APK do RustDesk - baixar do site oficial (versao armv7-signed para box 32-bit)
+
+Estrutura de pastas esperada:
+A:\Sistemas\xibo-mod\
+  xibo-modificado.apk
+  boot-retrato.mp4 (opcional)
+  boot-paisagem.mp4 (opcional)
+  provisiona*.ps1 (esses arquivos)
+A:\Sistemas\rustdesk\
+  rustdesk.apk
+
+Como rodar:
+cd A:\Sistemas\xibo-mod
+.\provisiona.ps1 -Ip 192.168.15.51
+
+Veja o passo-a-passo completo em:
+https://SEU-DOMINIO/guia-tvbox
