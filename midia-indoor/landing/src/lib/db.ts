@@ -322,6 +322,10 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`CREATE INDEX IF NOT EXISTS idx_midia_telas_local ON midia_telas(local_id);`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_midia_telas_ip ON midia_telas(ip);`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_midia_telas_mac ON midia_telas(mac);`);
+  // TVs DOOH pertencem ao MASTER (Three Digital), nao a um anunciante especifico.
+  // Antes a coluna era NOT NULL referenciando midia_contas, mas isso impede registrar
+  // TVs descobertas via Xibo (ex: pareadas pelo provisionamento sem conta de anunciante).
+  await p.query(`ALTER TABLE midia_telas ALTER COLUMN conta_id DROP NOT NULL;`).catch(() => {});
   // Geo + audiência estimada
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS lat NUMERIC(10,6);`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS lng NUMERIC(10,6);`);

@@ -77,8 +77,32 @@ async function handle(req: NextRequest, { params }: { params: { id: string } }) 
     console.log(`[telas-do-local] auto-vinculou ${naoVinculadas.length} tela(s) ao local ${params.id}`);
   }
 
+  // AUTO-CRIAR: displays do Xibo sem registro em midia_telas viram registros novos
+  // (conta_id=NULL pois sao TVs DOOH do master). Pega nome direto do Xibo.
+  const xiboIdsJaNoDb = new Set(telasDb.map(t => t.xibo_display_id));
+  const faltando = displayIds.filter(did => !xiboIdsJaNoDb.has(did));
+  const criadas: typeof telasDb = [];
+  for (const did of faltando) {
+    const x = xiboInfo.get(did);
+    const nome = x?.display ?? `Display ${did}`;
+    try {
+      const novo = await db().query<{ id: string }>(
+        `INSERT INTO midia_telas (conta_id, local_id, nome, xibo_display_id, status, ip, mac)
+         VALUES (NULL, $1, $2, $3, 'ativa', $4, $5) RETURNING id`,
+        [params.id, nome, did, x?.clientAddress ?? null, x?.macAddress ?? null]
+      ).then(r => r.rows[0]);
+      criadas.push({
+        id: novo.id, nome, xibo_display_id: did, local_id: params.id, status: "ativa",
+        gondola_media_id: null, gondola_nome: null, gondola_duracao_seg: 10,
+        gondola_layout_id: null, ip: x?.clientAddress ?? null, mac: x?.macAddress ?? null,
+      });
+      console.log(`[telas-do-local] auto-criou tela '${nome}' (xibo_display_id=${did}) vinculada ao local ${params.id}`);
+    } catch (e) { console.warn(`[telas-do-local] auto-criar tela ${did} falhou:`, (e as Error).message); }
+  }
+  const todasTelas = [...telasDb, ...criadas];
+
   // Monta resposta: 1 linha por displayId do grupo
-  const telasPorXibo = new Map(telasDb.map(t => [t.xibo_display_id ?? -1, t]));
+  const telasPorXibo = new Map(todasTelas.map(t => [t.xibo_display_id ?? -1, t]));
   const out = displayIds.map(did => {
     const t = telasPorXibo.get(did);
     const x = xiboInfo.get(did);
@@ -99,7 +123,12 @@ async function handle(req: NextRequest, { params }: { params: { id: string } }) 
     };
   });
 
-  return NextResponse.json({ ok: true, telas: out, total_xibo: displayIds.length, auto_vinculadas: naoVinculadas.length });
+  return NextResponse.json({
+    ok: true, telas: out,
+    total_xibo: displayIds.length,
+    auto_vinculadas: naoVinculadas.length,
+    auto_criadas: criadas.length,
+  });
 }
 
 export const GET = handle;

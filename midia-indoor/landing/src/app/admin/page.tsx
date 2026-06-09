@@ -1100,7 +1100,7 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
   );
 }
 
-interface TelaGondola { id: string; nome: string; xibo_display_id: number | null; status: string | null; gondola_media_id: number | null; gondola_nome: string | null; gondola_duracao_seg: number; online: boolean | null; ultimo_acesso: string | null; }
+interface TelaGondola { id: string | null; nome: string; xibo_display_id: number | null; status: string | null; gondola_media_id: number | null; gondola_nome: string | null; gondola_duracao_seg: number; online: boolean | null; ultimo_acesso: string | null; registrada_no_saas?: boolean; }
 function TelasDoLocalModal({ token, local, onClose }: { token: string; local: Local; onClose: () => void }) {
   const [telas, setTelas] = useState<TelaGondola[] | null>(null);
   const load = useCallback(async () => {
@@ -1134,16 +1134,25 @@ function TelaGondolaCard({ token, tela, onChange }: { token: string; tela: TelaG
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const [dur, setDur] = useState(String(tela.gondola_duracao_seg));
   const fileRef = useRef<HTMLInputElement>(null);
+  const desabilitado = !tela.id;
   async function enviar(f: File) {
+    if (!tela.id) { notify("Tela não registrada no SaaS — recarregue a página.", "error"); return; }
     setBusy(true); setErr("");
     const fd = new FormData(); fd.append("file", f); fd.append("duracao_seg", dur);
     const r = await fetch(`/api/admin/telas/${tela.id}/gondola`, { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: fd });
-    const d = await r.json(); setBusy(false);
     if (fileRef.current) fileRef.current.value = "";
+    if (!r.ok) {
+      setBusy(false);
+      let msg = `HTTP ${r.status}`;
+      try { const d = await r.json(); msg = d.error || msg; } catch { /* ignore */ }
+      setErr(msg); notify(msg, "error"); return;
+    }
+    const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); notify(d.error || "Erro", "error"); return; }
     notify(`Mídia atualizada em ${tela.nome}`, "success"); onChange();
   }
   async function salvarDur() {
+    if (!tela.id) { notify("Tela não registrada", "error"); return; }
     const r = await aapi(token, `/api/admin/telas/${tela.id}/gondola`, { method: "PATCH", body: JSON.stringify({ gondola_duracao_seg: Number(dur) }) });
     const d = await r.json();
     if (!d.ok) { notify(d.error || "Erro", "error"); return; }
@@ -1170,11 +1179,12 @@ function TelaGondolaCard({ token, tela, onChange }: { token: string; tela: TelaG
         </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-cyan-500/30 px-3 py-1.5 text-xs text-cyan-300 hover:bg-cyan-500/10">
+        <label className={`inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 px-3 py-1.5 text-xs ${desabilitado ? "cursor-not-allowed text-slate-500 opacity-60" : "cursor-pointer text-cyan-300 hover:bg-cyan-500/10"}`}>
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
           {tela.gondola_nome ? "Trocar mídia" : "Enviar mídia da gôndola"}
-          <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) enviar(f); }} />
+          <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" disabled={busy || desabilitado} onChange={e => { const f = e.target.files?.[0]; if (f) enviar(f); }} />
         </label>
+        {desabilitado && <span className="text-[10px] text-amber-400">recarregue: tela ainda registrando…</span>}
         <div className="flex items-center gap-1 text-xs">
           <span className="text-slate-400">Duração:</span>
           <input type="number" value={dur} onChange={e => setDur(e.target.value)} className="w-16 rounded border border-white/10 bg-white/5 px-2 py-1 text-xs" />
