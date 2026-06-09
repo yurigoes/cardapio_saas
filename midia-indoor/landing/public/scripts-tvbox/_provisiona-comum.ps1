@@ -574,6 +574,98 @@ function Ativar-RustDeskServicoRetrato([string]$device) {
   Start-Sleep -Seconds 2
 }
 
+# Sequencia de taps em RESOLUCAO PAISAGEM 1280x720 que ativa o servico do RustDesk.
+# Coords mapeadas em sessao com TV BOX-3 RK322x.
+function Ativar-RustDeskServicoPaisagem([string]$device) {
+  adb -s $device shell "am start -n com.carriez.flutter_hbb/.MainActivity" | Out-Null
+  Start-Sleep -Seconds 5
+  # Tab "Compartilhar Tela" (3a do rodape, em paisagem)
+  adb -s $device shell "input tap 800 685" | Out-Null
+  Start-Sleep -Seconds 3
+  # Botao azul "Iniciar Servico"
+  adb -s $device shell "input tap 407 165" | Out-Null
+  Start-Sleep -Seconds 3
+  # SCAM warning (so aparece 1a vez) - tap "Nao mostrar novamente" + Eu concordo
+  # Em paisagem coords sao: checkbox ~x=380 y=375, "Eu concordo" ~x=970 y=425
+  adb -s $device shell "input tap 380 375" | Out-Null
+  Start-Sleep -Seconds 1
+  Start-Sleep -Seconds 4
+  adb -s $device shell "input tap 970 425" | Out-Null
+  Start-Sleep -Seconds 3
+  # Aviso "Habilitar Captura" - botao OK
+  adb -s $device shell "input tap 877 427" | Out-Null
+  Start-Sleep -Seconds 4
+  # MediaProjection "Nao mostrar novamente" + INICIAR AGORA
+  # Coords previstas baseadas no padrao Android - se nao aparecer, pula
+  adb -s $device shell "input tap 250 470" | Out-Null
+  Start-Sleep -Seconds 1
+  adb -s $device shell "input tap 1115 510" | Out-Null
+  Start-Sleep -Seconds 5
+  # Toggle Controle de Entrada
+  adb -s $device shell "input tap 1217 496" | Out-Null
+  Start-Sleep -Seconds 3
+  # "Abrir Configuracoes do Sistema"
+  adb -s $device shell "input tap 775 458" | Out-Null
+  Start-Sleep -Seconds 4
+  # Tab "RustDesk Input" na lista de Acessibilidade
+  adb -s $device shell "input tap 190 225" | Out-Null
+  Start-Sleep -Seconds 3
+  # Toggle Desativado -> ON
+  adb -s $device shell "input tap 20 97" | Out-Null
+  Start-Sleep -Seconds 3
+  # Popup "Usar RustDesk Input?" - OK
+  adb -s $device shell "input tap 996 489" | Out-Null
+  Start-Sleep -Seconds 3
+  # Back 2x volta pro RustDesk
+  adb -s $device shell "input keyevent KEYCODE_BACK" | Out-Null
+  Start-Sleep -Seconds 1
+  adb -s $device shell "input keyevent KEYCODE_BACK" | Out-Null
+  Start-Sleep -Seconds 2
+}
+
+# PAISAGEM 1280x720: habilita "Iniciar na Inicializacao", desabilita Janela Flutuante,
+# ativa Acesso direto por IP. Coords mapeadas em sessao TV BOX-3.
+function Habilitar-RustDeskStartOnBoot-Paisagem([string]$device) {
+  # Tab Configuracoes (4a no rodape)
+  adb -s $device shell "input tap 1119 685" | Out-Null
+  Start-Sleep -Seconds 3
+
+  # Scroll pra baixo pra achar Acesso direto por IP + Iniciar na Inicializacao
+  adb -s $device shell "input swipe 640 600 640 100" | Out-Null
+  Start-Sleep -Seconds 2
+
+  # Tap toggle "Acesso direto por IP" (x ~1005 y ~642 nessa rolagem)
+  adb -s $device shell "input tap 1005 642" | Out-Null
+  Start-Sleep -Seconds 2
+
+  # Scroll pra baixo
+  adb -s $device shell "input swipe 640 600 640 100" | Out-Null
+  Start-Sleep -Seconds 2
+
+  # Tap toggle "Janela flutuante" pra DESABILITAR (icone sobreposto na tela do Xibo)
+  adb -s $device shell "input tap 1005 204" | Out-Null
+  Start-Sleep -Seconds 2
+
+  # Scroll DE VOLTA pra cima pra "Iniciar na Inicializacao"
+  adb -s $device shell "input swipe 640 200 640 500" | Out-Null
+  Start-Sleep -Seconds 2
+
+  # Tap toggle "Iniciar na Inicializacao"
+  adb -s $device shell "input tap 1005 490" | Out-Null
+  Start-Sleep -Seconds 3
+
+  # Popup "Complete a acao usando" - tap "Otimizacao de bateria"
+  adb -s $device shell "input tap 557 566" | Out-Null
+  Start-Sleep -Seconds 1
+  # SEMPRE
+  adb -s $device shell "input tap 827 685" | Out-Null
+  Start-Sleep -Seconds 4
+
+  # Popup "Ignorar otimizacoes de bateria?" - SIM
+  adb -s $device shell "input tap 996 410" | Out-Null
+  Start-Sleep -Seconds 3
+}
+
 # Habilita "Iniciar na Inicializacao" + concede "Ignorar otimizacao de bateria" (RETRATO 720x1280)
 function Habilitar-RustDeskStartOnBoot([string]$device) {
   # Aba Configuracoes (4a aba)

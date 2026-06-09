@@ -54,21 +54,24 @@ if (-not $videoOk) {
 # 4. Rotacao retrato
 Aplicar-Retrato -device $device -hasRoot $hasRoot -backupDir $backupDir
 
-# 5. Apps (Xibo NAO como launcher - assim conseguimos abrir RustDesk e outros apps)
-Instalar-Xibo     -device $device -apk $XiboApk     -cms $CmsAddress -key $ServerKey -displayName $DisplayName
+# ============ NOVA ORDEM: RustDesk PRIMEIRO, depois Xibo (que sera launcher) ============
+
+# 5. RustDesk - instalar + config + ativar servico + capturar ID ANTES do Xibo
 Instalar-RustDesk -device $device -apk $RustDeskApk -server $RustServer -key $RustKey -senha $RustSenha
 
-# 6. Detecta monitor HDMI (se monitor responder EDID, captura modelo/serial)
+# 6. Detecta monitor HDMI (antes do Xibo cobrir)
 $monitor = Detectar-MonitorHDMI -device $device
 if ($monitor.connect -eq "1") {
   Ok "Monitor HDMI: $($monitor.resolucao)$(if ($monitor.modelo) { ' - ' + $monitor.modelo } else { ' (modelo manual)' })"
-} else {
-  Warn "Nenhum monitor HDMI detectado (connect=$($monitor.connect))"
 }
 
-# 7. ID RustDesk + SaaS
+# 7. Captura ID RustDesk + registra no SaaS
 $rdId = Capturar-RustDeskId -device $device -pngOut $shotPath
 Registrar-NoSaas -saasUrl $SaasUrl -secret $ProvisionSecret -mac $mac -rdId $rdId -rdSenha $RustSenha -nome $DisplayName -ip $Ip -monitor $monitor
+
+# 8. AGORA instala Xibo + pre-config + fixa como launcher principal
+Instalar-Xibo -device $device -apk $XiboApk -cms $CmsAddress -key $ServerKey -displayName $DisplayName
+Fixar-XiboComoLauncher -device $device
 
 # 7. Resumo + reboot
 Resumo @{

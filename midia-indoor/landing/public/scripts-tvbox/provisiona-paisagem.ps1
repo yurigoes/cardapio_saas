@@ -54,34 +54,98 @@ if (-not $videoOk) {
 # 4. Rotacao paisagem (zerada)
 Aplicar-Paisagem -device $device -hasRoot $hasRoot -backupDir $backupDir
 
-# 5. Apps (Xibo NAO como launcher - assim conseguimos abrir RustDesk e outros apps)
-Instalar-Xibo     -device $device -apk $XiboApk     -cms $CmsAddress -key $ServerKey -displayName $DisplayName
+# ============ NOVA ORDEM: RustDesk PRIMEIRO, depois Xibo (que sera launcher) ============
 
-# RustDesk: a funcao tem taps automaticos CALIBRADOS PRA RETRATO 720x1280.
-# Em paisagem 1280x720, as coordenadas dos botoes sao diferentes - desativado por enquanto.
-Warn "RustDesk: taps automaticos sao especificos de retrato. Em paisagem voce precisa"
-Warn "abrir o RustDesk manualmente uma vez na primeira TV pra mapear novas coordenadas."
-Warn "Instalando APK e gravando config, mas SEM ativar servico automaticamente."
-
-# Instala APK e grava config basica (sem taps)
+# 5. RustDesk - instalar + config + ativar servico + capturar ID
+Step "Instalando RustDesk PRIMEIRO (pra capturar ID antes do Xibo virar launcher)"
+$rdId = ""
 if (Test-Path $RustDeskApk) {
   adb -s $device install -r -g $RustDeskApk | Out-Null
-  Ok "RustDesk APK instalado (servico precisa ser ativado manual)"
+  Ok "RustDesk APK instalado"
+  Start-Sleep -Seconds 3
+  adb -s $device shell "am start -n com.carriez.flutter_hbb/.MainActivity" | Out-Null
+  Start-Sleep -Seconds 8
+  adb -s $device shell "am force-stop com.carriez.flutter_hbb" | Out-Null
+  Start-Sleep -Seconds 2
+
+  # Grava RustDesk2.toml com TUDO inclusive desabilitar janela flutuante
+  $rd2 = @"
+rendezvous_server = '${RustServer}:21116'
+nat_type = 1
+serial = 0
+
+[options]
+custom-rendezvous-server = '$RustServer'
+relay-server = '$RustServer'
+api-server = ''
+key = '$RustKey'
+direct-server = 'Y'
+enable-audio = 'N'
+enable-clipboard = 'Y'
+enable-file-transfer = 'Y'
+enable-keyboard = 'Y'
+enable-tunnel = 'Y'
+allow-auto-record-incoming = 'N'
+verification-method = 'use-permanent-password'
+approve-mode = 'password'
+disable-floating-window = 'Y'
+show-scam-warning = 'N'
+"@
+  $tmp2 = New-TemporaryFile
+  [System.IO.File]::WriteAllBytes($tmp2.FullName, [System.Text.Encoding]::UTF8.GetBytes($rd2))
+  adb -s $device push $tmp2.FullName "/sdcard/RustDesk2.toml" | Out-Null
+  adb -s $device shell "su -c 'mkdir -p /data/data/com.carriez.flutter_hbb/app_flutter; cp /sdcard/RustDesk2.toml /data/data/com.carriez.flutter_hbb/app_flutter/RustDesk2.toml && chmod 660 /data/data/com.carriez.flutter_hbb/app_flutter/RustDesk2.toml'" | Out-Null
+  Remove-Item $tmp2.FullName -ErrorAction SilentlyContinue
+  adb -s $device shell "rm /sdcard/RustDesk2.toml" | Out-Null
+  Ok "RustDesk2.toml gravado (com floating window desabilitado)"
+
+  # Senha permanente via toml
+  $tomlLocal = "$env:TEMP\rd-paisagem-$(Get-Random).toml"
+  cmd /c "adb -s $device shell `"su -c 'cp /data/data/com.carriez.flutter_hbb/app_flutter/RustDesk.toml /sdcard/rd.toml 2>/dev/null'`""
+  cmd /c "adb -s $device pull /sdcard/rd.toml `"$tomlLocal`" >nul 2>nul"
+  if ((Test-Path $tomlLocal) -and (Get-Item $tomlLocal).Length -gt 0) {
+    $c = Get-Content $tomlLocal -Raw
+    $c = $c -replace "password = ''", "password = '$RustSenha'"
+    [System.IO.File]::WriteAllText($tomlLocal, $c)
+    adb -s $device push $tomlLocal /sdcard/rd.toml | Out-Null
+    adb -s $device shell "su -c 'cp /sdcard/rd.toml /data/data/com.carriez.flutter_hbb/app_flutter/RustDesk.toml && chmod 660 /data/data/com.carriez.flutter_hbb/app_flutter/RustDesk.toml'" | Out-Null
+    adb -s $device shell "rm /sdcard/rd.toml" | Out-Null
+    Remove-Item $tomlLocal -ErrorAction SilentlyContinue
+    Ok "Senha permanente '$RustSenha' gravada"
+  }
+
+  # Ativa servico + permissoes via taps PAISAGEM
+  Step "Ativando servico RustDesk via taps automaticos (paisagem)"
+  Ativar-RustDeskServicoPaisagem -device $device
+  Ok "RustDesk servico ativado"
+
+  # Configura: Iniciar na Inicializacao + desabilita Janela flutuante + Acesso direto IP
+  Step "Configurando RustDesk: iniciar no boot + ocultar janela flutuante + IP direto"
+  Habilitar-RustDeskStartOnBoot-Paisagem -device $device
+  Ok "RustDesk vai subir sozinho no boot, sem icone sobreposto"
+
+  # Captura ID via screenshot - APROVEITA que ainda nao subiu Xibo
+  $rdId = Capturar-RustDeskId -device $device -pngOut $shotPath
 } else {
   Warn "RustDesk APK nao encontrado em $RustDeskApk"
 }
 
-# 6. Detecta monitor HDMI
+# 6. Detecta monitor HDMI (antes de Xibo cobrir)
 $monitor = Detectar-MonitorHDMI -device $device
 if ($monitor.connect -eq "1") {
   Ok "Monitor HDMI: $($monitor.resolucao)$(if ($monitor.modelo) { ' - ' + $monitor.modelo } else { ' (modelo manual)' })"
-} else {
-  Warn "Nenhum monitor HDMI detectado (connect=$($monitor.connect))"
 }
 
-# 7. ID RustDesk + SaaS
-$rdId = Capturar-RustDeskId -device $device -pngOut $shotPath
+# 7. Registra no SaaS (com ID Rustdesk + monitor) ANTES de instalar Xibo
 Registrar-NoSaas -saasUrl $SaasUrl -secret $ProvisionSecret -mac $mac -rdId $rdId -rdSenha $RustSenha -nome $DisplayName -ip $Ip -monitor $monitor
+
+# 8. AGORA instala Xibo + pre-config
+Step "Instalando Xibo (sera o launcher principal)"
+Instalar-Xibo -device $device -apk $XiboApk -cms $CmsAddress -key $ServerKey -displayName $DisplayName
+
+# 9. Fixa Xibo como launcher principal (RustDesk continua rodando em background)
+Step "Fixando Xibo como launcher principal"
+Fixar-XiboComoLauncher -device $device
 
 # 7. Resumo + reboot
 Resumo @{
