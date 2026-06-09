@@ -255,6 +255,10 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_size BIGINT;`);
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_sha256 TEXT;`);
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS player_apk_uploaded_at TIMESTAMPTZ;`);
+  // Wallpaper da tela de login (BYTEA evita precisar montar volume)
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS login_wallpaper_data BYTEA;`);
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS login_wallpaper_mime TEXT;`);
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS login_wallpaper_updated_at TIMESTAMPTZ;`);
   // Splash do local (tela de espera quando não há conteúdo agendado)
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_layout_id INTEGER;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_nome TEXT;`);

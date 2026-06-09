@@ -149,6 +149,16 @@ function Splash() {
 function Login({ onLogin }: { onLogin: (t: string, role: string, nome: string) => void }) {
   const [email, setEmail] = useState(""); const [senha, setSenha] = useState("");
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const [bgUrl, setBgUrl] = useState<string>("");
+
+  useEffect(() => {
+    // Cache-bust por minuto pra refletir trocas sem hard reload
+    const v = Math.floor(Date.now() / 60000);
+    fetch(`/api/publico/login-wallpaper?v=${v}`, { method: "HEAD" })
+      .then(r => { if (r.ok) setBgUrl(`/api/publico/login-wallpaper?v=${v}`); })
+      .catch(() => { /* sem wallpaper, fallback dark */ });
+  }, []);
+
   async function entrar(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setErr("");
     try {
@@ -161,9 +171,13 @@ function Login({ onLogin }: { onLogin: (t: string, role: string, nome: string) =
       onLogin(d.token, d.admin.role, d.admin.nome);
     } catch { setErr("Erro de conexão"); } finally { setBusy(false); }
   }
+  const bgStyle: React.CSSProperties = bgUrl
+    ? { backgroundImage: `url(${bgUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
+    : {};
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0a0a12] text-white">
-      <form onSubmit={entrar} className="w-full max-w-sm px-6">
+    <main className="relative flex min-h-screen items-center justify-center bg-[#0a0a12] text-white" style={bgStyle}>
+      {bgUrl && <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />}
+      <form onSubmit={entrar} className="relative z-10 w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0a12]/80 px-6 py-8 shadow-2xl backdrop-blur-md">
         <div className="mb-8 flex items-center justify-center gap-2 text-brand-light">
           <Tv className="h-7 w-7" /><span className="text-lg font-bold">Admin · Three Digital Mídia</span>
         </div>
@@ -1455,12 +1469,74 @@ function Marca({ token }: { token: string }) {
           <PlayerApkUploader token={token} />
         </div>
 
+        <div className="border-t border-white/10 pt-4">
+          <p className="mb-1 text-sm font-semibold text-slate-300">Wallpaper da tela de login</p>
+          <p className="mb-3 text-xs text-slate-500">Imagem de fundo do login (JPG/PNG/WebP, máx 5 MB). Aparece com overlay escuro pra legibilidade.</p>
+          <LoginWallpaperUploader token={token} />
+        </div>
+
         <div className="flex items-center gap-3 pt-2">
           <button onClick={salvar} disabled={busy} className="flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar
           </button>
           <span className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white">amostra da cor</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function LoginWallpaperUploader({ token }: { token: string }) {
+  const [hasWallpaper, setHasWallpaper] = useState<boolean | null>(null);
+  const [bust, setBust] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch(`/api/publico/login-wallpaper?v=${bust}`, { method: "HEAD" })
+      .then(r => setHasWallpaper(r.ok))
+      .catch(() => setHasWallpaper(false));
+  }, [bust]);
+
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { notify("Imagem maior que 5MB", "error"); return; }
+    setBusy(true);
+    const fd = new FormData(); fd.append("file", f);
+    const r = await fetch("/api/admin/login-wallpaper", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    const d = await r.json(); setBusy(false);
+    if (e.target) e.target.value = "";
+    if (!d.ok) { notify(d.error || "Erro ao enviar", "error"); return; }
+    notify("Wallpaper atualizado", "success");
+    setBust(Date.now());
+  }
+
+  async function remover() {
+    if (!await confirmModal("Remover o wallpaper atual?")) return;
+    setBusy(true);
+    await fetch("/api/admin/login-wallpaper", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    setBusy(false);
+    notify("Wallpaper removido", "success");
+    setBust(Date.now());
+  }
+
+  return (
+    <div className="space-y-3">
+      {hasWallpaper && (
+        <div className="overflow-hidden rounded-xl border border-white/10">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/api/publico/login-wallpaper?v=${bust}`} alt="wallpaper" className="h-40 w-full object-cover" />
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={upload} className="hidden" />
+      <div className="flex gap-2">
+        <button onClick={() => inputRef.current?.click()} disabled={busy} className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm hover:bg-white/5 disabled:opacity-50">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          {hasWallpaper ? "Trocar wallpaper" : "Subir wallpaper"}
+        </button>
+        {hasWallpaper && (
+          <button onClick={remover} disabled={busy} className="rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50">Remover</button>
+        )}
       </div>
     </div>
   );
