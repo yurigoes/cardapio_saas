@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
   try {
     await ensureSchema();
     const rows = await db().query(
-      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, splash_nome, capacidade_dia, orientacao, lat, lng, passantes_dia, created_at, tipo
+      `SELECT id, nome, cidade, endereco, descricao, largura, altura, xibo_display_group_id, ativo, conteudo_nome, splash_nome, capacidade_dia, orientacao, lat, lng, passantes_dia, created_at, tipo,
+              plano_veiculacao, encarte_nome, encarte_inicio, encarte_fim, encarte_duracao_seg
          FROM midia_locais WHERE archived_at IS NULL AND (tipo IS NULL OR tipo='individual') ORDER BY cidade NULLS LAST, nome`
     ).then(r => r.rows);
     return NextResponse.json({ ok: true, locais: rows });
@@ -35,6 +36,7 @@ const novo = z.object({
   altura:    z.coerce.number().int().min(120).max(8000).optional(),
   capacidade_dia: z.coerce.number().int().min(0).default(0),
   orientacao: z.enum(["retrato", "paisagem"]).default("retrato"),
+  plano_veiculacao: z.enum(["publicidade","encarte_totem","ponta_gondola"]).default("publicidade"),
   lat: z.coerce.number().optional().nullable(),
   lng: z.coerce.number().optional().nullable(),
   passantes_dia: z.coerce.number().int().min(0).default(0),
@@ -58,9 +60,9 @@ export async function POST(req: NextRequest) {
     const altura  = b.altura  ?? (b.orientacao === "paisagem" ? 1080 : 1920);
 
     const id = await db().query<{ id: string }>(
-      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, capacidade_dia, orientacao, lat, lng, passantes_dia, xibo_display_group_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
-      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, largura, altura, b.capacidade_dia, b.orientacao, b.lat ?? null, b.lng ?? null, b.passantes_dia, dgId]
+      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, capacidade_dia, orientacao, lat, lng, passantes_dia, xibo_display_group_id, plano_veiculacao)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, largura, altura, b.capacidade_dia, b.orientacao, b.lat ?? null, b.lng ?? null, b.passantes_dia, dgId, b.plano_veiculacao]
     ).then(r => r.rows[0].id);
     return NextResponse.json({ ok: true, id, xibo_display_group_id: dgId });
   } catch (err) {

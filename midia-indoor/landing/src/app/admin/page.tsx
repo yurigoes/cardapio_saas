@@ -6,7 +6,7 @@ import {
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
   LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette, Server, Camera, Power, Undo2, ScrollText, Map,
   Ticket, CalendarDays, Check, ChevronLeft, ChevronRight, History, Grid3x3, Database,
-  FileSpreadsheet, Repeat, HandCoins, Archive,
+  FileSpreadsheet, Repeat, HandCoins, Archive, Zap,
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
@@ -387,7 +387,8 @@ function Badge({ s }: { s: string }) {
 }
 
 // ─── Tipos compartilhados ────────────────────────────────────────────────────
-interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; telas_total?: number; telas_online?: number; sync_em?: string | null; tipo?: string; sincronia?: boolean; qtd_membros?: number | null; }
+interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; telas_total?: number; telas_online?: number; sync_em?: string | null; tipo?: string; sincronia?: boolean; qtd_membros?: number | null; plano_veiculacao?: "publicidade" | "encarte_totem" | "ponta_gondola"; encarte_nome?: string | null; encarte_inicio?: string | null; encarte_fim?: string | null; encarte_duracao_seg?: number | null; }
+const PLANO_VEICULACAO_LABEL: Record<string, string> = { publicidade: "Publicidade (default)", encarte_totem: "Encarte de totem (1:1)", ponta_gondola: "Ponta de gôndola" };
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
 interface Camp    { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; data_inicio: string | null; data_fim: string | null; valor: string; status: string; status_pagamento: string; xibo_campaign_id: number | null; arte_nome: string | null; empresa: string; anunciante: string; locais: number; arte_status?: string; arte_rejeicao_motivo?: string | null; hora_inicio?: string | null; hora_fim?: string | null; desconto?: string | null; dias_semana?: string | null; formato?: string; }
@@ -741,6 +742,17 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
                   {busy === "rel-email" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar relatório por e-mail
                 </button>
               )}
+              {camp.status === "no_ar" && (
+                <button onClick={async () => {
+                  setBusy("force");
+                  const r = await aapi(token, `/api/admin/campanhas/${camp.id}/forcar-agendamento`, { method: "POST" });
+                  const d = await r.json(); setBusy("");
+                  notify(d.ok ? `Agendamento forçado · eventId ${d.eventId ?? "?"}` : (d.error || "Erro"), d.ok ? "success" : "error");
+                }} disabled={!!busy} title="Cria kick-start + force collect (use se a TV demorar a pegar)"
+                  className="flex items-center gap-2 rounded-xl border border-amber-500/30 px-4 py-2 text-sm text-amber-300 hover:bg-amber-500/10 disabled:opacity-50">
+                  {busy === "force" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Forçar agendamento
+                </button>
+              )}
               <button onClick={async () => {
                 setBusy("pdf");
                 try {
@@ -968,9 +980,13 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const [ocup, setOcup] = useState(false);
   const [busySplash, setBusySplash] = useState(false);
+  const [busyEncarte, setBusyEncarte] = useState(false);
+  const [editEncarte, setEditEncarte] = useState(false);
   const [ativar, setAtivar] = useState(false);
+  const [editPlano, setEditPlano] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const splashRef = useRef<HTMLInputElement>(null);
+  const plano = local.plano_veiculacao ?? "publicidade";
   async function enviarConteudo(files: FileList) {
     setBusy(true); setErr("");
     const fd = new FormData(); Array.from(files).forEach(f => fd.append("file", f));
@@ -991,6 +1007,13 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
     notify(`Splash atualizado em ${d.telas_atualizadas ?? 0} tela(s)`, "success");
     onChange();
   }
+  async function trocarPlano(novo: "publicidade" | "encarte_totem" | "ponta_gondola") {
+    const r = await aapi(token, "/api/admin/locais", { method: "PATCH", body: JSON.stringify({ id: local.id, plano_veiculacao: novo }) });
+    const d = await r.json();
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify(`Plano alterado pra ${PLANO_VEICULACAO_LABEL[novo]}`, "success");
+    setEditPlano(false); onChange();
+  }
   return (
     <div className={`rounded-2xl border p-4 ${local.ativo ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.02] opacity-60"}`}>
       <div className="flex items-start justify-between">
@@ -998,6 +1021,25 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
         <MapPin className="h-4 w-4 text-brand-light" />
       </div>
       <p className="mt-2 text-xs text-slate-500">{local.largura}×{local.altura} · grupo Xibo {local.xibo_display_group_id ?? "—"}</p>
+      <div className="mt-1 flex items-center gap-2">
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+          plano === "encarte_totem" ? "bg-amber-500/15 text-amber-300" :
+          plano === "ponta_gondola" ? "bg-cyan-500/15 text-cyan-300" :
+          "bg-white/10 text-slate-400"}`}>
+          {plano === "encarte_totem" ? "🎯 Encarte" : plano === "ponta_gondola" ? "🛒 Ponta gôndola" : "📺 Publicidade"}
+        </span>
+        <button onClick={() => setEditPlano(v => !v)} className="text-[10px] text-slate-500 underline hover:text-slate-300">trocar</button>
+      </div>
+      {editPlano && (
+        <div className="mt-2 flex flex-col gap-1 rounded-lg border border-white/10 bg-white/5 p-2 text-xs">
+          {(["publicidade","encarte_totem","ponta_gondola"] as const).map(p => (
+            <button key={p} disabled={p === plano} onClick={() => trocarPlano(p)}
+              className={`rounded px-2 py-1 text-left ${p === plano ? "cursor-default bg-brand/20 text-brand-light" : "hover:bg-white/10"}`}>
+              {PLANO_VEICULACAO_LABEL[p]}
+            </button>
+          ))}
+        </div>
+      )}
       {(local.telas_total ?? 0) > 0 && (
         <p className="mt-1 text-xs">
           <span className={`inline-flex items-center gap-1 ${local.telas_online === local.telas_total ? "text-emerald-300" : local.telas_online! > 0 ? "text-amber-300" : "text-red-300"}`}>
@@ -1005,7 +1047,21 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
           </span>
         </p>
       )}
-      <p className="mt-1 text-xs text-slate-500">Conteúdo base: {local.conteudo_nome ? <span className="text-emerald-300">{local.conteudo_nome}</span> : "nenhum"}</p>
+      {plano === "encarte_totem" && (
+        <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2">
+          <p className="text-xs text-amber-200">
+            🎯 <strong>Encarte:</strong> {local.encarte_nome ? <span>{local.encarte_nome}</span> : <span className="text-amber-300/70">não enviado</span>}
+            {local.encarte_inicio && local.encarte_fim && <span className="ml-1 text-amber-300/70">· {local.encarte_inicio.slice(0,10)} → {local.encarte_fim.slice(0,10)}</span>}
+            {local.encarte_duracao_seg && <span className="ml-1 text-amber-300/70">· {local.encarte_duracao_seg}s</span>}
+          </p>
+          <button onClick={() => setEditEncarte(true)} className="mt-1 inline-flex items-center gap-1 rounded border border-amber-500/30 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-500/10">
+            {busyEncarte ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />} {local.encarte_nome ? "Trocar encarte" : "Enviar encarte"}
+          </button>
+        </div>
+      )}
+      {plano !== "encarte_totem" && (
+        <p className="mt-1 text-xs text-slate-500">Conteúdo base: {local.conteudo_nome ? <span className="text-emerald-300">{local.conteudo_nome}</span> : "nenhum"}</p>
+      )}
       <p className="mt-1 text-xs text-slate-500">Splash (tela de espera): {local.splash_nome ? <span className="text-emerald-300">{local.splash_nome}</span> : "nenhum"}</p>
       {err && <p className="mt-1 text-xs text-red-400">{err}</p>}
       <div className="mt-3 flex gap-2">
@@ -1025,7 +1081,53 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
       </div>
       {ocup && <OcupacaoModal token={token} local={local} onClose={() => setOcup(false)} />}
       {ativar && <AtivarPorCodigoModal token={token} local={local} onClose={() => setAtivar(false)} onSaved={() => { setAtivar(false); onChange(); }} />}
+      {editEncarte && <EncarteModal token={token} local={local} onClose={() => setEditEncarte(false)} onSaved={() => { setEditEncarte(false); onChange(); }} busy={busyEncarte} setBusy={setBusyEncarte} />}
     </div>
+  );
+}
+
+function EncarteModal({ token, local, onClose, onSaved, busy, setBusy }: { token: string; local: Local; onClose: () => void; onSaved: () => void; busy: boolean; setBusy: (v: boolean) => void }) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const em30 = new Date(Date.now() + 30 * 86400e3).toISOString().slice(0, 10);
+  const [file, setFile] = useState<File | null>(null);
+  const [inicio, setInicio] = useState(local.encarte_inicio?.slice(0, 10) ?? hoje);
+  const [fim, setFim] = useState(local.encarte_fim?.slice(0, 10) ?? em30);
+  const [dur, setDur] = useState(String(local.encarte_duracao_seg ?? 10));
+  const [err, setErr] = useState("");
+  async function enviar() {
+    if (!file) { setErr("Selecione um arquivo"); return; }
+    setBusy(true); setErr("");
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("inicio", inicio);
+    fd.append("fim", fim);
+    fd.append("duracao_seg", dur);
+    const r = await fetch(`/api/admin/locais/${local.id}/encarte`, { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro"); return; }
+    notify(`Encarte atualizado · layout intercalado regenerado`, "success");
+    onSaved();
+  }
+  return (
+    <Modal onClose={onClose} title={`Encarte do ${local.nome}`}>
+      <p className="mb-3 text-xs text-slate-400">
+        O encarte vai aparecer <strong>intercalado 1:1</strong> com cada anúncio rotacionado no local:
+        <code className="ml-1 rounded bg-white/10 px-1 text-[10px]">encarte → anúncio_1 → encarte → anúncio_2 → encarte → ...</code>
+      </p>
+      <label className="mb-1 block text-sm text-slate-300">Arquivo (imagem ou vídeo)</label>
+      <input type="file" accept="image/*,video/*" onChange={e => setFile(e.target.files?.[0] ?? null)}
+        className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm file:mr-2 file:rounded file:border-0 file:bg-brand/30 file:px-3 file:py-1 file:text-xs file:text-brand-light hover:file:bg-brand/50" />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Início (vigência)" value={inicio} onChange={setInicio} type="date" />
+        <Field label="Fim (vigência)" value={fim} onChange={setFim} type="date" />
+      </div>
+      <Field label="Duração de exibição (segundos)" value={dur} onChange={setDur} type="number" />
+      <p className="mb-3 text-xs text-slate-500">Aplica-se a imagens (vídeos usam a duração nativa).</p>
+      {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+      <button onClick={enviar} disabled={busy || !file} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {local.encarte_nome ? "Trocar encarte" : "Enviar encarte"}
+      </button>
+    </Modal>
   );
 }
 
@@ -1111,13 +1213,14 @@ function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () =>
   const [capacidade, setCapacidade] = useState("0");
   const [lat, setLat] = useState(""); const [lng, setLng] = useState("");
   const [passantes, setPassantes] = useState("0");
+  const [planoVeiculacao, setPlanoVeiculacao] = useState<"publicidade" | "encarte_totem" | "ponta_gondola">("publicidade");
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   // largura/altura derivados da orientação (default; backend usa esses se não vierem)
   const largura = orientacao === "paisagem" ? "1920" : "1080";
   const altura  = orientacao === "paisagem" ? "1080" : "1920";
   async function salvar() {
     setBusy(true); setErr("");
-    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, orientacao, largura, altura, capacidade_dia: capacidade, lat: lat || null, lng: lng || null, passantes_dia: passantes }) });
+    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, orientacao, largura, altura, capacidade_dia: capacidade, lat: lat || null, lng: lng || null, passantes_dia: passantes, plano_veiculacao: planoVeiculacao }) });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
     onSaved();
@@ -1143,6 +1246,13 @@ function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () =>
         <Field label="Latitude" value={lat} onChange={setLat} placeholder="-12.971" />
         <Field label="Longitude" value={lng} onChange={setLng} placeholder="-38.513" />
       </div>
+      <label className="mb-1 block text-sm text-slate-300">Plano de veiculação</label>
+      <select value={planoVeiculacao} onChange={e => setPlanoVeiculacao(e.target.value as typeof planoVeiculacao)} className="mb-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+        <option value="publicidade">Publicidade (default) — anúncios via Ad Campaigns</option>
+        <option value="encarte_totem">Encarte de totem (1:1) — encarte ↔ anúncio rotacionando</option>
+        <option value="ponta_gondola">Ponta de gôndola — mídia por tela + anúncios em sync</option>
+      </select>
+      <p className="mb-3 text-xs text-slate-500">Em <strong>Encarte</strong>: depois de criar o local, suba a “Mídia do Encarte” no card pra começar a intercalação. Em <strong>Ponta de gôndola</strong>: cada TV cadastrada terá seu próprio upload de mídia ponta.</p>
       <p className="mb-3 text-xs text-slate-500">Lat/lng aparecem no <strong>Mapa</strong>; passantes/dia entram no cálculo de audiência estimada da campanha. O sistema atribui o <strong>Display Profile</strong> certo ({orientacao}) automaticamente ao vincular telas.</p>
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
       <button onClick={salvar} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Criar local</button>
