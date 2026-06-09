@@ -137,13 +137,29 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
     notify("Arte enviada com sucesso", "success");
     onChange();
   }
+  const [payModal, setPayModal] = useState<{ link: string } | null>(null);
   async function pagar() {
     setPayBusy(true);
-    const r = await api(token, `/api/painel/campanhas/${camp.id}/pagar`, { method: "POST" });
+    const r = await api(token, `/api/painel/campanhas/${camp.id}/cobrar-infinity`, { method: "POST" });
     const d = await r.json(); setPayBusy(false);
-    if (!d.ok || !d.init_point) { notify(d.error || "Erro ao gerar pagamento", "error"); return; }
-    window.location.href = d.init_point;
+    if (!d.ok || !d.link) { notify(d.error || "Erro ao gerar pagamento", "error"); return; }
+    setPayModal({ link: d.link });
   }
+  // Polling de status quando modal aberto
+  useEffect(() => {
+    if (!payModal) return;
+    const interval = setInterval(async () => {
+      const r = await api(token, `/api/painel/campanhas/${camp.id}/status-pagamento`);
+      const d = await r.json();
+      if (d.ok && d.status === "pago") {
+        clearInterval(interval);
+        setPayModal(null);
+        notify("Pagamento confirmado!", "success");
+        onChange();
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [payModal, token, camp.id, onChange]);
   async function carregarRel() {
     setVerRel(true);
     const r = await api(token, `/api/painel/campanhas/${camp.id}/relatorio`); const d = await r.json();
@@ -159,6 +175,20 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
           <div className="text-xs text-slate-500">{precisaPagar ? "Pagamento pendente" : camp.status_pagamento === "pago" ? "Pago ✓" : ""}</div>
         </div>
       </div>
+
+      {precisaPagar && (
+        <div className="mt-3 rounded-lg border border-amber-500/40 bg-gradient-to-br from-amber-500/15 to-orange-500/10 px-4 py-3 backdrop-blur-md">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-amber-200">⏳ Aguardando pagamento</p>
+              <p className="mt-0.5 text-xs text-amber-200/80">Pague {brl(Number(camp.valor))} via PIX ou cartão até 12x pra liberar o envio de arte e veiculação.</p>
+            </div>
+            <button onClick={pagar} disabled={payBusy} className="flex flex-shrink-0 items-center gap-2 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 disabled:opacity-50">
+              {payBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Pagar agora
+            </button>
+          </div>
+        </div>
+      )}
 
       {camp.arte_nome && <ArtePreview token={token} campId={camp.id} tipo={camp.arte_tipo} nome={camp.arte_nome} />}
 
@@ -181,16 +211,11 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
       {err && <p className="mt-3 text-sm text-red-400">{err}</p>}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark">
+        <label className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${precisaPagar ? "cursor-not-allowed bg-slate-700/50 text-slate-500" : "cursor-pointer bg-brand hover:bg-brand-dark"}`} title={precisaPagar ? "Pague primeiro pra enviar a arte" : ""}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
           {camp.arte_nome ? "Trocar arte" : "Enviar arte"}
-          <input ref={inputRef} type="file" accept="image/*,video/*" className="hidden" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) enviarArte(f); }} />
+          <input ref={inputRef} type="file" accept="image/*,video/*" className="hidden" disabled={busy || precisaPagar} onChange={e => { const f = e.target.files?.[0]; if (f) enviarArte(f); }} />
         </label>
-        {precisaPagar && (
-          <button onClick={pagar} disabled={payBusy} className="flex items-center gap-2 rounded-xl border border-emerald-500/40 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50">
-            {payBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Pagar {brl(Number(camp.valor))} (PIX/cartão)
-          </button>
-        )}
         {camp.status === "no_ar" && (
           <button onClick={carregarRel} className="flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5"><BarChart3 className="h-4 w-4" /> Relatório de exibições</button>
         )}
@@ -223,6 +248,35 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
           )}
         </div>
       )}
+
+      {payModal && <ModalPagamento link={payModal.link} valor={Number(camp.valor)} onClose={() => setPayModal(null)} />}
+    </div>
+  );
+}
+
+function ModalPagamento({ link, valor, onClose }: { link: string; valor: number; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+      <div className="flex w-full max-w-md flex-col rounded-2xl border border-white/15 bg-[#0a0a12] shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div>
+            <h3 className="text-lg font-bold text-white">💳 Pagar campanha</h3>
+            <p className="text-xs text-slate-400">{brl(valor)} via PIX ou cartão até 12x</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="p-5">
+          <p className="mb-4 text-sm text-slate-300">Clique no botão abaixo pra abrir a página segura da <strong>InfinityPay</strong>. Assim que o pagamento for confirmado, esta tela atualiza automaticamente.</p>
+          <a href={link} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 px-6 py-3 text-base font-bold text-white shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50">
+            <CreditCard className="h-5 w-5" /> Abrir página de pagamento
+          </a>
+          <div className="mt-4 rounded-lg bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200">
+            <p className="flex items-center gap-2 font-semibold">⏳ Aguardando confirmação...</p>
+            <p className="mt-1 text-emerald-200/80">Verificamos seu pagamento a cada 3 segundos. Pode fechar essa janela e abrir depois — quando pago, libera automaticamente.</p>
+          </div>
+          <p className="mt-4 text-center text-[10px] text-slate-500">Pagamento processado por CloudWalk InfinityPay · seguro e auditado</p>
+        </div>
+      </div>
     </div>
   );
 }
