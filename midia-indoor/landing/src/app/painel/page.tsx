@@ -159,21 +159,9 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
     notify("Arte enviada com sucesso", "success");
     onChange();
   }
-  const [payModal, setPayModal] = useState<{ link: string } | null>(null);
-  async function pagar() {
-    setPayBusy(true);
-    const r = await api(token, `/api/painel/campanhas/${camp.id}/cobrar-infinity`, { method: "POST" });
-    const d = await r.json(); setPayBusy(false);
-    if (!d.ok || !d.link) { notify(d.error || "Erro ao gerar pagamento", "error"); return; }
-    setPayModal({ link: d.link });
-  }
-  async function reativar() {
-    setPayBusy(true);
-    const r = await api(token, `/api/painel/campanhas/${camp.id}/reativar`, { method: "POST" });
-    const d = await r.json(); setPayBusy(false);
-    if (!d.ok || !d.link) { notify(d.error || "Erro ao gerar pagamento", "error"); return; }
-    setPayModal({ link: d.link });
-  }
+  const [payModal, setPayModal] = useState(false);
+  function pagar() { setPayModal(true); }
+  function reativar() { setPayModal(true); /* mesmo modal — backend escolhe se reativa ou cobra */ }
   // Polling de status quando modal aberto
   useEffect(() => {
     if (!payModal) return;
@@ -182,7 +170,7 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
       const d = await r.json();
       if (d.ok && d.status === "pago") {
         clearInterval(interval);
-        setPayModal(null);
+        setPayModal(false);
         notify("Pagamento confirmado!", "success");
         onChange();
       }
@@ -284,32 +272,100 @@ function CampanhaCard({ token, camp, onChange }: { token: string; camp: Camp; on
         </div>
       )}
 
-      {payModal && <ModalPagamento link={payModal.link} valor={Number(camp.valor)} onClose={() => setPayModal(null)} />}
+      {payModal && <ModalPagamento token={token} camp={camp} onClose={() => setPayModal(false)} />}
     </div>
   );
 }
 
-function ModalPagamento({ link, valor, onClose }: { link: string; valor: number; onClose: () => void }) {
+function ModalPagamento({ token, camp, onClose }: { token: string; camp: Camp; onClose: () => void }) {
+  const [aba, setAba] = useState<"pix" | "cartao">("pix");
+  const [pix, setPix] = useState<{ qr_code: string; qr_code_base64: string } | null>(null);
+  const [cartaoLink, setCartaoLink] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const valor = Number(camp.valor);
+  const endpoint = camp.status === "encerrada" ? "reativar" : "cobrar-infinity";
+
+  async function gerarPix() {
+    setBusy(true); setErr("");
+    const r = await api(token, `/api/painel/campanhas/${camp.id}/cobrar-pix-mp`, { method: "POST" });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro gerando PIX"); return; }
+    setPix({ qr_code: d.qr_code, qr_code_base64: d.qr_code_base64 });
+  }
+  async function gerarCartao() {
+    setBusy(true); setErr("");
+    const r = await api(token, `/api/painel/campanhas/${camp.id}/${endpoint}`, { method: "POST" });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok || !d.link) { setErr(d.error || "Erro"); return; }
+    setCartaoLink(d.link);
+  }
+  // Gera automatico a primeira aba ao abrir
+  useEffect(() => { if (aba === "pix" && !pix) gerarPix(); }, []); // eslint-disable-line
+
+  function copiarPix() {
+    if (!pix) return;
+    navigator.clipboard.writeText(pix.qr_code);
+    notify("Código PIX copiado!", "success");
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
-      <div className="flex w-full max-w-md flex-col rounded-2xl border border-white/15 bg-[#0a0a12] shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0a0a12] shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
             <h3 className="text-lg font-bold text-white">💳 Pagar campanha</h3>
-            <p className="text-xs text-slate-400">{brl(valor)} via PIX ou cartão até 12x</p>
+            <p className="text-xs text-slate-400">{brl(valor)}</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
         </div>
-        <div className="p-5">
-          <p className="mb-4 text-sm text-slate-300">Clique no botão abaixo pra abrir a página segura da <strong>InfinityPay</strong>. Assim que o pagamento for confirmado, esta tela atualiza automaticamente.</p>
-          <a href={link} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 px-6 py-3 text-base font-bold text-white shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50">
-            <CreditCard className="h-5 w-5" /> Abrir página de pagamento
-          </a>
-          <div className="mt-4 rounded-lg bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200">
-            <p className="flex items-center gap-2 font-semibold">⏳ Aguardando confirmação...</p>
-            <p className="mt-1 text-emerald-200/80">Verificamos seu pagamento a cada 3 segundos. Pode fechar essa janela e abrir depois — quando pago, libera automaticamente.</p>
-          </div>
-          <p className="mt-4 text-center text-[10px] text-slate-500">Pagamento processado por CloudWalk InfinityPay · seguro e auditado</p>
+
+        {/* Abas */}
+        <div className="flex border-b border-white/10">
+          <button onClick={() => { setAba("pix"); if (!pix) gerarPix(); }} className={`flex-1 px-4 py-3 text-sm font-semibold transition ${aba === "pix" ? "border-b-2 border-emerald-400 text-emerald-300 bg-emerald-500/5" : "text-slate-400 hover:text-white"}`}>
+            ⚡ PIX (instantâneo)
+          </button>
+          <button onClick={() => { setAba("cartao"); if (!cartaoLink) gerarCartao(); }} className={`flex-1 px-4 py-3 text-sm font-semibold transition ${aba === "cartao" ? "border-b-2 border-violet-400 text-violet-300 bg-violet-500/5" : "text-slate-400 hover:text-white"}`}>
+            💳 Cartão (até 12x)
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-5">
+          {busy && <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-slate-400" /></div>}
+          {err && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
+
+          {aba === "pix" && !busy && pix && (
+            <div className="space-y-4">
+              {pix.qr_code_base64 && (
+                <div className="flex justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`data:image/png;base64,${pix.qr_code_base64}`} alt="QR Pix" className="h-56 w-56 rounded-xl bg-white p-2" />
+                </div>
+              )}
+              <div>
+                <p className="mb-1 text-xs font-semibold text-slate-400">Ou copie o código PIX (copia e cola):</p>
+                <div className="flex gap-2">
+                  <textarea readOnly value={pix.qr_code} className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-mono outline-none" rows={3} />
+                  <button onClick={copiarPix} className="flex items-center gap-1 rounded-lg bg-emerald-500/20 px-3 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30">Copiar</button>
+                </div>
+              </div>
+              <div className="rounded-lg bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200">
+                <p className="font-semibold">⏳ Aguardando confirmação do PIX...</p>
+                <p className="mt-1 text-emerald-200/80">Assim que pagar, esta janela atualiza sozinha em alguns segundos.</p>
+              </div>
+              <p className="text-center text-[10px] text-slate-500">Processado por Mercado Pago · webhook ativo</p>
+            </div>
+          )}
+
+          {aba === "cartao" && !busy && cartaoLink && (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-300">Você será levado à página segura da <strong>InfinityPay</strong> pra preencher os dados do cartão (1x a 12x sem juros conforme política).</p>
+              <a href={cartaoLink} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-violet-500 to-violet-700 px-6 py-3 text-base font-bold text-white shadow-lg shadow-violet-500/30 hover:shadow-violet-500/50">
+                <CreditCard className="h-5 w-5" /> Abrir pagamento por cartão
+              </a>
+              <p className="text-center text-[10px] text-slate-500">Processado por CloudWalk InfinityPay</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -16,22 +16,40 @@ import { consultarPreApproval, consultarPagamento, validarAssinaturaWebhook } fr
 import { provisionarConta } from "@/lib/provisionar";
 import { enviarBoasVindas } from "@/lib/email";
 
-/** Pagamento único de campanha (Checkout Pro). external_reference = pagamento_id. */
+/**
+ * Pagamento único de campanha.
+ * external_reference pode ser:
+ *   - id de midia_pagamentos (fluxo antigo: Checkout Pro)
+ *   - id de midia_campanhas  (fluxo novo: PIX direto via cobrar-pix-mp)
+ */
 async function processarPagamento(paymentId: string): Promise<void> {
   const info = await consultarPagamento(paymentId);
   if (info.status !== "approved") return;
-  const pagamentoId = info.external_reference;
-  if (!pagamentoId) return;
+  const ref = info.external_reference;
+  if (!ref) return;
 
   await ensureSchema();
   const p = db();
+
+  // 1) tenta como pagamento (Checkout Pro)
   const pag = await p.query<{ campanha_id: string }>(
     `UPDATE midia_pagamentos SET status='pago', gateway_ref=$1, pago_em=NOW()
       WHERE id=$2 AND status<>'pago' RETURNING campanha_id`,
-    [paymentId, pagamentoId]
-  ).then(r => r.rows[0]);
-  if (pag) {
+    [paymentId, ref]
+  ).then(r => r.rows[0]).catch(() => null);
+  if (pag?.campanha_id) {
     await p.query(`UPDATE midia_campanhas SET status_pagamento='pago', updated_at=NOW() WHERE id=$1`, [pag.campanha_id]);
+    return;
+  }
+
+  // 2) tenta como campanha (PIX direto novo)
+  const camp = await p.query<{ id: string }>(
+    `UPDATE midia_campanhas SET status_pagamento='pago', updated_at=NOW()
+      WHERE id=$1 AND status_pagamento<>'pago' RETURNING id`,
+    [ref]
+  ).then(r => r.rows[0]).catch(() => null);
+  if (camp?.id) {
+    console.log(`[mp webhook] PIX direto confirmado pra campanha ${camp.id} (payment ${paymentId})`);
   }
 }
 

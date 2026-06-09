@@ -122,6 +122,63 @@ export async function criarPagamentoUnico(opts: {
   return { id: data.id, init_point: data.init_point };
 }
 
+/**
+ * Cria pagamento PIX DIRETO via MP (gera QR code + copia-cola inline).
+ * Diferente do criarPagamentoUnico que abre uma página Checkout Pro, este
+ * retorna o QR/payload pra mostrar dentro do nosso modal.
+ *
+ * Webhook chega em /api/pagamento/webhook quando o PIX for confirmado.
+ */
+export async function criarPixDireto(opts: {
+  referencia: string;       // external_reference (ex: campanha_id)
+  titulo: string;
+  valor: number;
+  email: string;            // obrigatório pro MP
+  nomePagador?: string;
+}): Promise<{ id: string; qr_code: string; qr_code_base64: string; ticket_url: string; expira_em: string }> {
+  if (!MP_TOKEN) throw new Error("MP_ACCESS_TOKEN não configurado");
+
+  const r = await fetch(`${MP_API}/v1/payments`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${MP_TOKEN}`,
+      "X-Idempotency-Key": `${opts.referencia}-${Date.now()}`,
+    },
+    body: JSON.stringify({
+      transaction_amount: Number(opts.valor.toFixed(2)),
+      description: opts.titulo,
+      payment_method_id: "pix",
+      external_reference: opts.referencia,
+      notification_url: `${APP_URL}/api/pagamento/webhook`,
+      payer: {
+        email: opts.email,
+        first_name: opts.nomePagador?.split(" ")[0],
+        last_name: opts.nomePagador?.split(" ").slice(1).join(" ") || "—",
+      },
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await r.json() as {
+    id?: string;
+    point_of_interaction?: { transaction_data?: { qr_code?: string; qr_code_base64?: string; ticket_url?: string } };
+    date_of_expiration?: string;
+    message?: string;
+  };
+  if (!r.ok || !data.id) {
+    throw new Error(`MP PIX falhou: ${data.message ?? JSON.stringify(data).slice(0, 200)}`);
+  }
+  const qr = data.point_of_interaction?.transaction_data;
+  if (!qr?.qr_code) throw new Error("MP PIX sem QR retornado");
+  return {
+    id: String(data.id),
+    qr_code: qr.qr_code,                 // copia-e-cola
+    qr_code_base64: qr.qr_code_base64 ?? "",
+    ticket_url: qr.ticket_url ?? "",
+    expira_em: data.date_of_expiration ?? "",
+  };
+}
+
 /** Consulta um pagamento (payment) por id → status + external_reference. */
 export async function consultarPagamento(paymentId: string): Promise<{ status: string; external_reference?: string }> {
   const r = await fetch(`${MP_API}/v1/payments/${paymentId}`, {
