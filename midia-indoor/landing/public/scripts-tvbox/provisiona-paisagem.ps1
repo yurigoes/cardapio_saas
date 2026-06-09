@@ -114,6 +114,18 @@ show-scam-warning = 'N'
     Ok "Senha permanente '$RustSenha' gravada"
   }
 
+  # ATENCAO: o RustDesk pode resetar o toml ao primeiro start.
+  # Pra garantir, sobrescreve mais 1x APOS o app ter gerado RustDesk.toml inicial
+  Step "Re-gravando RustDesk2.toml pra garantir config (alguns APKs resetam ao primeiro start)"
+  $tmp3 = New-TemporaryFile
+  [System.IO.File]::WriteAllBytes($tmp3.FullName, [System.Text.Encoding]::UTF8.GetBytes($rd2))
+  adb -s $device push $tmp3.FullName "/sdcard/RustDesk2.toml" | Out-Null
+  adb -s $device shell "su -c 'cp /sdcard/RustDesk2.toml /data/data/com.carriez.flutter_hbb/app_flutter/RustDesk2.toml'" | Out-Null
+  adb -s $device shell "rm /sdcard/RustDesk2.toml" | Out-Null
+  Remove-Item $tmp3.FullName -ErrorAction SilentlyContinue
+  # Apaga RustDesk.toml pra gerar ID novo associado ao server proprio (nao o publico)
+  adb -s $device shell "su -c 'rm /data/data/com.carriez.flutter_hbb/app_flutter/RustDesk.toml 2>/dev/null'" | Out-Null
+
   # Ativa servico + permissoes via taps PAISAGEM
   Step "Ativando servico RustDesk via taps automaticos (paisagem)"
   Ativar-RustDeskServicoPaisagem -device $device
