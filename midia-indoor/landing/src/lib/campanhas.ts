@@ -316,14 +316,44 @@ export async function relatorioCampanha(campanhaId: string): Promise<{ plays: nu
   return { plays: s.plays, duracao: s.duracao };
 }
 
-/** Relatório detalhado: cada exibição com horário + local + contagem (transparência). */
-export async function relatorioDetalhado(campanhaId: string): Promise<{ resumo: { plays: number; duracao: number }; exibicoes: ExibicaoLinha[] } | null> {
+/** Relatório detalhado: cada exibição com horário + local + contagem (transparência).
+ *  Se Xibo retornar 0 (stats ainda nao foram coletados ou erro), faz fallback pra
+ *  estimativa calculada (dias × insercoes_dia × locais) - assim o cliente NUNCA ve 0.
+ */
+export async function relatorioDetalhado(campanhaId: string): Promise<{ resumo: { plays: number; duracao: number; estimado: boolean; metodo: string }; exibicoes: ExibicaoLinha[] } | null> {
   const camp = await carregar(campanhaId);
   if (!camp?.xibo_campaign_id || !camp.data_inicio) return null;
   const from = `${ymd(camp.data_inicio)} 00:00:00`;
   const to   = `${ymd(camp.data_fim ?? camp.data_inicio)} 23:59:59`;
   const exibicoes = await statsDetalhe(camp.xibo_campaign_id, from, to);
-  const plays = exibicoes.reduce((s, e) => s + e.numberPlays, 0);
-  const duracao = exibicoes.reduce((s, e) => s + e.duration, 0);
-  return { resumo: { plays, duracao }, exibicoes };
+  const playsReais = exibicoes.reduce((s, e) => s + e.numberPlays, 0);
+  const duracaoReal = exibicoes.reduce((s, e) => s + e.duration, 0);
+
+  if (playsReais > 0) {
+    return { resumo: { plays: playsReais, duracao: duracaoReal, estimado: false, metodo: "xibo_stats" }, exibicoes };
+  }
+
+  // Fallback: estimativa baseada em config da campanha
+  // (dias decorridos + insercoes/dia × qtd locais × segundos)
+  const inicio = new Date(camp.data_inicio);
+  const fim    = camp.data_fim ? new Date(camp.data_fim) : new Date();
+  const hoje   = new Date();
+  const dataFinal = hoje < fim ? hoje : fim;
+  const diasCorridos = Math.max(1, Math.ceil((dataFinal.getTime() - inicio.getTime()) / (1000*60*60*24)));
+  // Conta locais (display groups vinculados)
+  let qtdLocais = 1;
+  try {
+    const locaisR = await db().query<{ n: string }>(
+      `SELECT COUNT(*)::TEXT AS n FROM midia_campanha_locais WHERE campanha_id = $1`, [campanhaId]
+    );
+    qtdLocais = Math.max(1, Number(locaisR.rows[0]?.n ?? 1));
+  } catch {}
+
+  const playsEstimado    = diasCorridos * (camp.insercoes_dia ?? 0) * qtdLocais;
+  const duracaoEstimada  = playsEstimado * (camp.segundos ?? 0);
+
+  return {
+    resumo: { plays: playsEstimado, duracao: duracaoEstimada, estimado: true, metodo: `estimado (${diasCorridos} dia${diasCorridos>1?'s':''} × ${camp.insercoes_dia}/dia × ${qtdLocais} local${qtdLocais>1?'is':''})` },
+    exibicoes,
+  };
 }

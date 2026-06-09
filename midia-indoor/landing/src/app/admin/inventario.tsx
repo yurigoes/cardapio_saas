@@ -127,6 +127,7 @@ function PrintModal({ token, item, onClose }: { token: string; item: ItemInv; on
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [takenAt, setTakenAt] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [solicitando, setSolicitando] = useState(false);
   const [erro, setErro] = useState("");
 
   async function carregar() {
@@ -146,6 +147,32 @@ function PrintModal({ token, item, onClose }: { token: string; item: ItemInv; on
     } catch (e) { setErro(String(e)); }
     setCarregando(false);
   }
+
+  async function solicitarPrint() {
+    setSolicitando(true);
+    const r = await aapi(token, "/api/admin/inventario/screenshot-request", { method: "POST", body: JSON.stringify({ id: item.id }) });
+    const d = await r.json();
+    if (!d.ok) { notify(d.error || "Erro ao solicitar", "error"); setSolicitando(false); return; }
+    notify(d.ja_pendente ? "Já tem solicitação pendente — o agente vai capturar em até 15s" : "Print solicitado — o agente vai capturar em até 15s", "info");
+    // Poll a cada 5s por até 60s pra mostrar quando chegar
+    let tentativas = 0;
+    const lastTaken = takenAt;
+    const poll = setInterval(async () => {
+      tentativas++;
+      try {
+        const r2 = await fetch(`/api/admin/inventario/screenshot?id=${item.id}&t=${Date.now()}`, { headers: { Authorization: `Bearer ${token}` } });
+        const novaTaken = r2.headers.get("X-Taken-At");
+        if (r2.ok && novaTaken && novaTaken !== lastTaken) {
+          clearInterval(poll); setSolicitando(false);
+          await carregar();
+          notify("Print atualizado!", "success");
+          return;
+        }
+      } catch {}
+      if (tentativas >= 12) { clearInterval(poll); setSolicitando(false); notify("Sem resposta do agente. Confirme que ele está rodando (-WatchRequests).", "error"); }
+    }, 5000);
+  }
+
   useEffect(() => { carregar(); }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -158,7 +185,10 @@ function PrintModal({ token, item, onClose }: { token: string; item: ItemInv; on
             {!takenAt && imgUrl === null && !carregando && <p className="text-xs text-amber-300">Sem print disponível ainda</p>}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={carregar} disabled={carregando} className="rounded-lg border border-white/15 p-2 hover:bg-white/5"><RefreshCw className={`h-4 w-4 ${carregando ? "animate-spin" : ""}`} /></button>
+            <button onClick={solicitarPrint} disabled={solicitando} title="Solicitar novo print" className="flex items-center gap-1 rounded-lg bg-gradient-to-br from-cyan-600 to-cyan-700 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-cyan-700/30 hover:shadow-cyan-700/50 disabled:opacity-50">
+              {solicitando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />} {solicitando ? "Aguardando agente..." : "Tirar print agora"}
+            </button>
+            <button onClick={carregar} disabled={carregando} title="Recarregar" className="rounded-lg border border-white/15 p-2 hover:bg-white/5"><RefreshCw className={`h-4 w-4 ${carregando ? "animate-spin" : ""}`} /></button>
             <button onClick={onClose}><X className="h-5 w-5 text-slate-400" /></button>
           </div>
         </div>
@@ -170,11 +200,10 @@ function PrintModal({ token, item, onClose }: { token: string; item: ItemInv; on
             <p className="text-sm font-semibold text-amber-200">Sem print disponível ainda</p>
             <p className="mt-2 text-xs text-slate-400">{erro}</p>
             <div className="mt-4 rounded-lg bg-black/30 p-3 text-left text-xs">
-              <p className="mb-2 font-semibold text-cyan-300">📥 Como capturar:</p>
-              <p className="mb-2 text-slate-300">No PC da rede local (mesma LAN das TVs):</p>
-              <code className="block rounded bg-black/40 p-2 font-mono text-emerald-300">A:\Sistemas\xibo-mod\tirar-prints.ps1</code>
-              <p className="mt-2 text-slate-400">Ou loop a cada 5 min:</p>
-              <code className="block rounded bg-black/40 p-2 font-mono text-emerald-300">.\tirar-prints.ps1 -Loop -IntervaloSegundos 300</code>
+              <p className="mb-2 font-semibold text-cyan-300">📥 Como capturar pela primeira vez:</p>
+              <p className="mb-2 text-slate-300">No PC da rede local (mesma LAN das TVs), rode o agente em modo WATCH:</p>
+              <code className="block rounded bg-black/40 p-2 font-mono text-emerald-300">A:\Sistemas\xibo-mod\tirar-prints.ps1 -WatchRequests</code>
+              <p className="mt-2 text-slate-400">Aí volta aqui e clica em <strong>"Tirar print agora"</strong> no topo — o agente captura em 15s.</p>
             </div>
           </div>
         ) : imgUrl ? (

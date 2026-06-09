@@ -15,7 +15,9 @@ param(
   [string]$Secret = "td-provision-2026",
   [string]$Ip = "",          # se preenchido, so essa IP
   [switch]$Loop,
-  [int]$IntervaloSegundos = 300
+  [int]$IntervaloSegundos = 300,
+  [switch]$WatchRequests,    # poll fila de requests do admin
+  [int]$WatchIntervalSegundos = 15
 )
 
 $ErrorActionPreference = "Continue"
@@ -98,7 +100,32 @@ function Rodar-Uma-Vez() {
   }
 }
 
-if ($Loop) {
+function Processar-Fila() {
+  try {
+    $r = Invoke-RestMethod -Uri "$SaasUrl/api/admin/inventario/screenshot-request?secret=$Secret" -Method Get -TimeoutSec 15
+    if (-not $r.ok) { return }
+    if ($r.requests.Count -eq 0) { return }
+    Step "$($r.requests.Count) request(s) na fila"
+    foreach ($req in $r.requests) {
+      try {
+        Tirar-Print -ip $req.ip -mac $req.mac -nome "request"
+        $patchBody = @{ secret = $Secret; id = $req.id; status = "capturado" } | ConvertTo-Json
+        Invoke-RestMethod -Uri "$SaasUrl/api/admin/inventario/screenshot-request" -Method Patch -Body $patchBody -ContentType "application/json" -TimeoutSec 15 | Out-Null
+      } catch {
+        $patchBody = @{ secret = $Secret; id = $req.id; status = "falha"; erro = "$_" } | ConvertTo-Json
+        Invoke-RestMethod -Uri "$SaasUrl/api/admin/inventario/screenshot-request" -Method Patch -Body $patchBody -ContentType "application/json" -TimeoutSec 15 | Out-Null
+      }
+    }
+  } catch { Warn "Erro pollando fila: $_" }
+}
+
+if ($WatchRequests) {
+  Write-Host "`n===== Modo WATCH - poll fila a cada $WatchIntervalSegundos s (Ctrl+C pra parar) =====`n" -ForegroundColor Magenta
+  while ($true) {
+    Processar-Fila
+    Start-Sleep -Seconds $WatchIntervalSegundos
+  }
+} elseif ($Loop) {
   Write-Host "`n===== Modo LOOP - intervalo $IntervaloSegundos s (Ctrl+C pra parar) =====`n" -ForegroundColor Magenta
   while ($true) {
     Rodar-Uma-Vez

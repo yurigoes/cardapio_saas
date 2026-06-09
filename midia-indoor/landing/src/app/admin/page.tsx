@@ -39,12 +39,22 @@ export default function AdminPage() {
   const [aba, setAba]     = useState<Aba>("dashboard");
   const [pronto, setPronto] = useState(false);
 
+  const [logoUrl, setLogoUrl] = useState<string>("");
+  const [marcaNome, setMarcaNome] = useState<string>("Three Digital Mídia");
+
   useEffect(() => {
     const t = localStorage.getItem(TOKEN_KEY);
     setToken(t);
     setRole(localStorage.getItem("midia_admin_role") ?? "");
     setNome(localStorage.getItem("midia_admin_nome") ?? "");
     setPronto(true);
+    // Carrega branding pra logo no header
+    fetch("/api/branding").then(r => r.json()).then(d => {
+      if (d?.ok && d.branding) {
+        if (d.branding.logo_url) setLogoUrl(d.branding.logo_url);
+        if (d.branding.nome) setMarcaNome(d.branding.nome);
+      }
+    }).catch(() => {});
   }, []);
 
   function sair() {
@@ -99,12 +109,17 @@ export default function AdminPage() {
         <NotifyHost />
         <header className="sticky top-0 z-40 border-b border-white/10 bg-[#05060f]/85 backdrop-blur-2xl backdrop-saturate-150">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-dark shadow-lg shadow-brand/30">
-                <Tv className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-bold leading-tight">Three Digital Mídia</p>
+            <div className="flex items-center gap-3">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt={marcaNome} className="h-9 max-w-[150px] object-contain" />
+              ) : (
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-dark shadow-lg shadow-brand/30">
+                  <Tv className="h-5 w-5 text-white" />
+                </div>
+              )}
+              <div className="hidden sm:block">
+                <p className="text-sm font-bold leading-tight">{marcaNome}</p>
                 <p className="text-[10px] uppercase tracking-wider text-slate-500">Admin · {role}</p>
               </div>
             </div>

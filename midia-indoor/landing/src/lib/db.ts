@@ -511,6 +511,41 @@ export async function ensureSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_screenshots_mac ON midia_screenshots(mac, taken_at DESC);
     CREATE INDEX IF NOT EXISTS idx_screenshots_inv ON midia_screenshots(inventario_id, taken_at DESC);
+
+    CREATE TABLE IF NOT EXISTS midia_screenshot_requests (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      inventario_id UUID NOT NULL REFERENCES midia_inventario(id) ON DELETE CASCADE,
+      mac           TEXT NOT NULL,
+      ip            TEXT,
+      status        TEXT NOT NULL DEFAULT 'pendente', -- pendente|capturado|falha
+      requested_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      done_at       TIMESTAMPTZ,
+      erro          TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_screen_req_status ON midia_screenshot_requests(status, requested_at);
+  `);
+
+  // Kits do inventario (TV + box + cabos = 1 kit) com depreciacao
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_inventario_kits (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      nome          TEXT NOT NULL,
+      local_id      UUID REFERENCES midia_locais(id) ON DELETE SET NULL,
+      vida_util_anos INT DEFAULT 5,
+      observacao    TEXT,
+      ativo         BOOLEAN NOT NULL DEFAULT true,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS midia_inventario_kit_itens (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      kit_id        UUID NOT NULL REFERENCES midia_inventario_kits(id) ON DELETE CASCADE,
+      inventario_id UUID REFERENCES midia_inventario(id) ON DELETE SET NULL,
+      descricao     TEXT NOT NULL,
+      quantidade    INT NOT NULL DEFAULT 1,
+      valor_unit    DECIMAL(10,2) NOT NULL DEFAULT 0,
+      comprado_em   DATE
+    );
+    CREATE INDEX IF NOT EXISTS idx_kit_itens_kit ON midia_inventario_kit_itens(kit_id);
   `);
 
   // ─── Multi-tenant / White-label (operadores DOOH revendendo o SaaS) ────
