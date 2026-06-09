@@ -17,6 +17,7 @@ import { HealthcheckBar } from "./healthcheck-bar";
 import { Tenants } from "./tenants";
 import { PlayerApkUploader } from "./player-apk";
 import { Seguranca2FA } from "./seguranca-2fa";
+import { PageHeader, PrimaryBtn, GhostBtn, PremiumTable, THead, TRow, StatusBadge, EmptyState, SearchInput } from "@/components/Premium";
 import { TelasOrfas } from "./telas-orfas";
 import { Inventario } from "./inventario";
 
@@ -394,38 +395,45 @@ function Campanhas({ token, isMaster }: { token: string; isMaster: boolean }) {
   }, [token]);
   useEffect(() => { load(); }, [load]);
 
+  const statusCor = (s: string): "emerald" | "amber" | "slate" => s === "no_ar" ? "emerald" : s === "aguardando_arte" || s === "pausada" ? "amber" : "slate";
+  const pagamentoCor = (s: string): "emerald" | "amber" | "slate" => s === "pago" ? "emerald" : s === "isento" ? "slate" : "amber";
+
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-bold">Campanhas</h2>
-        <div className="flex gap-2">
-          <button onClick={load} className="rounded-xl border border-white/10 p-2 hover:bg-white/5"><RefreshCw className="h-4 w-4" /></button>
-          {isMaster && <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Nova campanha</button>}
-        </div>
-      </div>
-      {loading ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
-        <div className="overflow-x-auto rounded-xl border border-white/10">
-          <table className="w-full text-sm">
-            <thead className="bg-white/5 text-left text-slate-400"><tr>
-              <th className="p-3">Campanha / Anunciante</th><th className="p-3">Tipo</th><th className="p-3">Inserções</th>
-              <th className="p-3">Período</th><th className="p-3">Locais</th><th className="p-3">Status</th><th className="p-3">Pgto</th>
-            </tr></thead>
-            <tbody>
-              {camps.map(c => (
-                <tr key={c.id} className="cursor-pointer border-t border-white/5 hover:bg-white/5" onClick={() => setDetalhe(c)}>
-                  <td className="p-3"><div className="font-medium">{c.nome}</div><div className="text-xs text-slate-400">{c.empresa}</div></td>
-                  <td className="p-3 text-xs">{TIPO_LABEL[c.tipo] ?? c.tipo}</td>
-                  <td className="p-3 text-xs">{c.insercoes_dia}/dia · {c.segundos}s</td>
-                  <td className="p-3 text-xs">{c.data_inicio ?? "—"}{c.data_fim ? ` → ${c.data_fim}` : ""}</td>
-                  <td className="p-3">{c.locais}</td>
-                  <td className="p-3"><span className={`text-xs font-medium capitalize ${STATUS_CAMP[c.status] ?? ""}`}>{c.status.replace("_", " ")}</span></td>
-                  <td className="p-3"><span className={`text-xs ${c.status_pagamento === "pago" ? "text-emerald-300" : c.status_pagamento === "isento" ? "text-slate-400" : "text-amber-300"}`}>{c.status_pagamento}</span></td>
-                </tr>
-              ))}
-              {!camps.length && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Nenhuma campanha ainda.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+      <PageHeader
+        icon={Megaphone} title="Campanhas"
+        subtitle={`${camps.length} ${camps.length === 1 ? "campanha cadastrada" : "campanhas cadastradas"}`}
+        actions={
+          <>
+            <GhostBtn onClick={load} icon={RefreshCw} busy={loading}>Atualizar</GhostBtn>
+            {isMaster && <PrimaryBtn onClick={() => setNovo(true)}>Nova campanha</PrimaryBtn>}
+          </>
+        }
+      />
+      {loading && !camps.length ? (
+        <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>
+      ) : !camps.length ? (
+        <EmptyState icon={Megaphone} title="Nenhuma campanha ainda" description={isMaster ? "Cria a primeira campanha pra começar." : "Aguardando o master cadastrar."} action={isMaster ? <PrimaryBtn onClick={() => setNovo(true)}>Nova campanha</PrimaryBtn> : undefined} />
+      ) : (
+        <PremiumTable>
+          <THead cols={["Campanha / Anunciante", "Tipo", "Inserções", "Período", "Locais", "Status", "Pgto"]} />
+          <tbody>
+            {camps.map(c => (
+              <TRow key={c.id} onClick={() => setDetalhe(c)}>
+                <td className="px-4 py-3">
+                  <div className="font-semibold">{c.nome}</div>
+                  <div className="text-xs text-slate-400">{c.empresa}</div>
+                </td>
+                <td className="px-4 py-3 text-xs text-slate-300">{TIPO_LABEL[c.tipo] ?? c.tipo}</td>
+                <td className="px-4 py-3 text-xs text-slate-300"><span className="font-bold text-brand-light">{c.insercoes_dia}</span>/dia · {c.segundos}s</td>
+                <td className="px-4 py-3 text-xs text-slate-400">{c.data_inicio ?? "—"}{c.data_fim ? <span className="text-slate-500"> → {c.data_fim}</span> : ""}</td>
+                <td className="px-4 py-3"><span className="rounded bg-white/5 px-2 py-0.5 text-xs font-semibold">{c.locais}</span></td>
+                <td className="px-4 py-3"><StatusBadge label={c.status.replace("_", " ")} color={statusCor(c.status)} dot /></td>
+                <td className="px-4 py-3"><StatusBadge label={c.status_pagamento} color={pagamentoCor(c.status_pagamento)} /></td>
+              </TRow>
+            ))}
+          </tbody>
+        </PremiumTable>
       )}
       {novo && <NovaCampanhaModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
       {detalhe && <CampanhaDetalhe token={token} camp={detalhe} isMaster={isMaster} onClose={() => setDetalhe(null)} onChange={load} />}
@@ -833,32 +841,45 @@ function Anunciantes({ token, isMaster }: { token: string; isMaster: boolean }) 
   }, [token, q]);
   useEffect(() => { load(); }, [load]);
 
+  const statusCor = (s: string): "emerald" | "amber" | "red" | "slate" =>
+    s === "ativo" ? "emerald" : s === "pendente" ? "amber" : s === "suspenso" ? "red" : "slate";
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2">
-        <div className="flex flex-1 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3">
-          <Search className="h-4 w-4 text-slate-500" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar anunciante" className="w-full bg-transparent py-2 text-sm outline-none" />
-        </div>
-        {isMaster && <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo anunciante</button>}
-      </div>
-      {loading ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
-        <div className="overflow-x-auto rounded-xl border border-white/10">
-          <table className="w-full text-sm">
-            <thead className="bg-white/5 text-left text-slate-400"><tr><th className="p-3">Empresa / Contato</th><th className="p-3">Campanhas</th><th className="p-3">Status</th><th className="p-3"></th></tr></thead>
-            <tbody>
-              {lista.map(a => (
-                <tr key={a.id} className="border-t border-white/5">
-                  <td className="p-3"><div className="font-medium">{a.empresa}</div><div className="text-xs text-slate-400">{a.nome} · {a.email}{a.whatsapp ? ` · ${a.whatsapp}` : ""}</div></td>
-                  <td className="p-3">{a.campanhas}</td>
-                  <td className="p-3"><Badge s={a.status} /></td>
-                  <td className="p-3 text-right">{isMaster && <button onClick={() => setContratoFor(a)} className="rounded border border-white/15 px-2 py-1 text-xs hover:bg-white/5">Contrato</button>}</td>
-                </tr>
-              ))}
-              {!lista.length && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhum anunciante.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+      <PageHeader
+        icon={UserCog} title="Anunciantes"
+        subtitle={`${lista.length} ${lista.length === 1 ? "anunciante cadastrado" : "anunciantes cadastrados"}`}
+        actions={
+          <>
+            <SearchInput value={q} onChange={setQ} placeholder="Buscar anunciante..." />
+            {isMaster && <PrimaryBtn onClick={() => setNovo(true)}>Novo anunciante</PrimaryBtn>}
+          </>
+        }
+      />
+      {loading && !lista.length ? (
+        <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>
+      ) : !lista.length ? (
+        <EmptyState icon={UserCog} title={q ? "Nenhum resultado" : "Nenhum anunciante ainda"} description={q ? `Não encontramos anunciantes com "${q}"` : "Cadastre o primeiro anunciante pra começar."} action={!q && isMaster ? <PrimaryBtn onClick={() => setNovo(true)}>Novo anunciante</PrimaryBtn> : undefined} />
+      ) : (
+        <PremiumTable>
+          <THead cols={["Empresa / Contato", "Campanhas", "Status", ""]} />
+          <tbody>
+            {lista.map(a => (
+              <TRow key={a.id}>
+                <td className="px-4 py-3">
+                  <div className="font-semibold">{a.empresa}</div>
+                  <div className="text-xs text-slate-400">{a.nome} · {a.email}{a.whatsapp ? ` · ${a.whatsapp}` : ""}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="inline-flex items-center justify-center rounded-full bg-brand/15 px-3 py-0.5 text-xs font-bold text-brand-light">{a.campanhas}</span>
+                </td>
+                <td className="px-4 py-3"><StatusBadge label={a.status} color={statusCor(a.status)} dot /></td>
+                <td className="px-4 py-3 text-right">
+                  {isMaster && <button onClick={() => setContratoFor(a)} className="rounded-lg border border-white/15 bg-white/5 px-3 py-1 text-xs hover:bg-white/10">Contrato</button>}
+                </td>
+              </TRow>
+            ))}
+          </tbody>
+        </PremiumTable>
       )}
       {novo && <AnuncModal token={token} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
       {contratoFor && <GerarContratoModal token={token} conta={{ id: contratoFor.id, empresa: contratoFor.empresa }} onClose={() => setContratoFor(null)} />}
@@ -898,19 +919,28 @@ function Locais({ token }: { token: string }) {
   const load = useCallback(async () => { const r = await aapi(token, "/api/admin/locais"); const d = await r.json(); if (d.ok) setLista(d.locais); }, [token]);
   useEffect(() => { load(); }, [load]);
   async function toggle(l: Local) { await aapi(token, "/api/admin/locais", { method: "PATCH", body: JSON.stringify({ id: l.id, ativo: !l.ativo }) }); load(); }
+  const ativos = lista.filter(l => l.ativo).length;
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-bold">Locais (inventário)</h2>
-        <div className="flex gap-2">
-          <button onClick={() => setNovoGrupo(true)} className="flex items-center gap-2 rounded-xl border border-amber-500/40 px-4 py-2 text-sm font-semibold text-amber-300 hover:bg-amber-500/10"><Plus className="h-4 w-4" /> Novo grupo (ex: 8 gôndolas)</button>
-          <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo local</button>
+      <PageHeader
+        icon={MapPin} title="Locais"
+        subtitle={`${ativos} ${ativos === 1 ? "local ativo" : "locais ativos"} de ${lista.length}`}
+        actions={
+          <>
+            <button onClick={() => setNovoGrupo(true)} className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/15">
+              <Plus className="h-4 w-4" /> Grupo de TVs
+            </button>
+            <PrimaryBtn onClick={() => setNovo(true)}>Novo local</PrimaryBtn>
+          </>
+        }
+      />
+      {!lista.length ? (
+        <EmptyState icon={MapPin} title="Nenhum local cadastrado" description="Cadastre seus pontos de mídia indoor (supermercado, totem, loja…)." action={<PrimaryBtn onClick={() => setNovo(true)}>Novo local</PrimaryBtn>} />
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {lista.map(l => <LocalCard key={l.id} token={token} local={l} onChange={load} onToggle={() => toggle(l)} />)}
         </div>
-      </div>
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {lista.map(l => <LocalCard key={l.id} token={token} local={l} onChange={load} onToggle={() => toggle(l)} />)}
-        {!lista.length && <p className="text-sm text-slate-500">Nenhum local. Cadastre seus pontos de mídia.</p>}
-      </div>
+      )}
 
       <GruposDeLocais token={token} locaisDisponiveis={lista} />
 
@@ -1366,12 +1396,14 @@ function Telas({ token }: { token: string }) {
   const pendentes = displays.filter(d => !d.autorizado);
   const ativos = displays.filter(d => d.autorizado);
 
+  const online = displays.filter(d => d.online).length;
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-bold">Telas (players)</h2>
-        <button onClick={load} className="rounded-xl border border-white/10 p-2 hover:bg-white/5"><RefreshCw className="h-4 w-4" /></button>
-      </div>
+      <PageHeader
+        icon={MonitorPlay} title="Telas"
+        subtitle={`${online} online · ${displays.length} totais${pendentes.length ? ` · ${pendentes.length} aguardando autorização` : ""}`}
+        actions={<GhostBtn onClick={load} icon={RefreshCw} busy={loading}>Atualizar</GhostBtn>}
+      />
       <p className="mb-4 text-xs text-slate-500">Instale o app Xibo Player na TV apontando pra <strong>midia.tthreedigital.com.br</strong>. A tela aparece aqui como pendente — vincule a um local com 1 clique.</p>
       {erro && <p className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400">{erro}</p>}
       {loading ? <Loader2 className="h-6 w-6 animate-spin text-slate-500" /> : (
