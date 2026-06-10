@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     const rows = await db().query(
       `SELECT l.id, l.nome, l.cidade, l.endereco, l.descricao, l.largura, l.altura, l.xibo_display_group_id, l.ativo, l.conteudo_nome, l.splash_nome, l.capacidade_dia, l.orientacao, l.lat, l.lng, l.passantes_dia, l.created_at, l.tipo,
               l.plano_veiculacao, l.encarte_nome, l.encarte_inicio, l.encarte_fim, l.encarte_duracao_seg,
+              l.hora_abertura, l.hora_fechamento,
               (SELECT COUNT(*)::int FROM midia_encarte_paginas p WHERE p.local_id = l.id) AS encarte_paginas
          FROM midia_locais l
         WHERE l.archived_at IS NULL AND (l.tipo IS NULL OR l.tipo='individual')
@@ -43,6 +44,8 @@ const novo = z.object({
   lat: z.coerce.number().optional().nullable(),
   lng: z.coerce.number().optional().nullable(),
   passantes_dia: z.coerce.number().int().min(0).default(0),
+  hora_abertura:   z.string().regex(/^\d{2}:\d{2}$/).default("06:00"),
+  hora_fechamento: z.string().regex(/^\d{2}:\d{2}$/).default("22:00"),
 });
 
 export async function POST(req: NextRequest) {
@@ -63,9 +66,9 @@ export async function POST(req: NextRequest) {
     const altura  = b.altura  ?? (b.orientacao === "paisagem" ? 1080 : 1920);
 
     const id = await db().query<{ id: string }>(
-      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, capacidade_dia, orientacao, lat, lng, passantes_dia, xibo_display_group_id, plano_veiculacao)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
-      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, largura, altura, b.capacidade_dia, b.orientacao, b.lat ?? null, b.lng ?? null, b.passantes_dia, dgId, b.plano_veiculacao]
+      `INSERT INTO midia_locais (nome, cidade, endereco, descricao, largura, altura, capacidade_dia, orientacao, lat, lng, passantes_dia, xibo_display_group_id, plano_veiculacao, hora_abertura, hora_fechamento)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+      [b.nome, b.cidade ?? null, b.endereco ?? null, b.descricao ?? null, largura, altura, b.capacidade_dia, b.orientacao, b.lat ?? null, b.lng ?? null, b.passantes_dia, dgId, b.plano_veiculacao, b.hora_abertura, b.hora_fechamento]
     ).then(r => r.rows[0].id);
     return NextResponse.json({ ok: true, id, xibo_display_group_id: dgId });
   } catch (err) {
@@ -89,6 +92,8 @@ const patch = z.object({
   passantes_dia: z.coerce.number().int().min(0).optional(),
   ativo: z.boolean().optional(),
   plano_veiculacao: z.enum(["publicidade", "encarte_totem", "ponta_gondola"]).optional(),
+  hora_abertura:   z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  hora_fechamento: z.string().regex(/^\d{2}:\d{2}$/).optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -104,7 +109,7 @@ export async function PATCH(req: NextRequest) {
 
   const sets: string[] = []; const vals: unknown[] = [];
   const add = (c: string, v: unknown) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
-  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "orientacao", "lat", "lng", "passantes_dia", "ativo", "plano_veiculacao"] as const)
+  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "orientacao", "lat", "lng", "passantes_dia", "ativo", "plano_veiculacao", "hora_abertura", "hora_fechamento"] as const)
     if (b[k] !== undefined) add(k, b[k]);
   if (!sets.length) return NextResponse.json({ ok: false, error: "nada para atualizar" }, { status: 400 });
 

@@ -387,7 +387,7 @@ function Badge({ s }: { s: string }) {
 }
 
 // ─── Tipos compartilhados ────────────────────────────────────────────────────
-interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; telas_total?: number; telas_online?: number; sync_em?: string | null; tipo?: string; sincronia?: boolean; qtd_membros?: number | null; plano_veiculacao?: "publicidade" | "encarte_totem" | "ponta_gondola"; encarte_nome?: string | null; encarte_inicio?: string | null; encarte_fim?: string | null; encarte_duracao_seg?: number | null; encarte_paginas?: number; }
+interface Local   { id: string; nome: string; cidade: string | null; endereco: string | null; largura: number; altura: number; xibo_display_group_id: number | null; ativo: boolean; conteudo_nome?: string | null; splash_nome?: string | null; lat?: number | null; lng?: number | null; passantes_dia?: number; telas_total?: number; telas_online?: number; sync_em?: string | null; tipo?: string; sincronia?: boolean; qtd_membros?: number | null; plano_veiculacao?: "publicidade" | "encarte_totem" | "ponta_gondola"; encarte_nome?: string | null; encarte_inicio?: string | null; encarte_fim?: string | null; encarte_duracao_seg?: number | null; encarte_paginas?: number; hora_abertura?: string; hora_fechamento?: string; }
 const PLANO_VEICULACAO_LABEL: Record<string, string> = { publicidade: "Publicidade (default)", encarte_totem: "Encarte de totem (1:1)", ponta_gondola: "Ponta de gôndola" };
 interface Pacote  { id: string; nome: string; tipo: string; dias: number; insercoes_dia: number; segundos: number; preco: number; ativo: boolean; ordem: number; }
 interface Anunc   { id: string; nome: string; empresa: string; email: string; whatsapp: string | null; status: string; campanhas: number; }
@@ -984,9 +984,13 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
   const [editEncarte, setEditEncarte] = useState(false);
   const [ativar, setAtivar] = useState(false);
   const [editPlano, setEditPlano] = useState(false);
+  const [cap, setCap] = useState<{ janela_horas: number; ocupacao_pct: number; segundos_disponiveis_dia: number; insercoes_restantes_padrao: { segundos: number; quantas: number }[]; campanhas_ativas: unknown[] } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const splashRef = useRef<HTMLInputElement>(null);
   const plano = local.plano_veiculacao ?? "publicidade";
+  useEffect(() => {
+    aapi(token, `/api/admin/locais/${local.id}/capacidade`).then(r => r.json()).then(d => { if (d.ok) setCap(d); }).catch(() => {});
+  }, [token, local.id, plano]);
   async function enviarConteudo(files: FileList) {
     setBusy(true); setErr("");
     const fd = new FormData(); Array.from(files).forEach(f => fd.append("file", f));
@@ -1052,6 +1056,20 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
             ● {local.telas_online}/{local.telas_total} tela(s) online
           </span>
         </p>
+      )}
+      {cap && (
+        <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.03] p-2">
+          <div className="mb-1 flex items-center justify-between text-[11px]">
+            <span className="text-slate-400">Capacidade ({cap.janela_horas}h/dia)</span>
+            <span className={cap.ocupacao_pct >= 90 ? "text-red-300" : cap.ocupacao_pct >= 70 ? "text-amber-300" : "text-emerald-300"}>{cap.ocupacao_pct}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div className={`h-full ${cap.ocupacao_pct >= 90 ? "bg-red-500" : cap.ocupacao_pct >= 70 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(cap.ocupacao_pct, 100)}%` }} />
+          </div>
+          <p className="mt-1 text-[10px] text-slate-500">
+            Cabem ainda: <span className="text-slate-300">{cap.insercoes_restantes_padrao.find(p => p.segundos === 10)?.quantas ?? 0}× 10s</span> · <span className="text-slate-300">{cap.insercoes_restantes_padrao.find(p => p.segundos === 15)?.quantas ?? 0}× 15s</span> · <span className="text-slate-300">{cap.insercoes_restantes_padrao.find(p => p.segundos === 30)?.quantas ?? 0}× 30s</span>
+          </p>
+        </div>
       )}
       {plano === "encarte_totem" && (
         <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2">
@@ -1354,13 +1372,15 @@ function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () =>
   const [lat, setLat] = useState(""); const [lng, setLng] = useState("");
   const [passantes, setPassantes] = useState("0");
   const [planoVeiculacao, setPlanoVeiculacao] = useState<"publicidade" | "encarte_totem" | "ponta_gondola">("publicidade");
+  const [horaAbertura, setHoraAbertura] = useState("06:00");
+  const [horaFechamento, setHoraFechamento] = useState("22:00");
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   // largura/altura derivados da orientação (default; backend usa esses se não vierem)
   const largura = orientacao === "paisagem" ? "1920" : "1080";
   const altura  = orientacao === "paisagem" ? "1080" : "1920";
   async function salvar() {
     setBusy(true); setErr("");
-    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, orientacao, largura, altura, capacidade_dia: capacidade, lat: lat || null, lng: lng || null, passantes_dia: passantes, plano_veiculacao: planoVeiculacao }) });
+    const r = await aapi(token, "/api/admin/locais", { method: "POST", body: JSON.stringify({ nome, cidade, endereco, orientacao, largura, altura, capacidade_dia: capacidade, lat: lat || null, lng: lng || null, passantes_dia: passantes, plano_veiculacao: planoVeiculacao, hora_abertura: horaAbertura, hora_fechamento: horaFechamento }) });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
     onSaved();
@@ -1392,6 +1412,11 @@ function LocalModal({ token, onClose, onSaved }: { token: string; onClose: () =>
         <option value="encarte_totem">Encarte de totem (1:1) — encarte ↔ anúncio rotacionando</option>
         <option value="ponta_gondola">Ponta de gôndola — mídia por tela + anúncios em sync</option>
       </select>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Field label="Abre às" value={horaAbertura} onChange={setHoraAbertura} type="time" />
+        <Field label="Fecha às" value={horaFechamento} onChange={setHoraFechamento} type="time" />
+      </div>
+      <p className="mb-3 text-xs text-slate-500">Horário de funcionamento — usado pra calcular quantos anúncios cabem por dia.</p>
       <p className="mb-3 text-xs text-slate-500">Em <strong>Encarte</strong>: depois de criar o local, suba a “Mídia do Encarte” no card pra começar a intercalação. Em <strong>Ponta de gôndola</strong>: cada TV cadastrada terá seu próprio upload de mídia ponta.</p>
       <p className="mb-3 text-xs text-slate-500">Lat/lng aparecem no <strong>Mapa</strong>; passantes/dia entram no cálculo de audiência estimada da campanha. O sistema atribui o <strong>Display Profile</strong> certo ({orientacao}) automaticamente ao vincular telas.</p>
       {err && <p className="mb-3 text-sm text-red-400">{err}</p>}

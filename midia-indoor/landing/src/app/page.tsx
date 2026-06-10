@@ -3,7 +3,7 @@ import {
   MonitorPlay, MapPin, CalendarClock, BarChart3, Megaphone, Image as ImageIcon,
   ArrowRight, Tv, Clock,
 } from "lucide-react";
-import { locaisVitrine, pacotesVitrine } from "@/lib/vitrine";
+import { locaisVitrine, pacotesVitrine, cidadesVitrine } from "@/lib/vitrine";
 import { getBranding } from "@/lib/branding";
 import { LoginDropdown } from "@/components/LoginDropdown";
 
@@ -13,8 +13,9 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 const TIPO_LABEL: Record<string, string> = { video: "Vídeo", banner_estatico: "Banner estático", banner_eletronico: "Banner eletrônico", peca: "Peça publicitária" };
 
 export default async function LandingPage() {
-  const [locais, pacotes, marca] = await Promise.all([locaisVitrine(), pacotesVitrine(), getBranding()]);
+  const [locais, pacotes, marca, cidadesAgrupadas] = await Promise.all([locaisVitrine(), pacotesVitrine(), getBranding(), cidadesVitrine()]);
   const cidades = Array.from(new Set(locais.map(l => l.cidade).filter(Boolean))) as string[];
+  const totalTelas = cidadesAgrupadas.reduce((s, c) => s + c.n_telas, 0);
 
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-[#05060f] text-white">
@@ -140,16 +141,39 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* Locais */}
-        {locais.length > 0 && (
+        {/* Cidades — agrupa locais por cidade pra nao expor lista nominal */}
+        {cidadesAgrupadas.length > 0 && (
           <section id="locais" className="mx-auto max-w-6xl px-6 py-20">
             <h2 className="text-center text-3xl font-bold">Onde sua marca pode aparecer</h2>
-            <p className="mt-3 text-center text-slate-400">Pontos da nossa rede de mídia indoor.</p>
-            <div className="mt-10 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-              {locais.map((l, i) => (
-                <div key={i} className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-md transition hover:border-brand/40 hover:bg-white/10">
-                  <MapPin className="h-5 w-5 flex-shrink-0 text-brand-light transition group-hover:scale-110" />
-                  <div><p className="font-medium">{l.nome}</p>{l.cidade && <p className="text-xs text-slate-400">{l.cidade}</p>}</div>
+            <p className="mt-3 text-center text-slate-400">
+              Nossa rede tem <strong className="text-brand-light">{totalTelas} telas</strong> em {cidadesAgrupadas.length} {cidadesAgrupadas.length === 1 ? "cidade" : "cidades"}.
+            </p>
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+              {cidadesAgrupadas.map(c => (
+                <div key={c.cidade} className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-md transition hover:border-brand/40 hover:bg-white/10">
+                  <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand/15 blur-2xl transition group-hover:bg-brand/25" />
+                  <div className="relative flex items-start justify-between">
+                    <div>
+                      <MapPin className="h-6 w-6 text-brand-light transition group-hover:scale-110" />
+                      <p className="mt-2 text-xl font-bold">{c.cidade}</p>
+                      <p className="text-xs text-slate-400">
+                        {c.n_locais} {c.n_locais === 1 ? "ponto de mídia" : "pontos de mídia"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-3xl font-black text-brand-light leading-none">{c.n_telas}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500">{c.n_telas === 1 ? "tela" : "telas"}</p>
+                    </div>
+                  </div>
+                  {c.orientacoes.length > 0 && (
+                    <div className="relative mt-3 flex flex-wrap gap-1">
+                      {c.orientacoes.map(o => (
+                        <span key={o} className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-300">
+                          {o === "paisagem" ? "🖥️" : "📱"} {o}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -266,6 +266,11 @@ export async function ensureSchema(): Promise<void> {
   // Sem isso, Xibo retorna 422 "Por favor indique uma largura" ao criar Resolution.
   await p.query(`UPDATE midia_locais SET largura = 1080 WHERE largura IS NULL OR largura < 120;`);
   await p.query(`UPDATE midia_locais SET altura  = 1920 WHERE altura  IS NULL OR altura  < 120;`);
+  // Horario de funcionamento do local — usado pra calcular CAPACIDADE de
+  // anuncios/dia (segundos disponiveis = (hora_fim - hora_inicio) * 3600).
+  // Default 06:00-22:00 (16h) — padrao de varejo brasileiro.
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS hora_abertura TEXT NOT NULL DEFAULT '06:00';`);
+  await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS hora_fechamento TEXT NOT NULL DEFAULT '22:00';`);
 
   // Plano de veiculacao: como o local intercala conteudo entre anuncios.
   //   'publicidade'    — so anuncios, sem ancora (default — comportamento atual)
