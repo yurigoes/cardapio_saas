@@ -150,13 +150,19 @@ export async function abrirOS(opts: {
   if (!item) return { ok: false, erro: "item nao encontrado" };
 
   const emGarantia = Boolean(item.garantia_ate && new Date(item.garantia_ate).getTime() >= Date.now());
-  const fotos = (opts.fotos ?? []).slice(0, 5); // cap
+  const fotos = (opts.fotos ?? []).slice(0, 5); // cap 5 fotos
+
+  // SLA por motivo (horas):
+  const slaHoras: Record<OsMotivo, number> = {
+    problema: 24, instalacao: 48, manutencao: 72, substituicao: 24, perda: 168, outro: 96,
+  };
+  const prazoSla = new Date(Date.now() + (slaHoras[opts.motivo] ?? 96) * 3600 * 1000);
 
   const r = await p.query<{ id: string }>(
     `INSERT INTO midia_inventario_os
-       (inventario_id, motivo, descricao, status, fotos, aberta_por_tipo, aberta_por, aberta_por_nome, em_garantia)
-     VALUES ($1, $2, $3, 'aberto', $4, $5, $6, $7, $8) RETURNING id`,
-    [opts.inventarioId, opts.motivo, opts.descricao, JSON.stringify(fotos), opts.autor.tipo, opts.autor.id ?? null, opts.autor.nome ?? null, emGarantia]
+       (inventario_id, motivo, descricao, status, fotos, aberta_por_tipo, aberta_por, aberta_por_nome, em_garantia, prazo_sla)
+     VALUES ($1, $2, $3, 'aberto', $4, $5, $6, $7, $8, $9) RETURNING id`,
+    [opts.inventarioId, opts.motivo, opts.descricao, JSON.stringify(fotos), opts.autor.tipo, opts.autor.id ?? null, opts.autor.nome ?? null, emGarantia, prazoSla]
   );
   const osId = r.rows[0].id;
 

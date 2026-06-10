@@ -620,6 +620,9 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_midia_inv_os_inv ON midia_inventario_os(inventario_id, criada_em DESC);
     CREATE INDEX IF NOT EXISTS idx_midia_inv_os_status ON midia_inventario_os(status);
   `);
+  // SLA: prazo de resposta esperado. Default por motivo: problema=24h,
+  // instalacao=48h, manutencao=72h, outros=96h. Set automaticamente em abrirOS.
+  await p.query(`ALTER TABLE midia_inventario_os ADD COLUMN IF NOT EXISTS prazo_sla TIMESTAMPTZ;`);
   // 2FA (TOTP) pra admins
   await p.query(`ALTER TABLE midia_admins ADD COLUMN IF NOT EXISTS totp_secret TEXT;`);
   await p.query(`ALTER TABLE midia_admins ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;`);

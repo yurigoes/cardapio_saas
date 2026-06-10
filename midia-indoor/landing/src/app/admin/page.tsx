@@ -943,6 +943,7 @@ function Locais({ token }: { token: string }) {
   const [lista, setLista] = useState<Local[]>([]);
   const [novo, setNovo] = useState(false);
   const [novoGrupo, setNovoGrupo] = useState(false);
+  const [limparOrfaos, setLimparOrfaos] = useState(false);
   const load = useCallback(async () => { const r = await aapi(token, "/api/admin/locais"); const d = await r.json(); if (d.ok) setLista(d.locais); }, [token]);
   useEffect(() => { load(); }, [load]);
   async function toggle(l: Local) { await aapi(token, "/api/admin/locais", { method: "PATCH", body: JSON.stringify({ id: l.id, ativo: !l.ativo }) }); load(); }
@@ -954,6 +955,9 @@ function Locais({ token }: { token: string }) {
         subtitle={`${ativos} ${ativos === 1 ? "local ativo" : "locais ativos"} de ${lista.length}`}
         actions={
           <>
+            <button onClick={() => setLimparOrfaos(true)} className="flex items-center gap-2 rounded-xl border border-white/15 px-3 py-2 text-sm hover:bg-white/5" title="Arquivar locais sem TVs vinculadas e sem campanhas">
+              🧹 Limpar órfãos
+            </button>
             <button onClick={() => setNovoGrupo(true)} className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/15">
               <Plus className="h-4 w-4" /> Grupo de TVs
             </button>
@@ -961,6 +965,7 @@ function Locais({ token }: { token: string }) {
           </>
         }
       />
+      {limparOrfaos && <LimparOrfaosModal token={token} onClose={() => setLimparOrfaos(false)} onDone={() => { setLimparOrfaos(false); load(); }} />}
       {!lista.length ? (
         <EmptyState icon={MapPin} title="Nenhum local cadastrado" description="Cadastre seus pontos de mídia indoor (supermercado, totem, loja…)." action={<PrimaryBtn onClick={() => setNovo(true)}>Novo local</PrimaryBtn>} />
       ) : (
@@ -976,6 +981,65 @@ function Locais({ token }: { token: string }) {
     </div>
   );
 }
+function LimparOrfaosModal({ token, onClose, onDone }: { token: string; onClose: () => void; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<{ id: string; nome: string; cidade: string | null }[] | null>(null);
+  const [executando, setExecutando] = useState(false);
+  useEffect(() => {
+    aapi(token, "/api/admin/locais/limpar-orfaos?dry_run=true", { method: "POST" }).then(r => r.json()).then(d => {
+      if (d.ok) setPreview(d.candidatos);
+    });
+  }, [token]);
+  async function confirmar() {
+    setBusy(true); setExecutando(true);
+    const r = await aapi(token, "/api/admin/locais/limpar-orfaos", { method: "POST" });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify(`${d.arquivados} local(is) arquivado(s)`, "success");
+    onDone();
+  }
+  return (
+    <Modal onClose={onClose} title="🧹 Limpar locais órfãos" wide>
+      <p className="mb-3 text-sm text-slate-300">
+        Vai arquivar todos os locais que cumprem TODOS critérios:
+      </p>
+      <ul className="mb-4 list-disc pl-5 text-xs text-slate-400">
+        <li>Sem nenhuma TV vinculada</li>
+        <li>Sem campanhas no ar cobrindo</li>
+        <li>Criados há mais de 7 dias</li>
+      </ul>
+      {!preview ? (
+        <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+      ) : preview.length === 0 ? (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-center text-sm text-emerald-300">
+          🎉 Nenhum local órfão. Está tudo limpo!
+        </div>
+      ) : (
+        <>
+          <div className="max-h-64 overflow-y-auto rounded-xl border border-white/10">
+            <table className="w-full text-sm">
+              <thead className="bg-white/5 text-left text-xs text-slate-400">
+                <tr><th className="p-2">Nome</th><th className="p-2">Cidade</th></tr>
+              </thead>
+              <tbody>
+                {preview.map(p => (
+                  <tr key={p.id} className="border-t border-white/5"><td className="p-2">{p.nome}</td><td className="p-2 text-slate-400">{p.cidade ?? "—"}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-amber-300">
+            ⚠ Vão ser arquivados <strong>{preview.length}</strong> local(is). Podem ser reativados via SQL se precisar.
+          </p>
+          <button onClick={confirmar} disabled={busy} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-2.5 font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+            {executando ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Arquivar {preview.length} local(is)
+          </button>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 function LocalCard({ token, local, onChange, onToggle }: { token: string; local: Local; onChange: () => void; onToggle: () => void }) {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const [ocup, setOcup] = useState(false);

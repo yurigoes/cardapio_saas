@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw, Monitor, Copy, Pencil, Camera, FileText } from "lucide-react";
 import { notify, confirmModal } from "@/components/Notify";
 import { KitsInventario } from "./kits-inventario";
@@ -227,21 +227,60 @@ interface OsRow {
   id: string; status: string; motivo: string; descricao: string; criada_em: string;
   item_nome: string; item_tipo: string; local_nome: string | null;
   veredito: string | null; em_garantia: boolean; aberta_por_nome: string | null; atribuido_a: string | null;
+  prazo_sla: string | null;
 }
 function OSInventario({ token }: { token: string }) {
   const [status, setStatus] = useState<"aberto" | "em_analise" | "resolvido" | "descartado" | "todos">("aberto");
   const [lista, setLista] = useState<OsRow[]>([]);
   const [verOs, setVerOs] = useState<OsRow | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [dash, setDash] = useState<{ totais: { status: string; n: number; custo_total: number }[]; por_motivo: { motivo: string; n: number; custo_total: number }[]; por_tipo: { tipo: string; n: number; custo_total: number }[]; top_itens: { nome: string; tipo: string; n_os: number; custo_total: number }[]; atrasadas: number; sla_medio_horas: number } | null>(null);
   const load = useCallback(async () => {
     setCarregando(true);
-    const r = await aapi(token, `/api/admin/inventario/os?status=${status}`);
-    const d = await r.json(); setCarregando(false);
-    if (d.ok) setLista(d.ordens);
+    const [r, dr] = await Promise.all([
+      aapi(token, `/api/admin/inventario/os?status=${status}`).then(r => r.json()),
+      aapi(token, "/api/admin/inventario/os/dashboard").then(r => r.json()).catch(() => null),
+    ]);
+    setCarregando(false);
+    if (r.ok) setLista(r.ordens);
+    if (dr?.ok) setDash(dr);
   }, [token, status]);
   useEffect(() => { load(); }, [load]);
+  const brl = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   return (
     <div>
+      {/* DASHBOARD FINANCEIRO */}
+      {dash && (
+        <div className="mb-4 grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Total custo resolvido</p>
+            <p className="mt-1 text-xl font-black text-emerald-300">{brl(dash.totais.filter(t => t.status === "resolvido").reduce((s,t) => s + t.custo_total, 0))}</p>
+            <p className="text-[10px] text-slate-500">SLA médio: {dash.sla_medio_horas}h</p>
+          </div>
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-red-300">Atrasadas (SLA)</p>
+            <p className="mt-1 text-xl font-black text-red-300">{dash.atrasadas}</p>
+            <p className="text-[10px] text-slate-500">passaram do prazo</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Por tipo (top)</p>
+            <div className="mt-1 space-y-0.5">
+              {dash.por_tipo.slice(0, 3).map(p => (
+                <p key={p.tipo} className="text-xs"><span className="font-semibold">{p.tipo}</span>: {p.n} OS · {brl(p.custo_total)}</p>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Top itens com mais OS</p>
+            <div className="mt-1 space-y-0.5">
+              {dash.top_itens.slice(0, 3).map((p, i) => (
+                <p key={i} className="truncate text-xs"><span className="font-semibold">{p.nome}</span>: {p.n_os}× · {brl(p.custo_total)}</p>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-3 flex gap-1">
         {(["aberto","em_analise","resolvido","descartado","todos"] as const).map(s => (
           <button key={s} onClick={() => setStatus(s)} className={`rounded-lg px-3 py-1 text-xs ${status === s ? "bg-brand text-white" : "border border-white/10 bg-white/5 text-slate-400 hover:bg-white/10"}`}>
@@ -254,28 +293,38 @@ function OSInventario({ token }: { token: string }) {
         <p className="rounded-xl border border-white/10 bg-white/[0.02] p-8 text-center text-sm text-slate-400">Nenhuma OS {status === "todos" ? "" : `em ${status}`}.</p>
       ) : (
         <div className="space-y-2">
-          {lista.map(o => (
-            <button key={o.id} onClick={() => setVerOs(o)} className={`w-full rounded-xl border p-3 text-left hover:bg-white/5 ${o.status === "aberto" ? "border-red-500/30 bg-red-500/5" : o.status === "em_analise" ? "border-amber-500/30 bg-amber-500/5" : o.status === "resolvido" ? "border-emerald-500/20 bg-emerald-500/5" : "border-white/10 bg-white/[0.02] opacity-70"}`}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">
-                    {o.motivo === "problema" ? "🚨" : o.motivo === "manutencao" ? "🔧" : "📎"} {o.item_nome}
-                    {o.em_garantia && <span className="ml-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-300">🛡 garantia</span>}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {o.local_nome ? `📍 ${o.local_nome} · ` : ""}
-                    {new Date(o.criada_em).toLocaleDateString("pt-BR")}
-                    {o.aberta_por_nome ? ` · por ${o.aberta_por_nome}` : ""}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-300 line-clamp-2">{o.descricao}</p>
+          {lista.map(o => {
+            const slaMs = o.prazo_sla ? new Date(o.prazo_sla).getTime() : null;
+            const atrasada = slaMs && slaMs < Date.now() && (o.status === "aberto" || o.status === "em_analise");
+            const slaRest = slaMs ? Math.round((slaMs - Date.now()) / 3600_000) : null;
+            return (
+              <button key={o.id} onClick={() => setVerOs(o)} className={`w-full rounded-xl border p-3 text-left hover:bg-white/5 ${atrasada ? "border-red-500/50 bg-red-500/10" : o.status === "aberto" ? "border-red-500/30 bg-red-500/5" : o.status === "em_analise" ? "border-amber-500/30 bg-amber-500/5" : o.status === "resolvido" ? "border-emerald-500/20 bg-emerald-500/5" : "border-white/10 bg-white/[0.02] opacity-70"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">
+                      {o.motivo === "problema" ? "🚨" : o.motivo === "manutencao" ? "🔧" : "📎"} {o.item_nome}
+                      {o.em_garantia && <span className="ml-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-300">🛡 garantia</span>}
+                      {atrasada && <span className="ml-1 rounded bg-red-500/30 px-1.5 py-0.5 text-[10px] font-bold text-red-200">⚠ atrasada</span>}
+                      {o.atribuido_a && <span className="ml-1 rounded bg-cyan-500/20 px-1.5 py-0.5 text-[10px] text-cyan-300">👷 {o.atribuido_a}</span>}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {o.local_nome ? `📍 ${o.local_nome} · ` : ""}
+                      {new Date(o.criada_em).toLocaleDateString("pt-BR")}
+                      {o.aberta_por_nome ? ` · por ${o.aberta_por_nome}` : ""}
+                      {slaRest != null && !atrasada && (o.status === "aberto" || o.status === "em_analise") && (
+                        <span className={`ml-2 ${slaRest < 8 ? "text-amber-300" : "text-slate-500"}`}>· {slaRest < 24 ? `${slaRest}h` : `${Math.round(slaRest/24)}d`} restantes</span>
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-300 line-clamp-2">{o.descricao}</p>
+                  </div>
+                  <div className="text-right">
+                    <code className="text-[10px] text-slate-500">{o.id.slice(0, 8)}</code>
+                    {o.veredito && <p className="mt-1 text-[10px] text-emerald-300">→ {o.veredito}</p>}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <code className="text-[10px] text-slate-500">{o.id.slice(0, 8)}</code>
-                  {o.veredito && <p className="mt-1 text-[10px] text-emerald-300">→ {o.veredito}</p>}
-                </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
       {verOs && <OSDetalheModal token={token} osId={verOs.id} onClose={() => setVerOs(null)} onSaved={() => { setVerOs(null); load(); }} />}
@@ -287,12 +336,39 @@ function OSDetalheModal({ token, osId, onClose, onSaved }: { token: string; osId
   const [d, setD] = useState<{ os: Record<string, unknown>; movimentos: Record<string, unknown>[]; candidatos_substituicao: { id: string; nome: string; modelo: string | null }[] } | null>(null);
   const [veredito, setVeredito] = useState<"consertado" | "queimado" | "sem_problema" | "substituir" | "descartar">("consertado");
   const [obs, setObs] = useState("");
+  const [custoReais, setCustoReais] = useState("");
   const [subst, setSubst] = useState("");
+  const [tecnico, setTecnico] = useState("");
+  const [tecnicosDisp, setTecnicosDisp] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { aapi(token, `/api/admin/inventario/os/${osId}`).then(r => r.json()).then(x => x.ok && setD(x)); }, [token, osId]);
+  const fotoRef = useRef<HTMLInputElement>(null);
+  const reload = useCallback(() => { aapi(token, `/api/admin/inventario/os/${osId}`).then(r => r.json()).then(x => x.ok && setD(x)); }, [token, osId]);
+  useEffect(() => { reload(); aapi(token, "/api/admin/inventario/os/tecnicos").then(r => r.json()).then(x => x.ok && setTecnicosDisp(x.tecnicos)); }, [reload, token]);
+  async function uploadFoto(f: File) {
+    const fd = new FormData(); fd.append("file", f);
+    const r = await fetch(`/api/admin/inventario/os/${osId}/foto`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    const x = await r.json();
+    if (fotoRef.current) fotoRef.current.value = "";
+    if (!x.ok) { notify(x.error || "Erro upload", "error"); return; }
+    notify(`Foto adicionada (${x.total}/5)`, "success"); reload();
+  }
+  async function removerFoto(idx: number) {
+    const r = await aapi(token, `/api/admin/inventario/os/${osId}/foto?idx=${idx}`, { method: "DELETE" });
+    const x = await r.json();
+    if (!x.ok) { notify(x.error || "Erro", "error"); return; }
+    reload();
+  }
+  async function atribuir() {
+    if (!tecnico.trim()) return;
+    const r = await aapi(token, `/api/admin/inventario/os/${osId}`, { method: "PATCH", body: JSON.stringify({ atribuido_a: tecnico.trim() }) });
+    const x = await r.json();
+    if (!x.ok) { notify(x.error || "Erro", "error"); return; }
+    notify("Atribuído!", "success"); reload();
+  }
   async function resolver() {
     setBusy(true);
-    const r = await aapi(token, `/api/admin/inventario/os/${osId}/resolver`, { method: "POST", body: JSON.stringify({ veredito, veredito_obs: obs, substituido_por_id: veredito === "substituir" ? subst : undefined }) });
+    const custo = custoReais ? Math.round(Number(custoReais.replace(",", ".")) * 100) : undefined;
+    const r = await aapi(token, `/api/admin/inventario/os/${osId}/resolver`, { method: "POST", body: JSON.stringify({ veredito, veredito_obs: obs, custo_centavos: custo, substituido_por_id: veredito === "substituir" ? subst : undefined }) });
     const x = await r.json(); setBusy(false);
     if (!x.ok) { notify(x.error || "Erro", "error"); return; }
     notify("OS resolvida!", "success"); onSaved();
@@ -302,7 +378,11 @@ function OSDetalheModal({ token, osId, onClose, onSaved }: { token: string; osId
     onSaved();
   }
   if (!d) return null;
-  const o = d.os as { id: string; item_nome: string; item_tipo: string; item_modelo?: string; item_mac?: string; local_nome?: string; motivo: string; descricao: string; status: string; veredito?: string; aberta_por_nome?: string; criada_em: string; em_garantia: boolean; fotos?: string[] };
+  const o = d.os as { id: string; item_nome: string; item_tipo: string; item_modelo?: string; item_mac?: string; local_nome?: string; motivo: string; descricao: string; status: string; veredito?: string; aberta_por_nome?: string; criada_em: string; em_garantia: boolean; fotos?: string[]; atribuido_a?: string; prazo_sla?: string };
+  const fotos: string[] = Array.isArray(o.fotos) ? o.fotos : [];
+  const slaMs = o.prazo_sla ? new Date(o.prazo_sla).getTime() : null;
+  const atrasada = slaMs && slaMs < Date.now() && (o.status === "aberto" || o.status === "em_analise");
+  const slaRestante = slaMs ? Math.round((slaMs - Date.now()) / 3600_000) : null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-white/10 bg-[#12121c]" onClick={e => e.stopPropagation()}>
@@ -314,16 +394,62 @@ function OSDetalheModal({ token, osId, onClose, onSaved }: { token: string; osId
           <button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button>
         </div>
         <div className="overflow-y-auto p-5">
-          <div className="mb-3 grid grid-cols-3 gap-2 text-xs">
+          <div className="mb-3 grid grid-cols-4 gap-2 text-xs">
             <div><p className="text-slate-500">Status</p><p className="font-medium">{o.status}</p></div>
             <div><p className="text-slate-500">Motivo</p><p className="font-medium">{o.motivo}</p></div>
             <div><p className="text-slate-500">Aberta</p><p className="font-medium">{new Date(o.criada_em).toLocaleDateString("pt-BR")}</p></div>
+            <div>
+              <p className="text-slate-500">SLA</p>
+              {slaMs ? (
+                <p className={`font-medium ${atrasada ? "text-red-300" : slaRestante! < 8 ? "text-amber-300" : "text-emerald-300"}`}>
+                  {atrasada ? `⚠ ${Math.abs(slaRestante!)}h atrasada` : slaRestante! < 24 ? `${slaRestante}h restantes` : `${Math.round(slaRestante! / 24)}d restantes`}
+                </p>
+              ) : <p className="text-slate-500">—</p>}
+            </div>
           </div>
           {o.em_garantia && <p className="mb-3 rounded bg-blue-500/15 px-2 py-1 text-xs text-blue-300">🛡 Item em garantia</p>}
+          {atrasada && <p className="mb-3 rounded bg-red-500/15 px-2 py-1 text-xs text-red-300">⚠ Esta OS passou do prazo de SLA</p>}
+
+          {/* TECNICO ATRIBUIDO */}
+          <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-3">
+            <p className="mb-1 text-xs text-slate-400">Técnico responsável</p>
+            <div className="flex gap-2">
+              <input value={tecnico || (o.atribuido_a ?? "")} onChange={e => setTecnico(e.target.value)} placeholder="Nome do técnico" list="lista-tecnicos"
+                className="flex-1 rounded border border-white/10 bg-white/5 px-2 py-1 text-sm" />
+              <datalist id="lista-tecnicos">{tecnicosDisp.map(t => <option key={t} value={t} />)}</datalist>
+              <button onClick={atribuir} className="rounded border border-brand/30 bg-brand/10 px-3 py-1 text-xs text-brand-light hover:bg-brand/20">Atribuir</button>
+            </div>
+            {o.atribuido_a && <p className="mt-1 text-[11px] text-slate-500">Atual: {o.atribuido_a}</p>}
+          </div>
           <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-3">
             <p className="text-xs text-slate-400">Descrição</p>
             <p className="mt-1 whitespace-pre-wrap text-sm">{o.descricao}</p>
             {o.aberta_por_nome && <p className="mt-2 text-[11px] text-slate-500">— por {o.aberta_por_nome}</p>}
+          </div>
+
+          {/* FOTOS */}
+          <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold text-slate-400">📷 Fotos ({fotos.length}/5)</p>
+              {fotos.length < 5 && (
+                <label className="cursor-pointer rounded border border-cyan-500/30 px-2 py-1 text-[11px] text-cyan-300 hover:bg-cyan-500/10">
+                  📤 Adicionar foto
+                  <input ref={fotoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadFoto(f); }} />
+                </label>
+              )}
+            </div>
+            {fotos.length > 0 ? (
+              <div className="grid grid-cols-3 gap-2">
+                {fotos.map((src, i) => (
+                  <div key={i} className="group relative">
+                    <a href={src} target="_blank" rel="noreferrer">
+                      <img src={src} alt={`Foto ${i+1}`} className="h-24 w-full rounded object-cover" />
+                    </a>
+                    <button onClick={() => removerFoto(i)} className="absolute right-1 top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] text-white group-hover:flex">×</button>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-[11px] text-slate-500">Sem fotos. Clique no botão acima pra adicionar.</p>}
           </div>
           {o.status !== "resolvido" && o.status !== "descartado" && (
             <>
@@ -348,6 +474,12 @@ function OSDetalheModal({ token, osId, onClose, onSaved }: { token: string; osId
                 )}
                 <textarea value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação (opcional)" rows={2}
                   className="mb-2 w-full rounded border border-white/10 bg-white/5 px-2 py-1.5 text-sm" />
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Custo R$:</span>
+                  <input type="text" value={custoReais} onChange={e => setCustoReais(e.target.value)} placeholder="0,00" inputMode="decimal"
+                    className="w-24 rounded border border-white/10 bg-white/5 px-2 py-1 text-sm" />
+                  <span className="text-[10px] text-slate-500">(opcional — entra no dashboard)</span>
+                </div>
                 <button onClick={resolver} disabled={busy || (veredito === "substituir" && !subst)} className="w-full rounded-lg bg-emerald-600 py-2 text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50">
                   {busy ? "Resolvendo…" : "Resolver OS"}
                 </button>
