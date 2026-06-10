@@ -356,19 +356,24 @@ export async function bumpDisplayCache(displayId: number, layoutFinal: number): 
  */
 export interface EventoDisplay { eventId: number; eventTypeId: number; campaignId: number; layoutId?: number; layout?: string; fromDt: number; toDt: number; }
 export async function eventosDoDisplay(displayId: number, dia: string): Promise<EventoDisplay[]> {
-  // Xibo expõe /api/schedule/data/events com filtro displayGroupId. Usa o próprio do display.
+  // Xibo expoe /api/schedule/data/events com filtro displayGroupId. Pra cobrir
+  // TODOS os schedules que afetam esse display (proprio + grupos do local +
+  // grupos agregadores), busca em todos os displayGroups que o display participa.
   const disp = (await listarDisplaysFull()).find(d => d.displayId === displayId);
-  const proprio = disp?.displayGroups?.find(g => g.isDisplaySpecific === 1) ?? disp?.displayGroups?.[0];
-  if (!proprio) return [];
+  const grupos = disp?.displayGroups ?? [];
+  if (!grupos.length) return [];
   const from = `${dia} 00:00:00`;
   const to   = `${dia} 23:59:59`;
-  try {
-    const r = await xibo<Array<EventoDisplay>>(`/api/schedule/data/events?displayGroupId=${proprio.displayGroupId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
-    return Array.isArray(r) ? r : [];
-  } catch (e) {
-    console.warn("[eventosDoDisplay]", (e as Error).message);
-    return [];
+  const eventosPorId = new Map<number, EventoDisplay>();
+  for (const g of grupos) {
+    try {
+      const r = await xibo<Array<EventoDisplay>>(`/api/schedule/data/events?displayGroupId=${g.displayGroupId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      for (const e of (Array.isArray(r) ? r : [])) {
+        eventosPorId.set(e.eventId, e); // dedupe por eventId
+      }
+    } catch (e) { console.warn(`[eventosDoDisplay] group ${g.displayGroupId}:`, (e as Error).message); }
   }
+  return Array.from(eventosPorId.values());
 }
 
 /** Lista Display Profiles. */
