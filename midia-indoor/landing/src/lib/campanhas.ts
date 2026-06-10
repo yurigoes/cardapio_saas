@@ -366,6 +366,16 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
           const { enviarCampanhaNoAr } = await import("./email");
           await enviarCampanhaNoAr({ nome: conta.nome, email: conta.email, campanha: camp.nome, periodo: `${ymd(camp.data_inicio)} a ${ymd(camp.data_fim)}`, locais: nomesLocais });
         }
+        // WhatsApp em paralelo (opt-in respeitado)
+        try {
+          const { enviarWhatsAppParaConta } = await import("./whatsapp");
+          await enviarWhatsAppParaConta({
+            contaId: camp.conta_id,
+            tipo: "campanha_no_ar",
+            cabecalho: "📺 Sua campanha está no ar!",
+            mensagem: `Olá ${conta?.nome?.split(" ")[0] ?? ""}!\n\nA campanha *${camp.nome}* entrou no ar.\n\n📅 ${ymd(camp.data_inicio)} → ${ymd(camp.data_fim)}\n📍 ${nomesLocais.length} local(is): ${nomesLocais.slice(0, 3).join(", ")}${nomesLocais.length > 3 ? "..." : ""}\n\nObrigado por confiar na Three Digital!`,
+          });
+        } catch (e) { console.warn("[lancar] whatsapp no ar falhou:", (e as Error).message); }
       } catch (e) { console.warn("[lancar] e-mail no ar falhou:", (e as Error).message); }
     }
 

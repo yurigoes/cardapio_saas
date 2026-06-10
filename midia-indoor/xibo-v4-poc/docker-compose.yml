@@ -45,7 +45,7 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
   cms-xmr:
-    image: ghcr.io/xibosignage/xibo-xmr:1.0
+    image: xibosignage/xibo-xmr:latest
     container_name: midia_xibo_xmr_v4
     restart: unless-stopped
     ports:
@@ -57,8 +57,10 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
   cms-web:
-    # v4.2 e a serie mais estavel atual; troque pra release-4.3 quando sair
-    image: ghcr.io/xibosignage/xibo-cms:release-4.2
+    # Imagem oficial Xibo no Docker Hub. Serie 4 tem tags release-4.0.x:
+    # release-4.0.13, release-4.0.12, etc. Use uma especifica pra reprodutibilidade.
+    # Se 'release-4.0.13' nao existir, tente outras: docker manifest inspect xibosignage/xibo-cms:release-4.0.12
+    image: xibosignage/xibo-cms:release-4.0.13
     container_name: midia_xibo_web_v4
     restart: unless-stopped
     depends_on: [cms-db, cms-xmr]

@@ -494,6 +494,27 @@ export async function ensureSchema(): Promise<void> {
   // Vincula anunciante ao afiliado que o indicou (e snapshot da comissão na hora do cadastro)
   await p.query(`ALTER TABLE midia_contas ADD COLUMN IF NOT EXISTS afiliado_id UUID REFERENCES midia_afiliados(id) ON DELETE SET NULL;`);
   await p.query(`ALTER TABLE midia_contas ADD COLUMN IF NOT EXISTS afiliado_comissao_pct NUMERIC(5,2);`);
+  // WhatsApp: opt-in (anunciante autoriza receber notificacoes) + opcionalmente
+  // sobrescreve o numero (caso o cadastro principal seja outro).
+  await p.query(`ALTER TABLE midia_contas ADD COLUMN IF NOT EXISTS whatsapp_optin BOOLEAN NOT NULL DEFAULT true;`);
+  await p.query(`ALTER TABLE midia_contas ADD COLUMN IF NOT EXISTS whatsapp_notif TEXT;`);
+  // Log de envios pra auditoria + reprocessamento se falhar
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_whatsapp_logs (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      conta_id      UUID REFERENCES midia_contas(id) ON DELETE SET NULL,
+      destino       TEXT NOT NULL,
+      tipo          TEXT NOT NULL,        -- 'campanha_no_ar'|'arte_aprovada'|'arte_rejeitada'|'os_aberta'|'pagamento_ok'|'vencimento'|'manual'
+      mensagem      TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'enviado',  -- 'enviado'|'falha'|'pendente'
+      provider      TEXT,                 -- 'evolution'|'twilio'|'wppconnect'
+      provider_id   TEXT,
+      erro          TEXT,
+      criado_em     TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_wpp_logs_conta ON midia_whatsapp_logs(conta_id, criado_em DESC);
+    CREATE INDEX IF NOT EXISTS idx_midia_wpp_logs_status ON midia_whatsapp_logs(status);
+  `);
 
   // Comissões geradas por campanha paga
   await p.query(`

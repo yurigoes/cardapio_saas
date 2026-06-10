@@ -1,4 +1,20 @@
-# Xibo v4 POC — paralelo ao v3 em produção
+# Xibo v4 POC — ⚠ ADIADO em 2026-06
+
+**Status**: arquivos mantidos no repo, mas POC não vai pra frente por enquanto.
+
+**Por quê?** Xibo não publica imagem Docker oficial do v4 no Docker Hub (estratégia
+fechada deles). Pra rodar v4 hoje precisa de build do source ou installer próprio
+(`xibosignage.com/get`, cadastro necessário). Como o v3.3.3 atual funciona bem
+e o sync via NTP é suficiente pro caso de uso atual, decidimos focar em features
+de negócio com ROI mais imediato (WhatsApp, SMTP, 2FA, onboarding, etc).
+
+Se um dia precisarmos do v4 (ex: Sync Groups perfeitos pra ponta de gôndola
+crítica), os arquivos abaixo continuam servindo de ponto de partida — só precisará
+trocar a `image:` no `docker-compose.yml` por uma imagem v4 funcional.
+
+---
+
+# Xibo v4 POC — paralelo ao v3 em produção (documentação histórica)
 
 Stack isolada pra testar **Xibo CMS v4.2** sem encostar no v3.3.3 que está
 rodando. Permite validar nosso código (`lib/xibo.ts`) contra a API nova,

@@ -100,6 +100,15 @@ async function processar(preapprovalId: string): Promise<void> {
       if (enviado) {
         await p.query(`UPDATE midia_contas SET boas_vindas_em = NOW() WHERE id = $1`, [assin.conta_id]);
       }
+      // WhatsApp em paralelo
+      try {
+        const { enviarWhatsAppParaConta } = await import("@/lib/whatsapp");
+        await enviarWhatsAppParaConta({
+          contaId: assin.conta_id, tipo: "pagamento_ok",
+          cabecalho: "🎉 Conta ativa!",
+          mensagem: `Olá ${conta.nome.split(" ")[0]}!\n\nSeu pagamento foi confirmado e a conta da *${conta.empresa}* está ativa na Three Digital.\n\nAcesse o painel pra subir suas artes e parear suas TVs.`,
+        });
+      } catch (e) { console.warn("[webhook] wpp boas-vindas:", (e as Error).message); }
     }
   } else if (info.status === "cancelled") {
     await p.query(

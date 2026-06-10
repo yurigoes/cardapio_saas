@@ -190,6 +190,18 @@ export async function abrirOS(opts: {
     });
   } catch (e) { console.warn("[abrirOS] email alerta falhou:", (e as Error).message); }
 
+  // WhatsApp master pra alertas urgentes (OS com motivo='problema')
+  if (opts.motivo === "problema") {
+    try {
+      const { enviarWhatsAppMaster } = await import("./whatsapp");
+      await enviarWhatsAppMaster({
+        tipo: "os_aberta",
+        cabecalho: "🚨 OS urgente aberta",
+        mensagem: `*${item.nome}* (${item.tipo})\n\n${opts.descricao.slice(0, 200)}${opts.descricao.length > 200 ? "..." : ""}\n\nProtocolo: ${osId.slice(0, 8)}${emGarantia ? "\n🛡 Em garantia" : ""}`,
+      });
+    } catch (e) { console.warn("[abrirOS] whatsapp master:", (e as Error).message); }
+  }
+
   return { ok: true, osId, emGarantia };
 }
 
