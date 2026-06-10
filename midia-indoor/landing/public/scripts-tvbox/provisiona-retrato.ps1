@@ -13,6 +13,8 @@ param(
   [string]$RustDeskApk = "A:\Sistemas\rustdesk\rustdesk.apk",
   [string]$LogoPng = "A:\Sistemas\LOGO BRANCA.png",
   [string]$BootVideo = "A:\Sistemas\xibo-mod\boot-retrato.mp4",
+  [string]$LauncherApk = "A:\Sistemas\three-launcher\app-release.apk",
+  [string]$WallpaperRetrato = "A:\Sistemas\three-launcher\wallpaper-retrato.png",
   [int]$BootFps = 24,
   [string]$CmsAddress = "https://midia.tthreedigital.com.br",
   [string]$ServerKey = "2IG5P8rP",
@@ -69,9 +71,11 @@ if ($monitor.connect -eq "1") {
 $rdId = Capturar-RustDeskId -device $device -pngOut $shotPath
 Registrar-NoSaas -saasUrl $SaasUrl -secret $ProvisionSecret -mac $mac -rdId $rdId -rdSenha $RustSenha -nome $DisplayName -ip $Ip -monitor $monitor
 
-# 8. AGORA instala Xibo + pre-config + fixa como launcher principal
+# 8. AGORA instala Xibo + pre-config (NAO mais como launcher — Three Launcher assume HOME)
 Instalar-Xibo -device $device -apk $XiboApk -cms $CmsAddress -key $ServerKey -displayName $DisplayName
-Fixar-XiboComoLauncher -device $device
+
+# 9. Three Launcher: relogio + wifi + botoes + wallpaper retrato. Auto-launch Xibo apos 30s.
+Instalar-LauncherThree -device $device -apk $LauncherApk -wallpaper $WallpaperRetrato
 
 # 7. Resumo + reboot
 Resumo @{

@@ -441,6 +441,57 @@ function Fixar-XiboComoLauncher([string]$device) {
   Ok "Xibo agora eh o unico launcher disponivel"
 }
 
+# ---------- Three Launcher (Android) ----------
+# Instala o launcher Three Digital com relogio + wifi + botoes (Xibo/RustDesk/Config/Reboot),
+# sobe wallpaper customizado e fixa como HOME. Substitui o Fixar-XiboComoLauncher
+# pra cenarios onde queremos a tela de home propria (e Xibo eh um botao).
+function Instalar-LauncherThree {
+  param(
+    [string]$device,
+    [string]$apk,           # caminho do APK do Three Launcher
+    [string]$wallpaper,     # caminho da imagem (PNG/JPG) — opcional
+    [switch]$NaoFixarComoHome  # se setado, instala mas nao fixa como HOME
+  )
+  Step "Instalando Three Launcher"
+  if (-not (Test-Path $apk)) {
+    Warn "APK do launcher nao encontrado: $apk - pulando"
+    return
+  }
+  adb -s $device install -r -g $apk | Out-Null
+  Ok "Launcher APK instalado"
+
+  # Sobe wallpaper se fornecido. Tenta varios caminhos pra cobrir variacoes do device.
+  if ($wallpaper -and (Test-Path $wallpaper)) {
+    $ext = [System.IO.Path]::GetExtension($wallpaper).ToLower().TrimStart(".")
+    if ($ext -notin @("png","jpg","jpeg")) { $ext = "png" }
+    $alvo = "/sdcard/three_wallpaper.$ext"
+    adb -s $device push $wallpaper $alvo | Out-Null
+    Ok "Wallpaper enviado para $alvo"
+  } else {
+    Warn "Sem wallpaper customizado - launcher vai usar gradient default"
+  }
+
+  if (-not $NaoFixarComoHome) {
+    adb -s $device shell "cmd package set-home-activity com.threedigital.launcher/.MainActivity" | Out-Null
+    # Desabilita launchers OEM e tambem o Xibo (que agora vira app comum aberto pelo botao)
+    $launchersOem = @(
+      "com.droidlogic.mboxlauncher",
+      "com.google.android.launcher",
+      "com.android.launcher3",
+      "com.farproc.wifi.analyzer"
+    )
+    foreach ($pkg in $launchersOem) {
+      $listOut = cmd /c "adb -s $device shell pm list packages $pkg 2>nul"
+      $existsExato = $listOut | Where-Object { $_ -match "^package:$([regex]::Escape($pkg))`$" }
+      if ($existsExato) {
+        cmd /c "adb -s $device shell pm disable-user --user 0 $pkg >nul 2>nul"
+        Ok "Launcher OEM desabilitado: $pkg"
+      }
+    }
+    Ok "Three Launcher fixado como HOME (auto-launch Xibo apos 30s sem toque)"
+  }
+}
+
 # ---------- RustDesk ----------
 # IMPORTANTE: os taps automaticos sao calibrados pra resolucao RETRATO 720x1280.
 # Pra paisagem 1280x720 as coords precisam ser remapeadas (TODO).
