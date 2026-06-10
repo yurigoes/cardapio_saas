@@ -793,10 +793,24 @@ export async function criarLayoutInterleave(opts: {
 
 /** Faz upload de UMA midia na library do Xibo (sem layout). Retorna mediaId. */
 export async function uploadMediaSimples(
-  arquivo: Buffer | Blob, nomeArquivo: string, folderId: number
+  arquivo: Buffer | Blob, nomeArquivo: string, folderId: number, mime?: string | null
 ): Promise<number> {
+  // Pre-processo: se for video, strip audio (Android player tem decoder AAC limitado)
+  let bufFinal: Buffer;
+  if (arquivo instanceof Blob) {
+    bufFinal = Buffer.from(await arquivo.arrayBuffer());
+  } else {
+    bufFinal = arquivo;
+  }
+  try {
+    const { prepararMidiaProPlayer } = await import("./midia-strip");
+    const prep = await prepararMidiaProPlayer(bufFinal, nomeArquivo, mime ?? (arquivo instanceof Blob ? arquivo.type : null));
+    if (prep.modificado) console.log(`[xibo upload] '${nomeArquivo}' processado: ${prep.motivo}`);
+    bufFinal = prep.buffer;
+  } catch (e) { console.warn(`[xibo upload] strip falhou pra '${nomeArquivo}':`, (e as Error).message); }
+
   const form = new FormData();
-  const blob = arquivo instanceof Blob ? arquivo : new Blob([new Uint8Array(arquivo)]);
+  const blob = new Blob([new Uint8Array(bufFinal)]);
   const nomeUnico = `${Date.now().toString(36)}-${nomeArquivo}`;
   form.append("files", blob, nomeUnico);
   form.append("name", nomeUnico);

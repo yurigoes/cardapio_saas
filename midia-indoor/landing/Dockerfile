@@ -25,6 +25,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3100
 ENV HOSTNAME=0.0.0.0
 
+# ffmpeg pra strip-audio automatico de videos enviados (Android player
+# tem decoder AAC limitado e crasha em alguns audios — display digital
+# nao precisa de som mesmo).
+RUN apk add --no-cache ffmpeg
+
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 
 # output standalone: server.js + node_modules mínimos + estáticos
