@@ -562,6 +562,14 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS monitor_serial TEXT;`);
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS monitor_resolucao TEXT;`);
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS monitor_polegadas INT;`);
+  // Vinculo 1:1 entre itens (TV <-> Box, etc). Quando vincula uma TV a um Box,
+  // ambos ficam apontando um pro outro (ou apenas TV.vinculado_a_id = box.id).
+  // Sem foreign key forte (ON DELETE SET NULL) pra nao impedir excluir um lado.
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS vinculado_a_id UUID;`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_midia_inv_vinculado ON midia_inventario(vinculado_a_id);`);
+  // Resolucao/polegadas tambem aplicam quando tipo='tv' (display em si)
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS resolucao TEXT;`);
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS polegadas INT;`);
   // 2FA (TOTP) pra admins
   await p.query(`ALTER TABLE midia_admins ADD COLUMN IF NOT EXISTS totp_secret TEXT;`);
   await p.query(`ALTER TABLE midia_admins ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;`);

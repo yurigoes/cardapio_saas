@@ -20,6 +20,8 @@ interface ItemInv {
   rustdesk_id: string | null; rustdesk_senha: string | null;
   monitor_modelo: string | null; monitor_serial: string | null;
   monitor_resolucao: string | null; monitor_polegadas: number | null;
+  resolucao: string | null; polegadas: number | null;
+  vinculado_a_id: string | null; vinculado_nome: string | null; vinculado_tipo: string | null;
 }
 interface LocalSimples { id: string; nome: string; cidade?: string | null; }
 
@@ -36,6 +38,7 @@ export function Inventario({ token }: { token: string }) {
   const [verQR, setVerQR] = useState<ItemInv | null>(null);
   const [editar, setEditar] = useState<ItemInv | null>(null);
   const [verPrint, setVerPrint] = useState<ItemInv | null>(null);
+  const [vincular, setVincular] = useState<ItemInv | null>(null);
   const [filtro, setFiltro] = useState("");
   const [loading, setLoading] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -109,7 +112,7 @@ export function Inventario({ token }: { token: string }) {
                   onChange={e => setSelecionados(e.target.checked ? new Set(filtrados.map(i => i.id)) : new Set())}
                   className="h-4 w-4 cursor-pointer accent-brand" />
               </th>
-              <th className="p-3">Tipo</th><th className="p-3">Nome</th><th className="p-3">MAC</th><th className="p-3">Serial</th><th className="p-3">Local</th><th className="p-3">Xibo</th><th className="p-3">RustDesk</th><th className="p-3"></th>
+              <th className="p-3">Tipo</th><th className="p-3">Nome</th><th className="p-3">MAC</th><th className="p-3">Serial</th><th className="p-3">Local</th><th className="p-3">Xibo</th><th className="p-3">RustDesk</th><th className="p-3">Vínculo</th><th className="p-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -125,6 +128,15 @@ export function Inventario({ token }: { token: string }) {
                 <td className="p-3 text-xs">{i.local_nome ?? "—"}</td>
                 <td className="p-3 text-xs">{i.xibo_display_id ? `#${i.xibo_display_id}` : "—"}</td>
                 <td className="p-3 text-xs font-mono">{i.rustdesk_id ?? "—"}</td>
+                <td className="p-3 text-xs">
+                  {i.vinculado_nome ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300" title={`Vinculado a ${i.vinculado_tipo}`}>
+                      🔗 {i.vinculado_nome}
+                    </span>
+                  ) : (i.tipo === "box" || i.tipo === "tv") ? (
+                    <button onClick={() => setVincular(i)} className="text-[11px] text-slate-500 underline hover:text-slate-300">vincular</button>
+                  ) : "—"}
+                </td>
                 <td className="p-3 text-right">
                   <div className="flex justify-end gap-1">
                     {(i.tipo === "box" || i.tipo === "tv" || i.tipo === "tv-box") && i.mac && (
@@ -138,7 +150,7 @@ export function Inventario({ token }: { token: string }) {
                 </td>
               </tr>
             ))}
-            {!filtrados.length && <tr><td colSpan={9} className="p-6 text-center text-slate-500">Nenhum item.</td></tr>}
+            {!filtrados.length && <tr><td colSpan={10} className="p-6 text-center text-slate-500">Nenhum item.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -148,6 +160,67 @@ export function Inventario({ token }: { token: string }) {
       {verQR && <QRCodeModal item={verQR} onClose={() => setVerQR(null)} />}
       {editar && <EditarItemModal token={token} item={editar} locais={locais} onClose={() => setEditar(null)} onSaved={() => { setEditar(null); load(); }} />}
       {verPrint && <PrintModal token={token} item={verPrint} onClose={() => setVerPrint(null)} />}
+      {vincular && <VincularModal token={token} item={vincular} todos={itens} onClose={() => setVincular(null)} onSaved={() => { setVincular(null); load(); }} />}
+    </div>
+  );
+}
+
+function VincularModal({ token, item, todos, onClose, onSaved }: { token: string; item: ItemInv; todos: ItemInv[]; onClose: () => void; onSaved: () => void }) {
+  // Candidatos: tipo oposto + sem vínculo
+  const alvo = item.tipo === "box" ? "tv" : item.tipo === "tv" ? "box" : null;
+  const candidatos = alvo ? todos.filter(t => t.tipo === alvo && !t.vinculado_a_id && t.id !== item.id) : [];
+  const [selId, setSelId] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function salvar() {
+    if (!selId) { notify("Escolha um item pra vincular", "error"); return; }
+    setBusy(true);
+    const r = await aapi(token, "/api/admin/inventario", { method: "PATCH", body: JSON.stringify({ id: item.id, vinculado_a_id: selId }) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify("Vinculado!", "success"); onSaved();
+  }
+  async function desvincular() {
+    setBusy(true);
+    const r = await aapi(token, "/api/admin/inventario", { method: "PATCH", body: JSON.stringify({ id: item.id, vinculado_a_id: "" }) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify("Desvinculado", "success"); onSaved();
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#12121c] p-5" onClick={e => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-bold">Vincular {item.nome}</h3>
+          <button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button>
+        </div>
+        {item.vinculado_nome ? (
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+            <p className="text-sm">Atualmente vinculado a: <strong>{item.vinculado_nome}</strong></p>
+            <p className="text-xs text-slate-400 capitalize">{item.vinculado_tipo}</p>
+            <button onClick={desvincular} disabled={busy} className="mt-3 w-full rounded-lg border border-red-500/30 py-1.5 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50">
+              {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Desvincular"}
+            </button>
+          </div>
+        ) : !alvo ? (
+          <p className="text-sm text-slate-400">Vínculo 1:1 só faz sentido entre <strong>Box ↔ TV/Monitor</strong>. Este item é {LABELS_TIPO[item.tipo] ?? item.tipo}.</p>
+        ) : candidatos.length === 0 ? (
+          <p className="text-sm text-slate-400">
+            Não há {alvo === "tv" ? "TVs/Monitores" : "Boxes"} disponíveis sem vínculo.
+            <br />Cadastre primeiro um {alvo === "tv" ? "monitor" : "box"} no inventário.
+          </p>
+        ) : (
+          <>
+            <label className="mb-1 block text-sm text-slate-300">Vincular a:</label>
+            <select value={selId} onChange={e => setSelId(e.target.value)} className="mb-3 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+              <option value="">— escolha —</option>
+              {candidatos.map(c => <option key={c.id} value={c.id}>{c.nome}{c.modelo ? ` · ${c.modelo}` : ""}</option>)}
+            </select>
+            <button onClick={salvar} disabled={busy || !selId} className="w-full rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
+              {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Vincular"}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -298,7 +371,7 @@ function EditarItemModal({ token, item, locais, onClose, onSaved }: { token: str
 }
 
 function NovoItemModal({ token, locais, onClose, onSaved }: { token: string; locais: LocalSimples[]; onClose: () => void; onSaved: () => void }) {
-  const [tipo, setTipo] = useState("box");
+  const [tipo, setTipo] = useState<"box" | "tv" | "totem" | "cabo" | "fonte" | "suporte" | "outro">("box");
   const [nome, setNome] = useState("");
   const [mac, setMac] = useState("");
   const [serial, setSerial] = useState("");
@@ -308,78 +381,157 @@ function NovoItemModal({ token, locais, onClose, onSaved }: { token: string; loc
   const [valor, setValor] = useState("");
   const [nf, setNf] = useState("");
   const [obs, setObs] = useState("");
+  // TV/Monitor (direto, sem prefixo)
+  const [resolucao, setResolucao] = useState("");
+  const [polegadas, setPolegadas] = useState("");
+  // Totem (tem TV + box num só)
   const [monitorModelo, setMonitorModelo] = useState("");
-  const [monitorSerial, setMonitorSerial] = useState("");
-  const [monitorResolucao, setMonitorResolucao] = useState("");
   const [monitorPolegadas, setMonitorPolegadas] = useState("");
+  // Vincular já no cadastro?
+  const [vinculadoA, setVinculadoA] = useState("");
+  // Lista de candidatos pra vínculo (carrega quando tipo = tv ou box)
+  const [candidatos, setCandidatos] = useState<Array<{ id: string; nome: string; tipo: string; vinculado_a_id: string | null }>>([]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+
+  // Sugere nome auto quando troca tipo
+  useEffect(() => {
+    if (!nome) {
+      const labels: Record<string, string> = { box: "Box-", tv: "TV-", totem: "Totem-", cabo: "Cabo-", fonte: "Fonte-", suporte: "Suporte-", outro: "Item-" };
+      setNome(labels[tipo] ?? "");
+    }
+  }, [tipo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Carrega candidatos pra vincular (tipo oposto: tv carrega boxes, box carrega tvs)
+  useEffect(() => {
+    const alvo = tipo === "tv" ? "box" : tipo === "box" ? "tv" : null;
+    if (!alvo) { setCandidatos([]); return; }
+    aapi(token, "/api/admin/inventario").then(r => r.json()).then(d => {
+      if (!d.ok) return;
+      const livres = (d.itens as Array<{ id: string; nome: string; tipo: string; vinculado_a_id: string | null }>)
+        .filter(i => i.tipo === alvo && !i.vinculado_a_id);
+      setCandidatos(livres);
+    });
+  }, [tipo, token]);
 
   async function salvar() {
     setBusy(true); setErr("");
     const r = await aapi(token, "/api/admin/inventario", { method: "POST", body: JSON.stringify({
-      tipo, nome, mac: mac || undefined, serial: serial || undefined, fabricante: fabricante || undefined,
-      modelo: modelo || undefined, local_id: localId || undefined, valor: valor ? Number(valor) : undefined,
-      nota_fiscal: nf || undefined, observacao: obs || undefined,
-      monitor_modelo: monitorModelo || undefined, monitor_serial: monitorSerial || undefined,
-      monitor_resolucao: monitorResolucao || undefined, monitor_polegadas: monitorPolegadas ? Number(monitorPolegadas) : undefined,
+      tipo, nome,
+      mac: mac || undefined,
+      serial: serial || undefined,
+      fabricante: fabricante || undefined,
+      modelo: modelo || undefined,
+      local_id: localId || undefined,
+      valor: valor ? Number(valor) : undefined,
+      nota_fiscal: nf || undefined,
+      observacao: obs || undefined,
+      // TV/Monitor — usa campos diretos
+      resolucao: tipo === "tv" ? (resolucao || undefined) : undefined,
+      polegadas: tipo === "tv" ? (polegadas ? Number(polegadas) : undefined) : undefined,
+      // Totem — usa monitor_* (totem = box+tv integrados)
+      monitor_modelo: tipo === "totem" ? (monitorModelo || undefined) : undefined,
+      monitor_polegadas: tipo === "totem" ? (monitorPolegadas ? Number(monitorPolegadas) : undefined) : undefined,
+      vinculado_a_id: vinculadoA || undefined,
     })});
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
-    notify(`Item criado · QR: ${d.qr_token}`, "success");
+    notify(`${LABELS_TIPO[tipo]} criado · QR: ${d.qr_token}${vinculadoA ? " · vinculado" : ""}`, "success");
     onSaved();
   }
+
+  const isBox = tipo === "box";
+  const isTv  = tipo === "tv";
+  const isTotem = tipo === "totem";
+  const labelVincular = isBox ? "Vincular já a uma TV/Monitor?" : isTv ? "Vincular já a um Box?" : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-white/10 bg-[#12121c]" onClick={e => e.stopPropagation()}>
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 p-5"><h3 className="font-bold">Novo item no inventário</h3><button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button></div>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 p-5">
+          <h3 className="font-bold">Novo item no inventário</h3>
+          <button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button>
+        </div>
         <div className="overflow-y-auto p-5">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-slate-400">Tipo</label>
-            <select value={tipo} onChange={e => setTipo(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
-              <option value="box">📦 Android Box</option>
-              <option value="tv">📺 TV / Monitor</option>
-              <option value="totem">🗼 Totem</option>
-              <option value="cabo">🔌 Cabo HDMI</option>
-              <option value="fonte">⚡ Fonte</option>
-              <option value="suporte">🔩 Suporte / Bracket</option>
-              <option value="outro">📎 Outro</option>
-            </select>
-          </div>
-          <Field label="Nome" value={nome} onChange={setNome} placeholder="ex: Box-001 Atacadão" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="MAC Address" value={mac} onChange={v => setMac(v.toUpperCase())} placeholder="AA:BB:CC:DD:EE:FF" mono />
-          <Field label="Número de série" value={serial} onChange={setSerial} mono />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Fabricante" value={fabricante} onChange={setFabricante} placeholder="ex: Xiaomi" />
-          <Field label="Modelo" value={modelo} onChange={setModelo} placeholder="ex: Mi Box S" />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs text-slate-400">Local (opcional)</label>
-          <select value={localId} onChange={e => setLocalId(e.target.value)} className="mb-3 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
-            <option value="">— estoque (sem local) —</option>
-            {locais.map(l => <option key={l.id} value={l.id}>{l.nome}{l.cidade ? ` · ${l.cidade}` : ""}</option>)}
-          </select>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Valor (R$)" value={valor} onChange={setValor} type="number" />
-          <Field label="Nota fiscal" value={nf} onChange={setNf} placeholder="000123" />
-        </div>
-        {tipo === "box" || tipo === "tv" ? (
-          <div className="mb-3 mt-2 rounded-lg border border-white/10 bg-white/5 p-3">
-            <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-400">Monitor / TV conectado via HDMI (opcional)</p>
+
+        {/* TIPO em destaque (linha cheia) */}
+        <label className="mb-1 block text-xs text-slate-400">Tipo de equipamento</label>
+        <select value={tipo} onChange={e => setTipo(e.target.value as typeof tipo)} className="mb-3 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+          <option value="box">📦 Android Box (TV box que roda o player)</option>
+          <option value="tv">📺 TV / Monitor (display em si)</option>
+          <option value="totem">🗼 Totem (box + monitor integrados)</option>
+          <option value="cabo">🔌 Cabo HDMI</option>
+          <option value="fonte">⚡ Fonte</option>
+          <option value="suporte">🔩 Suporte / Bracket</option>
+          <option value="outro">📎 Outro</option>
+        </select>
+
+        <Field label="Nome / identificação *" value={nome} onChange={setNome} placeholder={isBox ? "ex: Box-001" : isTv ? "ex: TV-Samsung-43-001" : "ex: Item-001"} />
+
+        {/* CAMPOS POR TIPO */}
+        {(isBox || isTotem) && (
+          <div className="mb-3 mt-2 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+            <p className="mb-2 text-[11px] uppercase tracking-wide text-cyan-300">📦 Dados do TV Box</p>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Modelo" value={monitorModelo} onChange={setMonitorModelo} placeholder="ex: Samsung UN43J5290" />
-              <Field label="Serial do monitor" value={monitorSerial} onChange={setMonitorSerial} mono />
-              <Field label="Resolução" value={monitorResolucao} onChange={setMonitorResolucao} placeholder="1920x1080" mono />
-              <Field label="Polegadas" value={monitorPolegadas} onChange={setMonitorPolegadas} type="number" placeholder="43" />
+              <Field label="MAC Address" value={mac} onChange={v => setMac(v.toUpperCase())} placeholder="AA:BB:CC:DD:EE:FF" mono />
+              <Field label="Serial do box" value={serial} onChange={setSerial} mono />
+              <Field label="Fabricante" value={fabricante} onChange={setFabricante} placeholder="ex: Rockchip" />
+              <Field label="Modelo" value={modelo} onChange={setModelo} placeholder="ex: RK322x" />
             </div>
           </div>
-        ) : null}
+        )}
+
+        {(isTv || isTotem) && (
+          <div className="mb-3 mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+            <p className="mb-2 text-[11px] uppercase tracking-wide text-amber-300">📺 Dados da TV / Monitor</p>
+            <div className="grid grid-cols-2 gap-3">
+              {isTv && <Field label="Marca" value={fabricante} onChange={setFabricante} placeholder="ex: Samsung" />}
+              {isTv && <Field label="Modelo" value={modelo} onChange={setModelo} placeholder="ex: UN43J5290" />}
+              {isTv && <Field label="Serial" value={serial} onChange={setSerial} mono />}
+              {isTotem && <Field label="Modelo do monitor" value={monitorModelo} onChange={setMonitorModelo} placeholder="ex: Samsung UN43J5290" />}
+              <Field label="Resolução" value={isTotem ? "" : resolucao} onChange={isTotem ? () => {} : setResolucao} placeholder="1920x1080" mono />
+              <Field label="Polegadas" value={isTotem ? monitorPolegadas : polegadas} onChange={isTotem ? setMonitorPolegadas : setPolegadas} type="number" placeholder="43" />
+            </div>
+          </div>
+        )}
+
+        {!isBox && !isTv && !isTotem && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Marca/Fabricante" value={fabricante} onChange={setFabricante} />
+            <Field label="Modelo" value={modelo} onChange={setModelo} />
+            <Field label="Serial" value={serial} onChange={setSerial} mono />
+            <Field label="MAC (se aplicável)" value={mac} onChange={v => setMac(v.toUpperCase())} mono />
+          </div>
+        )}
+
+        {/* VÍNCULO TV ↔ BOX */}
+        {labelVincular && (
+          <div className="mb-3 mt-1 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+            <label className="mb-1 block text-xs text-emerald-300">{labelVincular}</label>
+            <select value={vinculadoA} onChange={e => setVinculadoA(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+              <option value="">— não vincular agora —</option>
+              {candidatos.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            <p className="mt-1 text-[10px] text-slate-500">
+              Mostra só {isBox ? "TVs/Monitores" : "Boxes"} ainda não pareadas. Você também pode vincular depois no card.
+            </p>
+          </div>
+        )}
+
+        {/* LOCAL + VALOR + NF */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className="mb-1 block text-xs text-slate-400">Local (opcional — onde está fisicamente)</label>
+            <select value={localId} onChange={e => setLocalId(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+              <option value="">— estoque (sem local) —</option>
+              {locais.map(l => <option key={l.id} value={l.id}>{l.nome}{l.cidade ? ` · ${l.cidade}` : ""}</option>)}
+            </select>
+          </div>
+          <Field label="Valor (R$)" value={valor} onChange={setValor} type="number" placeholder="0.00" />
+          <Field label="Nota fiscal" value={nf} onChange={setNf} placeholder="000123" />
+        </div>
+
         <Field label="Observação" value={obs} onChange={setObs} />
+
         {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
         <button onClick={salvar} disabled={busy || !nome} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Adicionar ao inventário
@@ -389,6 +541,11 @@ function NovoItemModal({ token, locais, onClose, onSaved }: { token: string; loc
     </div>
   );
 }
+
+const LABELS_TIPO: Record<string, string> = {
+  box: "Android Box", tv: "TV/Monitor", totem: "Totem",
+  cabo: "Cabo", fonte: "Fonte", suporte: "Suporte", outro: "Item",
+};
 
 function Field({ label, value, onChange, placeholder = "", type = "text", mono }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; mono?: boolean }) {
   return (
