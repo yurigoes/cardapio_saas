@@ -863,11 +863,11 @@ function Desinstalar-Pacote([string]$device, [string]$pacote) {
 function Selecionar-Componentes {
   Write-Host ""
   Write-Host "  Selecionar o que instalar/reinstalar" -ForegroundColor Cyan
-  Write-Host "  ─────────────────────────────────────" -ForegroundColor Cyan
-  Write-Host "    1 — Xibo (player)"
-  Write-Host "    2 — RustDesk (acesso remoto)"
-  Write-Host "    3 — Three Launcher (HOME + wallpaper)"
-  Write-Host "    T — Tudo (inclui boot animation + rotacao tela)"
+  Write-Host "  -------------------------------------" -ForegroundColor Cyan
+  Write-Host "    1 - Xibo (player)"
+  Write-Host "    2 - RustDesk (acesso remoto)"
+  Write-Host "    3 - Three Launcher (HOME + wallpaper)"
+  Write-Host "    T - Tudo (inclui boot animation + rotacao tela)"
   Write-Host ""
   Write-Host "  Digite numeros separados por virgula (ex: 1,3) ou T pra tudo:" -ForegroundColor Yellow
   $resp = (Read-Host "  Opcao").Trim().ToUpper()
@@ -892,7 +892,7 @@ function Selecionar-Componentes {
   }
 
   if (-not ($flags.Xibo -or $flags.RustDesk -or $flags.Launcher -or $flags.Boot)) {
-    Write-Host "  Nada selecionado — abortando." -ForegroundColor Red
+    Write-Host "  Nada selecionado - abortando." -ForegroundColor Red
     exit 1
   }
 
