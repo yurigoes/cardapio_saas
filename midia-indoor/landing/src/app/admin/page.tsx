@@ -622,7 +622,7 @@ function CampanhaDetalhe({ token, camp, isMaster, onClose, onChange }: { token: 
     const r = await fetch(`/api/admin/campanhas/${camp.id}/arte`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
     const d = await r.json(); setBusy("");
     if (!d.ok) { notify(d.error || "Erro no upload", "error"); return; }
-    notify("Arte enviada", "success");
+    notify(d.relancada ? "Arte enviada · campanha re-lançada (TV atualiza em ~30s)" : "Arte enviada", "success");
     load(); onChange();
   }
   async function marcarPgto(status: string) {

@@ -606,6 +606,21 @@ export async function listarCampanhas(): Promise<XiboCampaignInfo[]> {
 }
 
 // ─── Resoluções ─────────────────────────────────────────────────────────────
+/** Sanitiza nome de Layout do Xibo: max 50 chars (limite do CMS).
+ *  Preserva sufixo unico (depois do ultimo espaco) e trunca o meio. */
+function nomeLayoutSeguro(nome: string): string {
+  const limite = 50;
+  if (nome.length <= limite) return nome;
+  // Tenta preservar sufixo unico (parte depois do ultimo espaco)
+  const idx = nome.lastIndexOf(" ");
+  if (idx > 0 && idx < limite - 4) {
+    const sufixo = nome.slice(idx); // inclui o espaco
+    const prefixo = nome.slice(0, limite - sufixo.length - 1);
+    return prefixo + "…" + sufixo;
+  }
+  return nome.slice(0, limite - 1) + "…";
+}
+
 /** Acha (ou cria) uma resolução pelo tamanho e retorna o resolutionId.
  *  Recusa entradas invalidas — Xibo joga 422 "Por favor indique uma largura"
  *  pra width/height <= 0, com mensagem ambigua. */
@@ -654,7 +669,7 @@ export async function criarLayoutDeMidia(opts: {
 
   // 1) Cria layout em rascunho. Resposta: layoutId=rascunho, parentId=publicado,
   //    campaignId já vem pronto, regions[0].regionPlaylist.playlistId p/ subir a mídia.
-  const draftBody = new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" });
+  const draftBody = new URLSearchParams({ name: nomeLayoutSeguro(opts.nome), resolutionId: String(resolutionId), returnDraft: "1" });
   const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: draftBody });
   const editId      = draft.layoutId;                    // rascunho (onde subimos a mídia)
   const publishId   = draft.parentId ?? draft.layoutId;  // publica pelo layout PAI (publicado)
@@ -722,7 +737,7 @@ export async function criarLayoutInterleave(opts: {
 }): Promise<{ layoutId: number; campaignId?: number }> {
   if (!opts.itens.length) throw new Error("interleave: nenhum item");
   const resolutionId = await getResolution(opts.width, opts.height);
-  const draftBody = new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" });
+  const draftBody = new URLSearchParams({ name: nomeLayoutSeguro(opts.nome), resolutionId: String(resolutionId), returnDraft: "1" });
   const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: draftBody });
   const publishId  = draft.parentId ?? draft.layoutId;
   const playlistId = draft.regions?.[0]?.regionPlaylist?.playlistId;
@@ -867,7 +882,7 @@ export async function criarLayoutLoop(opts: {
   if (!opts.arquivos.length) throw new Error("nenhum arquivo");
   const resolutionId = await getResolution(opts.width, opts.height);
 
-  const draftBody = new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" });
+  const draftBody = new URLSearchParams({ name: nomeLayoutSeguro(opts.nome), resolutionId: String(resolutionId), returnDraft: "1" });
   const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: draftBody });
   const publishId = draft.parentId ?? draft.layoutId;
   const playlistId = draft.regions?.[0]?.regionPlaylist?.playlistId;
@@ -932,7 +947,7 @@ export async function criarLayoutMultiZona(opts: {
   const resolutionId = await getResolution(opts.width, opts.height);
 
   // 1) Cria layout rascunho — vem com 1 região padrão. Vamos adicionar mais conforme spec.
-  const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: new URLSearchParams({ name: opts.nome, resolutionId: String(resolutionId), returnDraft: "1" }) });
+  const draft = await xibo<DraftLayout>("/api/layout", { method: "POST", body: new URLSearchParams({ name: nomeLayoutSeguro(opts.nome), resolutionId: String(resolutionId), returnDraft: "1" }) });
   const editId    = draft.layoutId;
   const publishId = draft.parentId ?? draft.layoutId;
   const firstPlaylistId = draft.regions?.[0]?.regionPlaylist?.playlistId;
