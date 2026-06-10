@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, LogOut, LayoutDashboard, Users, Package, FileText, UserCog,
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
-  LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette, Server, Camera, Power, Undo2, ScrollText, Map,
+  LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette, Server, Camera, Power, Undo2, ScrollText, Map, MessageCircle,
   Ticket, CalendarDays, Check, ChevronLeft, ChevronRight, History, Grid3x3, Database,
   FileSpreadsheet, Repeat, HandCoins, Archive, Zap,
 } from "lucide-react";
@@ -20,6 +20,7 @@ import { Seguranca2FA } from "./seguranca-2fa";
 import { PageHeader, PrimaryBtn, GhostBtn, PremiumTable, THead, TRow, StatusBadge, EmptyState, SearchInput } from "@/components/Premium";
 import { TelasOrfas } from "./telas-orfas";
 import { Inventario } from "./inventario";
+import { WhatsApp } from "./whatsapp";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -30,7 +31,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis" | "calculadora" | "tenants" | "orfas" | "inventario";
+type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis" | "calculadora" | "tenants" | "orfas" | "inventario" | "whatsapp";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export default function AdminPage() {
     { id: "contratos",   label: "Contratos",   icon: FileText, master: true },
     { id: "usuarios",    label: "Usuários",    icon: UserCog, master: true },
     { id: "marca",       label: "Marca",       icon: Palette, master: true },
+    { id: "whatsapp",    label: "WhatsApp",    icon: MessageCircle, master: true },
     { id: "mapa",        label: "Mapa",        icon: Map },
     { id: "calendario",  label: "Calendário",  icon: CalendarDays },
     { id: "grade",       label: "Grade",       icon: Grid3x3 },
@@ -157,6 +159,7 @@ export default function AdminPage() {
         {aba === "contratos"   && <Contratos token={token} />}
         {aba === "usuarios"    && <Usuarios token={token} />}
         {aba === "marca"       && <Marca token={token} />}
+        {aba === "whatsapp"    && <WhatsApp token={token} />}
         {aba === "mapa"        && <MapaLocais token={token} />}
         {aba === "calendario"  && <Calendario token={token} />}
         {aba === "grade"       && <GradeLocal token={token} />}
