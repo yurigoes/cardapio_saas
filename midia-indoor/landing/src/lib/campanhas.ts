@@ -241,14 +241,18 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
   }
 
   const p = db();
-  // Display groups dos locais — cria na hora os que ainda não têm (ex: local
-  // cadastrado quando a auth do Xibo estava off).
-  const locais = await p.query<{ id: string; nome: string; cidade: string | null; xibo_display_group_id: number | null }>(
-    `SELECT l.id, l.nome, l.cidade, l.xibo_display_group_id FROM midia_campanha_locais cl
+  // Display groups dos locais (com plano de veiculacao). CRITICO: locais
+  // 'encarte_totem' e 'ponta_gondola' NAO devem entrar como displayGroups da
+  // Ad Campaign — senao o schedule do anuncio sobrescreve o Default Layout
+  // intercalado e o player toca so o anuncio direto (sem encarte intercalando).
+  const locais = await p.query<{ id: string; nome: string; cidade: string | null; xibo_display_group_id: number | null; plano_veiculacao: string }>(
+    `SELECT l.id, l.nome, l.cidade, l.xibo_display_group_id, COALESCE(l.plano_veiculacao, 'publicidade') AS plano_veiculacao
+       FROM midia_campanha_locais cl
        JOIN midia_locais l ON l.id = cl.local_id WHERE cl.campanha_id = $1`, [campanhaId]
   ).then(r => r.rows);
 
-  const groups: number[] = [];
+  const groupsPub: number[]    = []; // locais 'publicidade' — vao pra Ad Campaign
+  const groupsVeicul: number[] = []; // locais encarte_totem/ponta_gondola — so regenerar
   for (const l of locais) {
     let dg = l.xibo_display_group_id;
     if (!dg) {
@@ -257,12 +261,18 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
         await p.query(`UPDATE midia_locais SET xibo_display_group_id = $1, updated_at = NOW() WHERE id = $2`, [dg, l.id]);
       } catch (e) { console.warn(`[lancar] display group do local ${l.nome} falhou:`, (e as Error).message); }
     }
-    if (dg) groups.push(dg);
+    if (!dg) continue;
+    if (l.plano_veiculacao === "encarte_totem" || l.plano_veiculacao === "ponta_gondola") {
+      groupsVeicul.push(dg);
+    } else {
+      groupsPub.push(dg);
+    }
   }
-  if (!groups.length) return { ok: false, erro: "nenhum local válido (não foi possível criar display group no Xibo)" };
+  const groups = groupsPub; // Ad Campaign cobre SO os de publicidade
+  if (!groupsPub.length && !groupsVeicul.length) return { ok: false, erro: "nenhum local válido (não foi possível criar display group no Xibo)" };
 
-  // Alvo total de inserções = inserções/dia × dias × nº de locais
-  const targetPlays = camp.insercoes_dia * camp.dias * groups.length;
+  // Alvo total de inserções = inserções/dia × dias × nº de locais (todos os locais)
+  const targetPlays = Math.max(1, camp.insercoes_dia * camp.dias * locais.length);
   // data_inicio/fim podem vir como Date (pg) ou string — normaliza com segurança
   const inicio = new Date(camp.data_inicio); inicio.setHours(0, 0, 0, 0);
   const fim    = new Date(camp.data_fim);    fim.setHours(23, 59, 59, 0);
@@ -290,47 +300,56 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
 
   try {
     let xiboCampaignId = camp.xibo_campaign_id ?? undefined;
-    if (xiboCampaignId) {
-      try {
-        await editarAdCampaign(xiboCampaignId, { nome: camp.nome, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups });
-        // Re-anexa o layout atual (cobre o caso de troca de arte: novo xibo_layout_id)
-        await reassignLayoutNaAdCampaign(xiboCampaignId, camp.xibo_layout_id, dayPartId, camp.dias_semana ?? undefined);
-      } catch (e) {
-        const msg = (e as Error).message ?? "";
-        // Se a ad campaign foi apagada no Xibo, descarta o id morto e cria de novo
-        if (/→ 404/.test(msg) || /not found/i.test(msg) || /n[aã]o encontrad/i.test(msg)) {
-          console.warn(`[lancar] ad campaign ${xiboCampaignId} sumiu no Xibo — recriando`);
-          await p.query(`UPDATE midia_campanhas SET xibo_campaign_id = NULL WHERE id = $1`, [campanhaId]);
-          xiboCampaignId = undefined;
-        } else {
-          throw e;
+    // Cria/edita Ad Campaign cobrindo SO grupos de publicidade. Locais com
+    // encarte_totem/ponta_gondola sao tratados via regenerarSeNecessario abaixo.
+    if (groupsPub.length > 0) {
+      if (xiboCampaignId) {
+        try {
+          await editarAdCampaign(xiboCampaignId, { nome: camp.nome, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groupsPub });
+          await reassignLayoutNaAdCampaign(xiboCampaignId, camp.xibo_layout_id, dayPartId, camp.dias_semana ?? undefined);
+        } catch (e) {
+          const msg = (e as Error).message ?? "";
+          if (/→ 404/.test(msg) || /not found/i.test(msg) || /n[aã]o encontrad/i.test(msg)) {
+            console.warn(`[lancar] ad campaign ${xiboCampaignId} sumiu no Xibo — recriando`);
+            await p.query(`UPDATE midia_campanhas SET xibo_campaign_id = NULL WHERE id = $1`, [campanhaId]);
+            xiboCampaignId = undefined;
+          } else { throw e; }
         }
       }
+      if (!xiboCampaignId) {
+        xiboCampaignId = await criarAdCampaign({ nome: camp.nome, layoutId: camp.xibo_layout_id, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groupsPub, dayPartId, diasSemana: camp.dias_semana ?? undefined });
+      }
+    } else if (xiboCampaignId) {
+      // SO tem locais de veiculacao (encarte/gondola) — esvazia displayGroups
+      // da Ad Campaign existente pra evitar que ela continue agendada nesses grupos.
+      try {
+        await editarAdCampaign(xiboCampaignId, { nome: camp.nome, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: [] });
+        console.log(`[lancar] Ad Campaign ${xiboCampaignId} com displayGroups vazio (so locais de veiculacao)`);
+      } catch (e) { console.warn("[lancar] esvaziar displayGroups falhou:", (e as Error).message); }
     }
-    if (!xiboCampaignId) {
-      xiboCampaignId = await criarAdCampaign({ nome: camp.nome, layoutId: camp.xibo_layout_id, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groups, dayPartId, diasSemana: camp.dias_semana ?? undefined });
-    }
+
     const jaEstavaNoAr = camp.status === "no_ar";
     await p.query(
       `UPDATE midia_campanhas SET xibo_campaign_id = $1, status = 'no_ar', lancada_em = NOW(), updated_at = NOW() WHERE id = $2`,
-      [xiboCampaignId, campanhaId]
+      [xiboCampaignId ?? null, campanhaId]
     );
-    // Kick-start: cria um schedule manual que toca da hora atual até a virada,
-    // pra cobrir o intervalo até o CampaignSchedulerTask criar os eventos da
-    // próxima hora cheia. Sem isso, a campanha lançada às 15:20 só começaria 16:00.
-    try {
-      const layoutCampaignId = await obterCampaignIdDoLayout(camp.xibo_layout_id);
-      if (layoutCampaignId) {
-        const playsHora = Math.max(1, Math.ceil(camp.insercoes_dia / 12)); // ~12 horas úteis/dia
-        const eventId = await kickStartLayoutAteProximaHora(layoutCampaignId, groups, playsHora, camp.dias_semana ?? undefined);
-        if (eventId) console.log(`[lancar] kick-start agendado (eventId ${eventId})`);
-      }
-    } catch (e) { console.warn("[lancar] kick-start falhou:", (e as Error).message); }
 
-    // Força os players a coletarem a nova programação imediatamente (XMR push)
-    for (const g of groups) {
-      try { await collectNow(g); } catch (e) { console.warn(`[lancar] collectNow ${g} falhou:`, (e as Error).message); }
+    // Kick-start + collectNow SO em grupos de publicidade (veiculacao usa
+    // Default Layout intercalado, nao precisa de schedule).
+    if (groupsPub.length > 0) {
+      try {
+        const layoutCampaignId = await obterCampaignIdDoLayout(camp.xibo_layout_id);
+        if (layoutCampaignId) {
+          const playsHora = Math.max(1, Math.ceil(camp.insercoes_dia / 12));
+          const eventId = await kickStartLayoutAteProximaHora(layoutCampaignId, groupsPub, playsHora, camp.dias_semana ?? undefined);
+          if (eventId) console.log(`[lancar] kick-start agendado (eventId ${eventId}) em ${groupsPub.length} grupo(s) pub`);
+        }
+      } catch (e) { console.warn("[lancar] kick-start falhou:", (e as Error).message); }
+      for (const g of groupsPub) {
+        try { await collectNow(g); } catch (e) { console.warn(`[lancar] collectNow ${g} falhou:`, (e as Error).message); }
+      }
     }
+    // Pra grupos de veiculacao, o regenerarSeNecessario abaixo ja faz collectNow + sync
     // E-mail "no ar" só na 1ª vez (não em reaplicações)
     if (!jaEstavaNoAr) {
       try {
