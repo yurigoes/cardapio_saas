@@ -481,7 +481,7 @@ export async function encerrarCampanha(campanhaId: string): Promise<{ ok: boolea
     try {
       const { regenerarSeNecessario } = await import("./veiculacao");
       // Expande grupos -> membros individuais
-      const alvos = await p.query<{ local_id: string }>(
+      const alvos = await db().query<{ local_id: string }>(
         `SELECT DISTINCT m.id AS local_id
            FROM (SELECT unnest($1::uuid[]) AS lid) src
            JOIN midia_locais l ON l.id = src.lid
