@@ -1359,40 +1359,114 @@ function TelaGondolaCard({ token, tela, onChange }: { token: string; tela: TelaG
   );
 }
 
+interface PaginaEncarte { id: string; ordem: number; xibo_media_id: number; duracao_seg: number; nome: string | null; }
+
 function EncarteModal({ token, local, onClose, onSaved, busy, setBusy }: { token: string; local: Local; onClose: () => void; onSaved: () => void; busy: boolean; setBusy: (v: boolean) => void }) {
   const hoje = new Date().toISOString().slice(0, 10);
   const em30 = new Date(Date.now() + 30 * 86400e3).toISOString().slice(0, 10);
+  const [paginas, setPaginas] = useState<PaginaEncarte[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [inicio, setInicio] = useState(local.encarte_inicio?.slice(0, 10) ?? hoje);
   const [fim, setFim] = useState(local.encarte_fim?.slice(0, 10) ?? em30);
   const [dur, setDur] = useState(String(local.encarte_duracao_seg ?? 10));
   const [err, setErr] = useState("");
+  const [loadingPg, setLoadingPg] = useState(true);
+
+  const carregarPaginas = useCallback(async () => {
+    setLoadingPg(true);
+    const r = await fetch(`/api/admin/locais/${local.id}/encarte`, { headers: { Authorization: `Bearer ${token}` } });
+    const d = await r.json();
+    if (d?.ok) setPaginas(d.paginas ?? []);
+    setLoadingPg(false);
+  }, [token, local.id]);
+  useEffect(() => { carregarPaginas(); }, [carregarPaginas]);
+
   function onPick(list: FileList | null) {
     if (!list) return;
     setFiles(Array.from(list));
   }
-  function remover(i: number) { setFiles(f => f.filter((_, idx) => idx !== i)); }
-  function mover(i: number, dir: -1 | 1) {
+  function removerLocal(i: number) { setFiles(f => f.filter((_, idx) => idx !== i)); }
+  function moverLocal(i: number, dir: -1 | 1) {
     setFiles(f => {
       const arr = [...f]; const j = i + dir;
       if (j < 0 || j >= arr.length) return arr;
       [arr[i], arr[j]] = [arr[j], arr[i]]; return arr;
     });
   }
-  async function enviar() {
-    if (!files.length) { setErr("Selecione 1+ arquivos"); return; }
+
+  async function adicionar() {
+    if (!files.length) { setErr("Selecione 1+ arquivos pra adicionar"); return; }
     setBusy(true); setErr("");
     const fd = new FormData();
-    for (const f of files) fd.append("file", f); // mesmo nome — backend usa getAll('file')
-    fd.append("inicio", inicio);
-    fd.append("fim", fim);
+    for (const f of files) fd.append("file", f);
     fd.append("duracao_seg", dur);
+    const r = await fetch(`/api/admin/locais/${local.id}/encarte`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro"); return; }
+    notify(`+${d.adicionadas} página(s) adicionada(s) (total ${d.total}) · layout regenerado`, "success");
+    setFiles([]);
+    await carregarPaginas();
+    onSaved();
+  }
+
+  async function trocarTudo() {
+    if (!files.length) { setErr("Selecione 1+ arquivos pra substituir"); return; }
+    const ok = await confirmModal(`Substituir TODAS as ${paginas.length} página(s) atuais pelos ${files.length} novo(s) arquivo(s)?`);
+    if (!ok) return;
+    setBusy(true); setErr("");
+    const fd = new FormData();
+    for (const f of files) fd.append("file", f);
+    fd.append("inicio", inicio); fd.append("fim", fim); fd.append("duracao_seg", dur);
     const r = await fetch(`/api/admin/locais/${local.id}/encarte`, { method: "PUT", headers: { Authorization: `Bearer ${token}` }, body: fd });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
-    notify(`Encarte atualizado · ${d.paginas} página(s) · layout regenerado`, "success");
+    notify(`Encarte substituído · ${d.paginas} página(s) · layout regenerado`, "success");
+    setFiles([]);
+    await carregarPaginas();
     onSaved();
   }
+
+  async function excluirPagina(p: PaginaEncarte) {
+    if (!await confirmModal(`Remover a página "${p.nome ?? p.id.slice(0, 8)}" da fila?`)) return;
+    setBusy(true);
+    const r = await fetch(`/api/admin/locais/${local.id}/encarte?paginaId=${p.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro ao remover", "error"); return; }
+    notify(`Página removida · ${d.restantes} restante(s)`, "success");
+    await carregarPaginas();
+    onSaved();
+  }
+
+  async function moverPaginaBackend(idx: number, dir: -1 | 1) {
+    const j = idx + dir;
+    if (j < 0 || j >= paginas.length) return;
+    const nova = [...paginas];
+    [nova[idx], nova[j]] = [nova[j], nova[idx]];
+    setPaginas(nova);
+    setBusy(true);
+    const r = await fetch(`/api/admin/locais/${local.id}/encarte`, {
+      method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ordem: nova.map(x => x.id) }),
+    });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro ao reordenar", "error"); await carregarPaginas(); return; }
+    onSaved();
+  }
+
+  async function salvarVigencia() {
+    setBusy(true);
+    const fd = new FormData();
+    fd.append("duracao_seg", dur);
+    const r = await fetch(`/api/admin/locais`, {
+      method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: local.id, encarte_inicio: inicio, encarte_fim: fim, encarte_duracao_seg: parseInt(dur, 10) || 10 }),
+    });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro ao salvar vigência", "error"); return; }
+    notify("Vigência atualizada", "success");
+    onSaved();
+  }
+
   return (
     <Modal onClose={onClose} title={`Encarte do ${local.nome}`} wide>
       <p className="mb-2 text-xs text-slate-400">
@@ -1401,34 +1475,74 @@ function EncarteModal({ token, local, onClose, onSaved, busy, setBusy }: { token
       <code className="mb-3 block rounded bg-white/10 px-2 py-1 text-[10px] text-slate-300">
         [pág 1 → pág 2 → … → pág N] → anúncio_1 → [pág 1 → pág 2 → … → pág N] → anúncio_2 → …
       </code>
-      <label className="mb-1 block text-sm text-slate-300">Arquivos do encarte (imagens/vídeos)</label>
+
+      {/* ─── Fila atual ─────────────────────────────────────────────── */}
+      <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wider text-amber-300">Fila atual ({paginas.length} página{paginas.length === 1 ? "" : "s"})</p>
+          {loadingPg && <Loader2 className="h-3 w-3 animate-spin text-amber-300" />}
+        </div>
+        {paginas.length === 0 ? (
+          <p className="text-xs text-slate-500">Nenhuma página ainda — adicione arquivos abaixo.</p>
+        ) : (
+          <div className="max-h-48 space-y-1 overflow-y-auto">
+            {paginas.map((p, i) => (
+              <div key={p.id} className="flex items-center gap-2 rounded bg-white/5 px-2 py-1.5 text-xs">
+                <span className="w-6 rounded bg-amber-500/30 px-1 text-center font-bold text-amber-200">{i + 1}</span>
+                <span className="flex-1 truncate" title={p.nome ?? p.id}>{p.nome ?? "sem nome"}</span>
+                <span className="text-slate-500">{p.duracao_seg}s</span>
+                <button type="button" disabled={busy || i === 0} onClick={() => moverPaginaBackend(i, -1)} className="rounded border border-white/10 px-1 disabled:opacity-30">↑</button>
+                <button type="button" disabled={busy || i === paginas.length - 1} onClick={() => moverPaginaBackend(i, 1)} className="rounded border border-white/10 px-1 disabled:opacity-30">↓</button>
+                <button type="button" disabled={busy} onClick={() => excluirPagina(p)} className="rounded border border-red-500/30 px-1 text-red-300 hover:bg-red-500/10" title="Remover página"><Trash2 className="h-3 w-3" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ─── Adicionar arquivos ─────────────────────────────────────── */}
+      <label className="mb-1 block text-sm text-slate-300">Adicionar novos arquivos (imagens/vídeos)</label>
       <input type="file" accept="image/*,video/*" multiple onChange={e => onPick(e.target.files)}
         className="mb-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm file:mr-2 file:rounded file:border-0 file:bg-brand/30 file:px-3 file:py-1 file:text-xs file:text-brand-light hover:file:bg-brand/50" />
       {files.length > 0 && (
         <div className="mb-3 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-2">
           {files.map((f, i) => (
             <div key={i} className="flex items-center gap-2 text-xs">
-              <span className="w-6 rounded bg-amber-500/20 px-1 text-center text-amber-300 font-bold">{i + 1}</span>
+              <span className="w-6 rounded bg-cyan-500/20 px-1 text-center text-cyan-300 font-bold">{i + 1}</span>
               <span className="flex-1 truncate">{f.name}</span>
               <span className="text-slate-500">{(f.size / 1024 / 1024).toFixed(2)} MB</span>
-              <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className="rounded border border-white/10 px-1 disabled:opacity-30">↑</button>
-              <button type="button" onClick={() => mover(i, 1)} disabled={i === files.length - 1} className="rounded border border-white/10 px-1 disabled:opacity-30">↓</button>
-              <button type="button" onClick={() => remover(i)} className="rounded border border-red-500/30 px-1 text-red-300 hover:bg-red-500/10"><X className="h-3 w-3" /></button>
+              <button type="button" onClick={() => moverLocal(i, -1)} disabled={i === 0} className="rounded border border-white/10 px-1 disabled:opacity-30">↑</button>
+              <button type="button" onClick={() => moverLocal(i, 1)} disabled={i === files.length - 1} className="rounded border border-white/10 px-1 disabled:opacity-30">↓</button>
+              <button type="button" onClick={() => removerLocal(i)} className="rounded border border-red-500/30 px-1 text-red-300 hover:bg-red-500/10"><X className="h-3 w-3" /></button>
             </div>
           ))}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Início (vigência)" value={inicio} onChange={setInicio} type="date" />
-        <Field label="Fim (vigência)" value={fim} onChange={setFim} type="date" />
+
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <button onClick={adicionar} disabled={busy || !files.length} className="flex items-center justify-center gap-2 rounded-xl bg-brand py-2 text-sm font-semibold hover:bg-brand-dark disabled:opacity-50">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar à fila
+        </button>
+        <button onClick={trocarTudo} disabled={busy || !files.length} className="flex items-center justify-center gap-2 rounded-xl border border-red-500/30 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/10 disabled:opacity-50" title="Apaga todas as páginas atuais e usa só os novos arquivos">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Substituir tudo
+        </button>
       </div>
-      <Field label="Duração de exibição (segundos)" value={dur} onChange={setDur} type="number" />
-      <p className="mb-3 text-xs text-slate-500">Aplica em <strong>todas as páginas</strong> (imagens). Vídeos usam a duração nativa.</p>
-      {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
-      <button onClick={enviar} disabled={busy || !files.length} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {files.length > 1 ? `Enviar ${files.length} páginas` : local.encarte_nome ? "Trocar encarte" : "Enviar encarte"}
-      </button>
-      <p className="mt-2 text-[11px] text-slate-500">⚠ Reenviar substitui <strong>todas</strong> as páginas anteriores (replace-mode).</p>
+
+      {/* ─── Vigência + duração ────────────────────────────────────── */}
+      <div className="mt-2 border-t border-white/5 pt-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Vigência e duração</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Início" value={inicio} onChange={setInicio} type="date" />
+          <Field label="Fim" value={fim} onChange={setFim} type="date" />
+        </div>
+        <Field label="Duração por página (segundos)" value={dur} onChange={setDur} type="number" />
+        <button onClick={salvarVigencia} disabled={busy} className="mb-1 w-full rounded-xl border border-white/15 py-2 text-xs font-semibold text-slate-200 hover:bg-white/5 disabled:opacity-50">
+          Salvar vigência/duração
+        </button>
+        <p className="text-[11px] text-slate-500">Vigência aplica ao bloco todo. Duração afeta páginas adicionadas a partir de agora.</p>
+      </div>
+
+      {err && <p className="mt-3 text-sm text-red-400">{err}</p>}
     </Modal>
   );
 }

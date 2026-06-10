@@ -94,6 +94,9 @@ const patch = z.object({
   plano_veiculacao: z.enum(["publicidade", "encarte_totem", "ponta_gondola"]).optional(),
   hora_abertura:   z.string().regex(/^\d{2}:\d{2}$/).optional(),
   hora_fechamento: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  encarte_inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  encarte_fim:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  encarte_duracao_seg: z.coerce.number().int().min(1).max(600).optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -109,7 +112,7 @@ export async function PATCH(req: NextRequest) {
 
   const sets: string[] = []; const vals: unknown[] = [];
   const add = (c: string, v: unknown) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
-  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "orientacao", "lat", "lng", "passantes_dia", "ativo", "plano_veiculacao", "hora_abertura", "hora_fechamento"] as const)
+  for (const k of ["nome", "cidade", "endereco", "descricao", "largura", "altura", "capacidade_dia", "orientacao", "lat", "lng", "passantes_dia", "ativo", "plano_veiculacao", "hora_abertura", "hora_fechamento", "encarte_inicio", "encarte_fim", "encarte_duracao_seg"] as const)
     if (b[k] !== undefined) add(k, b[k]);
   if (!sets.length) return NextResponse.json({ ok: false, error: "nada para atualizar" }, { status: 400 });
 

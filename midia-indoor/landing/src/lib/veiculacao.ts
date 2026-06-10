@@ -44,11 +44,11 @@ interface LocalRow {
   interleave_layout_id: number | null; interleave_event_id: number | null;
 }
 
-interface EncartePagina {
+export interface EncartePagina {
   id: string; ordem: number; xibo_media_id: number; duracao_seg: number; nome: string | null;
 }
 
-async function listarPaginasEncarte(localId: string): Promise<EncartePagina[]> {
+export async function listarPaginasEncarte(localId: string): Promise<EncartePagina[]> {
   const r = await db().query<EncartePagina>(
     `SELECT id, ordem, xibo_media_id, duracao_seg, nome
        FROM midia_encarte_paginas WHERE local_id = $1 ORDER BY ordem ASC, criada_em ASC`,
@@ -290,6 +290,132 @@ export async function definirEncarteDoLocal(localId: string, opts: {
   // Dispara regeneracao imediata
   const r = await regenerarLayoutDoLocal(localId);
   return { ok: true, paginas: novasPaginas.length, regenerado: r.regenerado };
+}
+
+/**
+ * APPEND-mode: adiciona paginas no final da fila do encarte (sem apagar
+ * as anteriores). Util pra UI de "fila" onde o usuario acumula designs.
+ */
+export async function adicionarPaginasEncarte(localId: string, opts: {
+  arquivos: Array<{ arquivo: Buffer | Blob; nomeArquivo: string; mime?: string }>;
+  duracaoSeg?: number;
+}): Promise<{ ok: boolean; erro?: string; adicionadas?: number; total?: number; regenerado?: boolean }> {
+  await ensureSchema();
+  const p = db();
+  const local = await carregarLocal(localId);
+  if (!local) return { ok: false, erro: "local nao encontrado" };
+  if (!opts.arquivos.length) return { ok: false, erro: "nenhum arquivo enviado" };
+
+  const novas: Array<{ mediaId: number; nome: string; blob: Buffer | null; mime: string | null }> = [];
+  for (const a of opts.arquivos) {
+    try {
+      const mediaId = await uploadMediaSimples(a.arquivo, a.nomeArquivo, ROOT_FOLDER);
+      const blob = Buffer.isBuffer(a.arquivo)
+        ? (a.arquivo.length <= 100 * 1024 * 1024 ? a.arquivo : null)
+        : (a.arquivo.size <= 100 * 1024 * 1024 ? Buffer.from(await a.arquivo.arrayBuffer()) : null);
+      novas.push({ mediaId, nome: a.nomeArquivo, blob, mime: a.mime ?? null });
+    } catch (e) {
+      console.warn(`[veiculacao] upload encarte pagina '${a.nomeArquivo}' falhou:`, (e as Error).message);
+    }
+  }
+  if (!novas.length) return { ok: false, erro: "todos os uploads falharam" };
+
+  const duracao = opts.duracaoSeg && opts.duracaoSeg > 0 ? opts.duracaoSeg : (local.encarte_duracao_seg || 10);
+  const maxOrdem = await p.query<{ max: number | null }>(
+    `SELECT MAX(ordem) AS max FROM midia_encarte_paginas WHERE local_id = $1`, [localId]
+  ).then(r => r.rows[0]?.max ?? -1);
+
+  let ordem = (maxOrdem ?? -1) + 1;
+  for (const pg of novas) {
+    await p.query(
+      `INSERT INTO midia_encarte_paginas (local_id, ordem, nome, xibo_media_id, duracao_seg, arquivo_bytes, arquivo_mime)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [localId, ordem++, pg.nome, pg.mediaId, duracao, pg.blob, pg.mime]
+    );
+  }
+
+  // Garante plano = encarte_totem se ainda estava em publicidade + atualiza nome resumo
+  const total = await p.query<{ n: string; primeiro: string | null }>(
+    `SELECT COUNT(*)::text AS n, (SELECT nome FROM midia_encarte_paginas WHERE local_id = $1 ORDER BY ordem ASC LIMIT 1) AS primeiro
+       FROM midia_encarte_paginas WHERE local_id = $1`, [localId]
+  ).then(r => r.rows[0]);
+  const nTotal = parseInt(total?.n ?? "0", 10);
+  const nomeResumo = nTotal === 1 ? (total?.primeiro ?? "encarte") : `${nTotal} páginas (${total?.primeiro ?? ""}…)`;
+  await p.query(
+    `UPDATE midia_locais
+        SET encarte_nome = $1,
+            encarte_duracao_seg = COALESCE(NULLIF(encarte_duracao_seg, 0), $2),
+            plano_veiculacao = CASE WHEN plano_veiculacao = 'publicidade' THEN 'encarte_totem' ELSE plano_veiculacao END,
+            updated_at = NOW()
+      WHERE id = $3`,
+    [nomeResumo, duracao, localId]
+  );
+
+  const r = await regenerarLayoutDoLocal(localId);
+  return { ok: true, adicionadas: novas.length, total: nTotal, regenerado: r.regenerado };
+}
+
+/** Remove uma pagina especifica do encarte e regenera o layout. */
+export async function removerPaginaEncarte(localId: string, paginaId: string): Promise<{
+  ok: boolean; erro?: string; restantes?: number; regenerado?: boolean
+}> {
+  await ensureSchema();
+  const p = db();
+  const local = await carregarLocal(localId);
+  if (!local) return { ok: false, erro: "local nao encontrado" };
+
+  const del = await p.query(`DELETE FROM midia_encarte_paginas WHERE id = $1 AND local_id = $2`, [paginaId, localId]);
+  if (del.rowCount === 0) return { ok: false, erro: "pagina nao encontrada" };
+
+  // Recompacta ordens (0..n-1) pra evitar buracos
+  const rest = await p.query<{ id: string }>(
+    `SELECT id FROM midia_encarte_paginas WHERE local_id = $1 ORDER BY ordem ASC, criada_em ASC`, [localId]
+  ).then(r => r.rows);
+  for (let i = 0; i < rest.length; i++) {
+    await p.query(`UPDATE midia_encarte_paginas SET ordem = $1 WHERE id = $2`, [i, rest[i].id]);
+  }
+
+  // Atualiza nome resumo
+  if (rest.length === 0) {
+    await p.query(`UPDATE midia_locais SET encarte_nome = NULL, encarte_media_id = NULL, updated_at = NOW() WHERE id = $1`, [localId]);
+  } else {
+    const primeiro = await p.query<{ nome: string | null; xibo_media_id: number }>(
+      `SELECT nome, xibo_media_id FROM midia_encarte_paginas WHERE local_id = $1 ORDER BY ordem ASC LIMIT 1`, [localId]
+    ).then(r => r.rows[0]);
+    const nomeResumo = rest.length === 1 ? (primeiro?.nome ?? "encarte") : `${rest.length} páginas (${primeiro?.nome ?? ""}…)`;
+    await p.query(
+      `UPDATE midia_locais SET encarte_nome = $1, encarte_media_id = $2, updated_at = NOW() WHERE id = $3`,
+      [nomeResumo, primeiro?.xibo_media_id ?? null, localId]
+    );
+  }
+
+  const r = await regenerarLayoutDoLocal(localId);
+  return { ok: true, restantes: rest.length, regenerado: r.regenerado };
+}
+
+/** Reordena as paginas do encarte (array de ids na nova ordem). */
+export async function reordenarPaginasEncarte(localId: string, ordemIds: string[]): Promise<{
+  ok: boolean; erro?: string; regenerado?: boolean
+}> {
+  await ensureSchema();
+  const p = db();
+  if (!ordemIds.length) return { ok: false, erro: "ordem vazia" };
+
+  // Valida que todos os ids pertencem ao local
+  const existentes = await p.query<{ id: string }>(
+    `SELECT id FROM midia_encarte_paginas WHERE local_id = $1`, [localId]
+  ).then(r => r.rows.map(x => x.id));
+  for (const id of ordemIds) {
+    if (!existentes.includes(id)) return { ok: false, erro: `pagina ${id} nao pertence ao local` };
+  }
+  if (ordemIds.length !== existentes.length) return { ok: false, erro: "ordem incompleta (faltam ids)" };
+
+  for (let i = 0; i < ordemIds.length; i++) {
+    await p.query(`UPDATE midia_encarte_paginas SET ordem = $1 WHERE id = $2 AND local_id = $3`, [i, ordemIds[i], localId]);
+  }
+
+  const r = await regenerarLayoutDoLocal(localId);
+  return { ok: true, regenerado: r.regenerado };
 }
 
 /** Faz upload da midia ponta de uma TELA (gondola). */
