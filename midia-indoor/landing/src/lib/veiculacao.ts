@@ -82,14 +82,22 @@ async function carregarLocal(localId: string): Promise<LocalRow | null> {
 }
 
 async function listarAnunciosAtivosNoLocal(localId: string): Promise<AnuncioAtivo[]> {
+  // Inclui campanhas apontadas DIRETAMENTE no local OU via qualquer grupo
+  // do qual o local seja membro (midia_local_grupo_membros).
   const r = await db().query<AnuncioAtivo>(
-    `SELECT c.id AS campanha_id, c.nome, c.xibo_media_id, c.segundos
+    `SELECT DISTINCT c.id AS campanha_id, c.nome, c.xibo_media_id, c.segundos,
+            c.lancada_em, c.created_at
        FROM midia_campanhas c
        JOIN midia_campanha_locais cl ON cl.campanha_id = c.id
-      WHERE cl.local_id = $1
-        AND c.status = 'no_ar'
+      WHERE c.status = 'no_ar'
         AND c.xibo_media_id IS NOT NULL
         AND (c.data_fim IS NULL OR c.data_fim >= CURRENT_DATE)
+        AND (
+          cl.local_id = $1
+          OR cl.local_id IN (
+            SELECT grupo_id FROM midia_local_grupo_membros WHERE membro_id = $1
+          )
+        )
       ORDER BY c.lancada_em ASC NULLS LAST, c.created_at ASC`,
     [localId]
   );

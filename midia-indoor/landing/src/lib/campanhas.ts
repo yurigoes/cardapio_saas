@@ -383,10 +383,17 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
     // regenera o layout intercalado pra incluir esse novo anuncio na rotacao.
     try {
       const { regenerarSeNecessario } = await import("./veiculacao");
-      const locaisIds = await p.query<{ local_id: string }>(
-        `SELECT local_id FROM midia_campanha_locais WHERE campanha_id = $1`, [campanhaId]
+      // Expande grupos: se a campanha aponta pra um grupo, regenera TODOS os
+      // membros individuais (o proprio grupo nao tem display nem encarte).
+      const alvos = await p.query<{ local_id: string }>(
+        `SELECT DISTINCT m.id AS local_id
+           FROM midia_campanha_locais cl
+           JOIN midia_locais l ON l.id = cl.local_id
+           LEFT JOIN midia_local_grupo_membros g ON g.grupo_id = l.id
+           JOIN midia_locais m ON m.id = CASE WHEN l.tipo = 'grupo' THEN g.membro_id ELSE l.id END
+          WHERE cl.campanha_id = $1`, [campanhaId]
       ).then(r => r.rows.map(x => x.local_id));
-      for (const lid of locaisIds) { await regenerarSeNecessario(lid); }
+      for (const lid of alvos) { await regenerarSeNecessario(lid); }
     } catch (e) { console.warn("[lancar] regen veiculacao:", (e as Error).message); }
 
     return { ok: true, xiboCampaignId };
@@ -473,7 +480,16 @@ export async function encerrarCampanha(campanhaId: string): Promise<{ ok: boolea
     // intercalados de encarte/gondola dos locais que ela cobria.
     try {
       const { regenerarSeNecessario } = await import("./veiculacao");
-      for (const lid of locaisIds) { await regenerarSeNecessario(lid); }
+      // Expande grupos -> membros individuais
+      const alvos = await p.query<{ local_id: string }>(
+        `SELECT DISTINCT m.id AS local_id
+           FROM (SELECT unnest($1::uuid[]) AS lid) src
+           JOIN midia_locais l ON l.id = src.lid
+           LEFT JOIN midia_local_grupo_membros g ON g.grupo_id = l.id
+           JOIN midia_locais m ON m.id = CASE WHEN l.tipo = 'grupo' THEN g.membro_id ELSE l.id END`,
+        [locaisIds]
+      ).then(r => r.rows.map(x => x.local_id));
+      for (const lid of alvos) { await regenerarSeNecessario(lid); }
     } catch (e) { console.warn("[encerrar] regen veiculacao:", (e as Error).message); }
 
     return { ok: true };
