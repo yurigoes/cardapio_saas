@@ -460,13 +460,32 @@ function Instalar-LauncherThree {
   adb -s $device install -r -g $apk | Out-Null
   Ok "Launcher APK instalado"
 
-  # Sobe wallpaper se fornecido. Tenta varios caminhos pra cobrir variacoes do device.
+  # Sobe wallpaper se fornecido. Empurra em VARIOS lugares pra garantir:
+  # 1. /sdcard (publico, precisa permissao em Android <13 - ja inclui READ_EXTERNAL_STORAGE)
+  # 2. files dir externa do app (sem permissao)
+  # 3. files dir interna do app (via root, sem permissao - mais confiavel)
   if ($wallpaper -and (Test-Path $wallpaper)) {
     $ext = [System.IO.Path]::GetExtension($wallpaper).ToLower().TrimStart(".")
     if ($ext -notin @("png","jpg","jpeg")) { $ext = "png" }
-    $alvo = "/sdcard/three_wallpaper.$ext"
-    adb -s $device push $wallpaper $alvo | Out-Null
-    Ok "Wallpaper enviado para $alvo"
+    $nomeArq = "three_wallpaper.$ext"
+
+    # 1. /sdcard publico
+    adb -s $device push $wallpaper "/sdcard/$nomeArq" | Out-Null
+    Ok "Wallpaper enviado para /sdcard/$nomeArq"
+
+    # 2. External files dir do app (cria se nao existir)
+    $extDir = "/sdcard/Android/data/com.threedigital.launcher/files"
+    adb -s $device shell "mkdir -p $extDir" | Out-Null
+    adb -s $device push $wallpaper "$extDir/$nomeArq" | Out-Null
+    Ok "Wallpaper enviado para $extDir/$nomeArq"
+
+    # 3. Internal files dir do app (via root)
+    $intDir = "/data/data/com.threedigital.launcher/files"
+    adb -s $device shell "su -c 'mkdir -p $intDir && cp $extDir/$nomeArq $intDir/$nomeArq && chmod 644 $intDir/$nomeArq && chown -R `$(stat -c %u:%g /data/data/com.threedigital.launcher) $intDir'" | Out-Null
+    Ok "Wallpaper enviado para $intDir/$nomeArq (via root)"
+
+    # Tambem garante permissao runtime (Android >=6, antes do maxSdk 32)
+    adb -s $device shell "pm grant com.threedigital.launcher android.permission.READ_EXTERNAL_STORAGE" 2>$null | Out-Null
   } else {
     Warn "Sem wallpaper customizado - launcher vai usar gradient default"
   }

@@ -139,22 +139,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun carregarWallpaper() {
-        val candidatos = listOf(
-            "/sdcard/three_wallpaper.png",
-            "/sdcard/three_wallpaper.jpg",
-            "/sdcard/Download/three_wallpaper.png",
-            "/sdcard/Download/three_wallpaper.jpg"
-        )
+        val candidatos = mutableListOf<String>().apply {
+            // 1. Pasta privada do app — sem permissao, funciona em qualquer Android
+            filesDir?.let {
+                add("${it.absolutePath}/three_wallpaper.png")
+                add("${it.absolutePath}/three_wallpaper.jpg")
+            }
+            // 2. Pasta externa do app — sem permissao, funciona em qualquer Android
+            getExternalFilesDir(null)?.let {
+                add("${it.absolutePath}/three_wallpaper.png")
+                add("${it.absolutePath}/three_wallpaper.jpg")
+            }
+            // 3. /sdcard publico — fallback (precisa READ_EXTERNAL_STORAGE em Android <13)
+            add("/sdcard/three_wallpaper.png")
+            add("/sdcard/three_wallpaper.jpg")
+            add("/sdcard/Download/three_wallpaper.png")
+            add("/sdcard/Download/three_wallpaper.jpg")
+            add("/storage/emulated/0/three_wallpaper.png")
+            add("/storage/emulated/0/three_wallpaper.jpg")
+        }
+        android.util.Log.d("ThreeLauncher", "Procurando wallpaper em ${candidatos.size} caminhos...")
         for (path in candidatos) {
             val f = File(path)
-            if (f.exists() && f.length() > 0) {
+            val existe = f.exists()
+            val tamanho = if (existe) f.length() else 0L
+            android.util.Log.d("ThreeLauncher", "  $path -> existe=$existe size=$tamanho")
+            if (existe && tamanho > 0) {
                 try {
                     val bmp = BitmapFactory.decodeFile(path)
-                    if (bmp != null) { background.setImageBitmap(bmp); return }
-                } catch (e: Exception) { /* tenta proximo */ }
+                    if (bmp != null) {
+                        background.setImageBitmap(bmp)
+                        android.util.Log.d("ThreeLauncher", "Wallpaper carregado: $path (${bmp.width}x${bmp.height})")
+                        return
+                    } else {
+                        android.util.Log.w("ThreeLauncher", "decodeFile retornou null: $path")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("ThreeLauncher", "Erro decodificando $path: ${e.message}")
+                }
             }
         }
-        // Sem wallpaper externo — mantem o background do layout (gradient default)
+        android.util.Log.w("ThreeLauncher", "Nenhum wallpaper encontrado — mantendo gradient default")
     }
 
     private fun abrirApp(pacote: String, silenciosoSeAusente: Boolean = false) {
