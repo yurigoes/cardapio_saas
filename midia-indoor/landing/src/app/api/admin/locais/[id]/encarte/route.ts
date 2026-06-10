@@ -30,7 +30,7 @@ async function autorizar(req: NextRequest): Promise<boolean> {
   const key = req.nextUrl.searchParams.get("key") ?? req.headers.get("x-cron-key");
   const cronSecret = process.env.CRON_SECRET ?? "";
   if (cronSecret && key === cronSecret) return true;
-  return await exigirMaster(req);
+  return Boolean(await exigirMaster(req));
 }
 
 async function lerArquivos(req: NextRequest) {
