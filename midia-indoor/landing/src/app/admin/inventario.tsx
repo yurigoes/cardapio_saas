@@ -231,6 +231,9 @@ interface OsRow {
 }
 function OSInventario({ token }: { token: string }) {
   const [status, setStatus] = useState<"aberto" | "em_analise" | "resolvido" | "descartado" | "todos">("aberto");
+  const [filtroTexto, setFiltroTexto] = useState("");
+  const [filtroTecnico, setFiltroTecnico] = useState("");
+  const [filtroLocal, setFiltroLocal] = useState("");
   const [lista, setLista] = useState<OsRow[]>([]);
   const [verOs, setVerOs] = useState<OsRow | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -247,10 +250,36 @@ function OSInventario({ token }: { token: string }) {
   }, [token, status]);
   useEffect(() => { load(); }, [load]);
   const brl = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  // Listas unicas de tecnicos/locais pros filtros (da propria lista atual)
+  const tecnicosUnicos = Array.from(new Set(lista.map(l => l.atribuido_a).filter((x): x is string => Boolean(x)))).sort();
+  const locaisUnicos = Array.from(new Set(lista.map(l => l.local_nome).filter((x): x is string => Boolean(x)))).sort();
+  const listaFiltrada = lista.filter(o => {
+    if (filtroTecnico && o.atribuido_a !== filtroTecnico) return false;
+    if (filtroLocal && o.local_nome !== filtroLocal) return false;
+    if (filtroTexto) {
+      const t = filtroTexto.toLowerCase();
+      const blob = `${o.item_nome} ${o.descricao} ${o.atribuido_a ?? ""} ${o.aberta_por_nome ?? ""} ${o.local_nome ?? ""}`.toLowerCase();
+      if (!blob.includes(t)) return false;
+    }
+    return true;
+  });
   return (
     <div>
       {/* DASHBOARD FINANCEIRO */}
       {dash && (
+        <>
+        <div className="mb-2 flex justify-end">
+          <button onClick={async () => {
+            const r = await aapi(token, "/api/admin/inventario/os/dashboard.pdf");
+            const html = await r.text();
+            const blob = new Blob([html], { type: "text/html" });
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank");
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+          }} className="flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1 text-xs hover:bg-white/5">
+            <FileText className="h-3.5 w-3.5" /> Exportar dashboard
+          </button>
+        </div>
         <div className="mb-4 grid gap-3 md:grid-cols-4">
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
             <p className="text-[10px] uppercase tracking-wide text-slate-400">Total custo resolvido</p>
@@ -279,6 +308,7 @@ function OSInventario({ token }: { token: string }) {
             </div>
           </div>
         </div>
+        </>
       )}
 
       <div className="mb-3 flex gap-1">
@@ -289,11 +319,31 @@ function OSInventario({ token }: { token: string }) {
         ))}
         <button onClick={load} disabled={carregando} className="ml-2 rounded-lg border border-white/15 p-1.5 hover:bg-white/5 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${carregando ? "animate-spin" : ""}`} /></button>
       </div>
-      {lista.length === 0 ? (
-        <p className="rounded-xl border border-white/10 bg-white/[0.02] p-8 text-center text-sm text-slate-400">Nenhuma OS {status === "todos" ? "" : `em ${status}`}.</p>
+
+      {/* FILTROS */}
+      <div className="mb-3 grid gap-2 md:grid-cols-3">
+        <input type="text" value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)} placeholder="🔍 Busca livre (item, descrição, técnico…)"
+          className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm outline-none" />
+        <select value={filtroTecnico} onChange={e => setFiltroTecnico(e.target.value)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm outline-none">
+          <option value="">👷 Todos os técnicos</option>
+          {tecnicosUnicos.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={filtroLocal} onChange={e => setFiltroLocal(e.target.value)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm outline-none">
+          <option value="">📍 Todos os locais</option>
+          {locaisUnicos.map(l => <option key={l} value={l}>{l}</option>)}
+        </select>
+      </div>
+      {(filtroTexto || filtroTecnico || filtroLocal) && (
+        <p className="mb-2 text-xs text-slate-400">
+          Mostrando {listaFiltrada.length} de {lista.length} OS
+          <button onClick={() => { setFiltroTexto(""); setFiltroTecnico(""); setFiltroLocal(""); }} className="ml-2 text-brand-light underline">limpar filtros</button>
+        </p>
+      )}
+      {listaFiltrada.length === 0 ? (
+        <p className="rounded-xl border border-white/10 bg-white/[0.02] p-8 text-center text-sm text-slate-400">{lista.length === 0 ? `Nenhuma OS ${status === "todos" ? "" : `em ${status}`}.` : "Nenhuma OS bate com os filtros."}</p>
       ) : (
         <div className="space-y-2">
-          {lista.map(o => {
+          {listaFiltrada.map(o => {
             const slaMs = o.prazo_sla ? new Date(o.prazo_sla).getTime() : null;
             const atrasada = slaMs && slaMs < Date.now() && (o.status === "aberto" || o.status === "em_analise");
             const slaRest = slaMs ? Math.round((slaMs - Date.now()) / 3600_000) : null;

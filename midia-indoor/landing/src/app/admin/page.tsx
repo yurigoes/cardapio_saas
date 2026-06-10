@@ -1088,6 +1088,7 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
     notify(d.ok ? "Comando de sync de relógio disparado · TVs devem alinhar em ~10s" : (d.error || "Erro"), d.ok ? "success" : "error");
   }
   const [verTelas, setVerTelas] = useState(false);
+  const [editar, setEditar] = useState(false);
   return (
     <div className={`rounded-2xl border p-4 ${local.ativo ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.02] opacity-60"}`}>
       <div className="flex items-start justify-between">
@@ -1164,9 +1165,10 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
         </label>
         <button onClick={onToggle} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5">{local.ativo ? "Desativar" : "Ativar"}</button>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <button onClick={() => setEditar(true)} className="flex items-center justify-center gap-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/5"><Pencil className="h-3.5 w-3.5" /> Editar</button>
         <button onClick={() => setOcup(true)} className="flex items-center justify-center gap-1 rounded-lg bg-brand/15 py-1.5 text-xs font-medium text-brand-light hover:bg-brand/25"><BarChart3 className="h-3.5 w-3.5" /> Ocupação</button>
-        <button onClick={() => setAtivar(true)} className="flex items-center justify-center gap-1 rounded-lg border border-emerald-500/30 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/10"><MonitorPlay className="h-3.5 w-3.5" /> Ativar TV por código</button>
+        <button onClick={() => setAtivar(true)} className="flex items-center justify-center gap-1 rounded-lg border border-emerald-500/30 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/10"><MonitorPlay className="h-3.5 w-3.5" /> Ativar TV</button>
       </div>
       {plano === "ponta_gondola" && (
         <div className="mt-2 grid grid-cols-2 gap-2">
@@ -1178,7 +1180,82 @@ function LocalCard({ token, local, onChange, onToggle }: { token: string; local:
       {ativar && <AtivarPorCodigoModal token={token} local={local} onClose={() => setAtivar(false)} onSaved={() => { setAtivar(false); onChange(); }} />}
       {editEncarte && <EncarteModal token={token} local={local} onClose={() => setEditEncarte(false)} onSaved={() => { setEditEncarte(false); onChange(); }} busy={busyEncarte} setBusy={setBusyEncarte} />}
       {verTelas && <TelasDoLocalModal token={token} local={local} onClose={() => setVerTelas(false)} />}
+      {editar && <EditarLocalModal token={token} local={local} onClose={() => setEditar(false)} onSaved={() => { setEditar(false); onChange(); }} />}
     </div>
+  );
+}
+
+function EditarLocalModal({ token, local, onClose, onSaved }: { token: string; local: Local; onClose: () => void; onSaved: () => void }) {
+  const [nome, setNome] = useState(local.nome);
+  const [cidade, setCidade] = useState(local.cidade ?? "");
+  const [endereco, setEndereco] = useState(local.endereco ?? "");
+  const [orientacao, setOrientacao] = useState<"retrato" | "paisagem">(local.altura > local.largura ? "retrato" : "paisagem");
+  const [largura, setLargura] = useState(String(local.largura));
+  const [altura, setAltura] = useState(String(local.altura));
+  const [capacidade, setCapacidade] = useState("0");
+  const [lat, setLat] = useState(local.lat != null ? String(local.lat) : "");
+  const [lng, setLng] = useState(local.lng != null ? String(local.lng) : "");
+  const [passantes, setPassantes] = useState(String(local.passantes_dia ?? 0));
+  const [plano, setPlano] = useState<"publicidade" | "encarte_totem" | "ponta_gondola">(local.plano_veiculacao ?? "publicidade");
+  const [horaA, setHoraA] = useState(local.hora_abertura ?? "06:00");
+  const [horaF, setHoraF] = useState(local.hora_fechamento ?? "22:00");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  async function salvar() {
+    setBusy(true); setErr("");
+    const r = await aapi(token, "/api/admin/locais", { method: "PATCH", body: JSON.stringify({
+      id: local.id, nome, cidade, endereco, orientacao, largura: Number(largura), altura: Number(altura),
+      capacidade_dia: capacidade, lat: lat || null, lng: lng || null, passantes_dia: passantes,
+      plano_veiculacao: plano, hora_abertura: horaA, hora_fechamento: horaF,
+    })});
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro"); return; }
+    notify(d.campanhas_reaplicadas > 0 ? `Salvo · ${d.campanhas_reaplicadas} campanha(s) reaplicada(s)` : "Salvo", "success");
+    onSaved();
+  }
+  return (
+    <Modal onClose={onClose} title={`Editar local — ${local.nome}`}>
+      <Field label="Nome" value={nome} onChange={setNome} />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Cidade" value={cidade} onChange={setCidade} />
+        <Field label="Endereço" value={endereco} onChange={setEndereco} />
+      </div>
+      <label className="mb-1 block text-sm text-slate-300">Orientação</label>
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        {(["retrato", "paisagem"] as const).map(o => (
+          <button type="button" key={o} onClick={() => { setOrientacao(o); setLargura(o === "paisagem" ? "1920" : "1080"); setAltura(o === "paisagem" ? "1080" : "1920"); }}
+            className={`rounded-xl border px-3 py-2 text-sm font-medium ${orientacao === o ? "border-brand bg-brand/15 text-brand-light" : "border-white/10 text-slate-400 hover:bg-white/5"}`}>
+            {o === "retrato" ? "Retrato" : "Paisagem"}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Largura (px)" value={largura} onChange={setLargura} type="number" />
+        <Field label="Altura (px)" value={altura} onChange={setAltura} type="number" />
+      </div>
+      <label className="mb-1 block text-sm text-slate-300">Plano de veiculação</label>
+      <select value={plano} onChange={e => setPlano(e.target.value as typeof plano)} className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+        <option value="publicidade">📺 Publicidade</option>
+        <option value="encarte_totem">🎯 Encarte de totem</option>
+        <option value="ponta_gondola">🛒 Ponta de gôndola</option>
+      </select>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Abre às" value={horaA} onChange={setHoraA} type="time" />
+        <Field label="Fecha às" value={horaF} onChange={setHoraF} type="time" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Capacidade/dia (0=ilim)" value={capacidade} onChange={setCapacidade} type="number" />
+        <Field label="Passantes/dia" value={passantes} onChange={setPassantes} type="number" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Latitude" value={lat} onChange={setLat} placeholder="-12.971" />
+        <Field label="Longitude" value={lng} onChange={setLng} placeholder="-38.513" />
+      </div>
+      <p className="mb-3 text-xs text-slate-500">Mudar plano/horários re-aplica campanhas no ar automaticamente.</p>
+      {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+      <button onClick={salvar} disabled={busy || !nome} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar alterações
+      </button>
+    </Modal>
   );
 }
 
