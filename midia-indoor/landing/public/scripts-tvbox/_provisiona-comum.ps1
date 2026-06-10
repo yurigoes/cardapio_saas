@@ -877,7 +877,7 @@ function Selecionar-Componentes {
   if ($resp -eq "T" -or $resp -eq "TUDO") {
     $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true
   } else {
-    $partes = $resp -split "[,;\s]+" | Where-Object { $_ }
+    $partes = $resp -split '[,;\s]+' | Where-Object { $_ }
     foreach ($p in $partes) {
       switch ($p) {
         "1"        { $flags.Xibo = $true }
@@ -909,7 +909,7 @@ function Selecionar-Componentes {
 # Converte string CSV em hashtable de flags (uso via -Componentes "xibo,launcher")
 function Parse-Componentes([string]$csv) {
   $flags = @{ Xibo=$false; RustDesk=$false; Launcher=$false; Boot=$false }
-  $partes = $csv -split "[,;\s]+" | Where-Object { $_ }
+  $partes = $csv -split '[,;\s]+' | Where-Object { $_ }
   foreach ($p in $partes) {
     switch ($p.ToLower()) {
       "tudo"     { $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true }
