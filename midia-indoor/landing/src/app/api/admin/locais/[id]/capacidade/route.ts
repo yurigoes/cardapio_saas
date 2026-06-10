@@ -32,6 +32,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { exigirMaster, autenticarAdmin } from "@/lib/admin-auth";
+import { autenticar } from "@/lib/auth";
 import { db, ensureSchema } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +61,11 @@ async function handle(req: NextRequest, { params }: { params: { id: string } }) 
   const key = req.nextUrl.searchParams.get("key") ?? req.headers.get("x-cron-key");
   const cronSecret = process.env.CRON_SECRET ?? "";
   const viaKey = cronSecret && key === cronSecret;
-  if (!viaKey && !(await autenticarAdmin(req)) && !(await exigirMaster(req))) {
+  // Aceita: ?key=CRON_SECRET | admin cookie | master | anunciante JWT
+  // (anunciante precisa ver capacidade pra escolher locais na campanha)
+  const isAdmin = await autenticarAdmin(req).catch(() => false);
+  const isAnunciante = !isAdmin && Boolean(await autenticar(req).catch(() => null));
+  if (!viaKey && !isAdmin && !isAnunciante) {
     return NextResponse.json({ ok: false, error: "nao autenticado" }, { status: 401 });
   }
   await ensureSchema();

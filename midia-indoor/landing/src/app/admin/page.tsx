@@ -577,7 +577,7 @@ function NovaCampanhaModal({ token, onClose, onSaved }: { token: string; onClose
         <Field label="Cupom (opcional)" value={cupom} onChange={v => setCupom(v.toUpperCase())} placeholder="ex: PROMO10" />
       </div>
       <label className="mb-1 block text-sm text-slate-300">Locais ({selLocais.length} selecionado{selLocais.length === 1 ? "" : "s"} de {locais.length})</label>
-      <LocaisDropdown locais={locais} selecionados={selLocais} onToggle={toggleLocal} onTodos={() => setSelLocais(locais.map(l => l.id))} onNenhum={() => setSelLocais([])} />
+      <LocaisDropdown locais={locais} selecionados={selLocais} onToggle={toggleLocal} onTodos={() => setSelLocais(locais.map(l => l.id))} onNenhum={() => setSelLocais([])} token={token} duracaoSegHint={segundos ? Number(segundos) : 10} />
       {selLocais.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1">
           {locais.filter(l => selLocais.includes(l.id)).map(l => (
@@ -2611,9 +2611,12 @@ async function carregarPdfJs(): Promise<void> {
 }
 
 // ─── Dropdown checklist de locais ───────────────────────────────────────────
-function LocaisDropdown({ locais, selecionados, onToggle, onTodos, onNenhum }: { locais: Local[]; selecionados: string[]; onToggle: (id: string) => void; onTodos: () => void; onNenhum: () => void }) {
+interface CapBatch { ocupacao_pct: number; cabem_10s: number; cabem_15s: number; cabem_30s: number; plano: string; janela_h: number; }
+
+function LocaisDropdown({ locais, selecionados, onToggle, onTodos, onNenhum, token, duracaoSegHint }: { locais: Local[]; selecionados: string[]; onToggle: (id: string) => void; onTodos: () => void; onNenhum: () => void; token?: string; duracaoSegHint?: number }) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState("");
+  const [cap, setCap] = useState<Record<string, CapBatch>>({});
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -2624,6 +2627,14 @@ function LocaisDropdown({ locais, selecionados, onToggle, onTodos, onNenhum }: {
     return () => document.removeEventListener("mousedown", fora);
   }, [aberto]);
 
+  // Quando abre, carrega capacidade dos locais visiveis (1 req batch)
+  useEffect(() => {
+    if (!aberto || !token) return;
+    const ids = locais.filter(l => l.tipo !== "grupo").map(l => l.id).slice(0, 200).join(",");
+    if (!ids) return;
+    aapi(token, `/api/admin/locais/capacidade-batch?ids=${ids}`).then(r => r.json()).then(d => { if (d.ok) setCap(d.locais); }).catch(() => {});
+  }, [aberto, token, locais]);
+
   const filtrados = locais.filter(l =>
     !busca || l.nome.toLowerCase().includes(busca.toLowerCase()) || (l.cidade ?? "").toLowerCase().includes(busca.toLowerCase())
   );
@@ -2632,6 +2643,10 @@ function LocaisDropdown({ locais, selecionados, onToggle, onTodos, onNenhum }: {
     : selecionados.length === 1
       ? locais.find(l => l.id === selecionados[0])?.nome ?? "1 local"
       : `${selecionados.length} locais selecionados`;
+
+  // Quantas inserções cabem na duração escolhida (10s default)
+  const dur = duracaoSegHint && [10, 15, 30].includes(duracaoSegHint) ? duracaoSegHint as 10 | 15 | 30 : 10;
+  const campoCabem = `cabem_${dur}s` as "cabem_10s" | "cabem_15s" | "cabem_30s";
 
   return (
     <div ref={ref} className="relative mb-3">
@@ -2647,20 +2662,33 @@ function LocaisDropdown({ locais, selecionados, onToggle, onTodos, onNenhum }: {
               <button type="button" onClick={onTodos} className="text-brand-light hover:underline">Marcar todos</button>
               <button type="button" onClick={onNenhum} className="text-slate-400 hover:underline">Desmarcar todos</button>
             </div>
+            <p className="mt-1 text-[10px] text-slate-500">📊 capacidade calculada pra inserção de {dur}s</p>
           </div>
           <div className="max-h-64 overflow-y-auto p-1">
-            {filtrados.map(l => (
-              <label key={l.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
-                <input type="checkbox" checked={selecionados.includes(l.id)} onChange={() => onToggle(l.id)} className="h-4 w-4 accent-brand" />
-                <span className="flex-1">
-                  {l.tipo === "grupo" && <span className="mr-1.5 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">GRUPO</span>}
-                  {l.nome}
-                  {l.cidade ? <span className="text-slate-500"> · {l.cidade}</span> : null}
-                  {l.tipo === "grupo" && l.qtd_membros != null && <span className="ml-1 text-[10px] text-amber-300">({l.qtd_membros} telas{l.sincronia ? ", sync" : ""})</span>}
-                </span>
-                {l.tipo !== "grupo" && l.largura > 0 && l.altura > 0 && <span className="text-[10px] text-slate-500">{l.largura}×{l.altura}</span>}
-              </label>
-            ))}
+            {filtrados.map(l => {
+              const c = cap[l.id];
+              const cabem = c?.[campoCabem] ?? null;
+              const cheio = c && c.ocupacao_pct >= 95;
+              const apertado = c && c.ocupacao_pct >= 80 && c.ocupacao_pct < 95;
+              return (
+                <label key={l.id} className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5 ${cheio ? "opacity-60" : ""}`}>
+                  <input type="checkbox" checked={selecionados.includes(l.id)} onChange={() => onToggle(l.id)} className="h-4 w-4 accent-brand" />
+                  <span className="flex-1">
+                    {l.tipo === "grupo" && <span className="mr-1.5 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">GRUPO</span>}
+                    {l.nome}
+                    {l.cidade ? <span className="text-slate-500"> · {l.cidade}</span> : null}
+                    {l.tipo === "grupo" && l.qtd_membros != null && <span className="ml-1 text-[10px] text-amber-300">({l.qtd_membros} telas{l.sincronia ? ", sync" : ""})</span>}
+                  </span>
+                  {c && l.tipo !== "grupo" && (
+                    <span className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${cheio ? "bg-red-500/20 text-red-300" : apertado ? "bg-amber-500/20 text-amber-300" : "bg-emerald-500/15 text-emerald-300"}`}
+                          title={`${c.ocupacao_pct}% ocupado · cabem ${c.cabem_10s}×10s · ${c.cabem_15s}×15s · ${c.cabem_30s}×30s`}>
+                      {cheio ? "cheio" : apertado ? `${cabem} vagas` : `${c.ocupacao_pct}% · ${cabem} vagas`}
+                    </span>
+                  )}
+                  {l.tipo !== "grupo" && l.largura > 0 && l.altura > 0 && <span className="text-[10px] text-slate-500">{l.largura}×{l.altura}</span>}
+                </label>
+              );
+            })}
             {!filtrados.length && <p className="p-3 text-center text-xs text-slate-500">{busca ? "Nenhum local encontrado." : "Cadastre locais antes."}</p>}
           </div>
         </div>
