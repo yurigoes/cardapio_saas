@@ -837,3 +837,89 @@ function Resumo([hashtable]$data) {
   $data.GetEnumerator() | ForEach-Object { Write-Host ("  {0,-15}: {1}" -f $_.Key, $_.Value) }
   Write-Host ""
 }
+
+# ---------- Helpers de provisionamento seletivo ----------
+
+# Retorna $true se o pacote esta instalado no device.
+function Esta-Instalado([string]$device, [string]$pacote) {
+  $listOut = cmd /c "adb -s $device shell pm list packages $pacote 2>nul"
+  $achou = $listOut | Where-Object { $_ -match "^package:$([regex]::Escape($pacote))`$" }
+  return [bool]$achou
+}
+
+# Desinstala um pacote silenciosamente (ignora erro se nao existir).
+function Desinstalar-Pacote([string]$device, [string]$pacote) {
+  if (Esta-Instalado $device $pacote) {
+    Step "Removendo $pacote antes de reinstalar"
+    cmd /c "adb -s $device uninstall $pacote >nul 2>nul" | Out-Null
+    Start-Sleep -Milliseconds 500
+    Ok "$pacote removido"
+  }
+}
+
+# Prompt interativo de selecao de componentes.
+# Retorna hashtable com flags: @{ Xibo=$bool; RustDesk=$bool; Launcher=$bool; Boot=$bool }
+# Aceita atalhos: 'tudo' (todos + boot animation + rotacao), '1','2','3' (xibo,rustdesk,launcher).
+function Selecionar-Componentes {
+  Write-Host ""
+  Write-Host "  Selecionar o que instalar/reinstalar" -ForegroundColor Cyan
+  Write-Host "  ─────────────────────────────────────" -ForegroundColor Cyan
+  Write-Host "    1 — Xibo (player)"
+  Write-Host "    2 — RustDesk (acesso remoto)"
+  Write-Host "    3 — Three Launcher (HOME + wallpaper)"
+  Write-Host "    T — Tudo (inclui boot animation + rotacao tela)"
+  Write-Host ""
+  Write-Host "  Digite numeros separados por virgula (ex: 1,3) ou T pra tudo:" -ForegroundColor Yellow
+  $resp = (Read-Host "  Opcao").Trim().ToUpper()
+  if (-not $resp) { $resp = "T" }
+
+  $flags = @{ Xibo=$false; RustDesk=$false; Launcher=$false; Boot=$false }
+  if ($resp -eq "T" -or $resp -eq "TUDO") {
+    $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true
+  } else {
+    $partes = $resp -split "[,;\s]+" | Where-Object { $_ }
+    foreach ($p in $partes) {
+      switch ($p) {
+        "1"        { $flags.Xibo = $true }
+        "XIBO"     { $flags.Xibo = $true }
+        "2"        { $flags.RustDesk = $true }
+        "RUSTDESK" { $flags.RustDesk = $true }
+        "3"        { $flags.Launcher = $true }
+        "LAUNCHER" { $flags.Launcher = $true }
+        default    { Warn "Opcao ignorada: $p" }
+      }
+    }
+  }
+
+  if (-not ($flags.Xibo -or $flags.RustDesk -or $flags.Launcher -or $flags.Boot)) {
+    Write-Host "  Nada selecionado — abortando." -ForegroundColor Red
+    exit 1
+  }
+
+  $resumo = @()
+  if ($flags.Boot)     { $resumo += "Boot+Rotacao" }
+  if ($flags.RustDesk) { $resumo += "RustDesk" }
+  if ($flags.Xibo)     { $resumo += "Xibo" }
+  if ($flags.Launcher) { $resumo += "Launcher" }
+  Write-Host ("  Selecionado: " + ($resumo -join ", ")) -ForegroundColor Green
+  Write-Host ""
+  return $flags
+}
+
+# Converte string CSV em hashtable de flags (uso via -Componentes "xibo,launcher")
+function Parse-Componentes([string]$csv) {
+  $flags = @{ Xibo=$false; RustDesk=$false; Launcher=$false; Boot=$false }
+  $partes = $csv -split "[,;\s]+" | Where-Object { $_ }
+  foreach ($p in $partes) {
+    switch ($p.ToLower()) {
+      "tudo"     { $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true }
+      "all"      { $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true }
+      "xibo"     { $flags.Xibo = $true }
+      "rustdesk" { $flags.RustDesk = $true }
+      "launcher" { $flags.Launcher = $true }
+      "boot"     { $flags.Boot = $true }
+      default    { Warn "Componente desconhecido: $p" }
+    }
+  }
+  return $flags
+}
