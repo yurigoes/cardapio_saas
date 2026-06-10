@@ -115,7 +115,33 @@ export async function PATCH(req: NextRequest) {
     // Arquiva/desarquiva conforme ativo
     if (b.ativo === false) await db().query(`UPDATE midia_locais SET archived_at = COALESCE(archived_at, NOW()) WHERE id = $1`, [b.id]);
     if (b.ativo === true)  await db().query(`UPDATE midia_locais SET archived_at = NULL WHERE id = $1`, [b.id]);
-    return NextResponse.json({ ok: true });
+
+    // AUTO-REAPLICAR: se mudou plano_veiculacao, todas as campanhas no_ar
+    // que cobrem esse local precisam ser relancadas pra trocar entre
+    // Ad Campaign (publicidade) e interleave (encarte/gondola).
+    let campanhasReaplicadas = 0;
+    if (b.plano_veiculacao !== undefined) {
+      const camps = await db().query<{ id: string }>(
+        `SELECT DISTINCT c.id FROM midia_campanhas c
+           JOIN midia_campanha_locais cl ON cl.campanha_id = c.id
+          WHERE cl.local_id = $1 AND c.status = 'no_ar'`, [b.id]
+      ).then(r => r.rows.map(x => x.id));
+      if (camps.length > 0) {
+        const { lancarCampanha } = await import("@/lib/campanhas");
+        for (const cid of camps) {
+          try { const r = await lancarCampanha(cid); if (r.ok) campanhasReaplicadas++; }
+          catch (e) { console.warn(`[locais PATCH] reaplicar ${cid} falhou:`, (e as Error).message); }
+        }
+        console.log(`[locais PATCH] plano_veiculacao mudou — ${campanhasReaplicadas}/${camps.length} campanhas reaplicadas`);
+      }
+      // Tambem regenera o proprio local (cobre caso de mudar pra encarte_totem/ponta_gondola)
+      try {
+        const { regenerarSeNecessario } = await import("@/lib/veiculacao");
+        await regenerarSeNecessario(b.id);
+      } catch (e) { console.warn("[locais PATCH] regen local:", (e as Error).message); }
+    }
+
+    return NextResponse.json({ ok: true, campanhas_reaplicadas: campanhasReaplicadas });
   } catch (err) {
     console.error("[admin/locais PATCH]", err);
     return NextResponse.json({ ok: false, error: "erro" }, { status: 500 });

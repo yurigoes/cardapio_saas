@@ -90,7 +90,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         await p.query(`INSERT INTO midia_campanha_locais (campanha_id, local_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [params.id, localId]);
     }
 
-    return NextResponse.json({ ok: true });
+    // AUTO-REAPLICAR: se a campanha esta no_ar E mudou algo que afeta a
+    // veiculacao (pacote/datas/dias/locais/inseroes/segundos/horario),
+    // dispara lancarCampanha pra propagar pras TVs imediatamente.
+    let reaplicada = false;
+    const mudouAlgoQueAfetaVeiculacao = ["data_inicio","data_fim","dias","insercoes_dia","segundos","hora_inicio","hora_fim","dias_semana","pacote_id","tipo"]
+      .some(k => (b as Record<string, unknown>)[k] !== undefined) || Boolean(b.locais);
+    if (mudouAlgoQueAfetaVeiculacao) {
+      const status = await p.query<{ status: string }>(`SELECT status FROM midia_campanhas WHERE id = $1`, [params.id]).then(r => r.rows[0]?.status);
+      if (status === "no_ar") {
+        const { lancarCampanha } = await import("@/lib/campanhas");
+        const r = await lancarCampanha(params.id);
+        reaplicada = r.ok;
+        if (!r.ok) console.warn(`[campanha PATCH] re-aplicacao auto falhou: ${r.erro}`);
+      }
+    }
+
+    return NextResponse.json({ ok: true, reaplicada });
   } catch (err) {
     console.error("[admin/campanhas PATCH]", err);
     return NextResponse.json({ ok: false, error: "erro" }, { status: 500 });
