@@ -139,7 +139,7 @@ export function Inventario({ token }: { token: string }) {
                     <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300" title={`Vinculado a ${i.vinculado_tipo}`}>
                       🔗 {i.vinculado_nome}
                     </span>
-                  ) : (i.tipo === "box" || i.tipo === "tv") ? (
+                  ) : (i.tipo === "box" || i.tipo === "tv" || i.tipo === "tv-box") ? (
                     <button onClick={() => setVincular(i)} className="text-[11px] text-slate-500 underline hover:text-slate-300">vincular</button>
                   ) : "—"}
                 </td>
@@ -638,8 +638,12 @@ function MoverLocalModal({ token, item, locais, onClose, onSaved }: { token: str
 
 function VincularModal({ token, item, todos, onClose, onSaved }: { token: string; item: ItemInv; todos: ItemInv[]; onClose: () => void; onSaved: () => void }) {
   // Candidatos: tipo oposto + sem vínculo
-  const alvo = item.tipo === "box" ? "tv" : item.tipo === "tv" ? "box" : null;
-  const candidatos = alvo ? todos.filter(t => t.tipo === alvo && !t.vinculado_a_id && t.id !== item.id) : [];
+  // 'box' e 'tv-box' são equivalentes (ambos são players Android com display interno opcional)
+  const ehBox = item.tipo === "box" || item.tipo === "tv-box";
+  const ehTv  = item.tipo === "tv";
+  const alvo: "tv" | "box" | null = ehBox ? "tv" : ehTv ? "box" : null;
+  const tiposAlvo = alvo === "box" ? ["box", "tv-box"] : alvo === "tv" ? ["tv"] : [];
+  const candidatos = alvo ? todos.filter(t => tiposAlvo.includes(t.tipo) && !t.vinculado_a_id && t.id !== item.id) : [];
   const [selId, setSelId] = useState("");
   const [busy, setBusy] = useState(false);
   async function salvar() {
