@@ -1,0 +1,26 @@
+[
+    {
+        "merged": "com.threedigital.launcher.app-merged_res-4:/layout_activity_main.xml.flat",
+        "source": "com.threedigital.launcher.app-main-6:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.threedigital.launcher.app-merged_res-4:/drawable_ic_launcher_bg.xml.flat",
+        "source": "com.threedigital.launcher.app-main-6:/drawable/ic_launcher_bg.xml"
+    },
+    {
+        "merged": "com.threedigital.launcher.app-merged_res-4:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.threedigital.launcher.app-main-6:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.threedigital.launcher.app-merged_res-4:/drawable_ic_launcher_fg.xml.flat",
+        "source": "com.threedigital.launcher.app-main-6:/drawable/ic_launcher_fg.xml"
+    },
+    {
+        "merged": "com.threedigital.launcher.app-merged_res-4:/drawable_bg_default.xml.flat",
+        "source": "com.threedigital.launcher.app-main-6:/drawable/bg_default.xml"
+    },
+    {
+        "merged": "com.threedigital.launcher.app-merged_res-4:/drawable_btn_glass.xml.flat",
+        "source": "com.threedigital.launcher.app-main-6:/drawable/btn_glass.xml"
+    }
+]
