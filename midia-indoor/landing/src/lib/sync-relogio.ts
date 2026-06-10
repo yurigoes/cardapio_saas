@@ -53,18 +53,20 @@ async function criarOuObterCommand(): Promise<number | null> {
  */
 async function garantirCommandNoProfile(commandId: number): Promise<void> {
   try {
-    const profiles = await xibo<Array<{ displayProfileId: number; type: string; commands?: Array<{ commandId: number; commandString?: string }> }>>(`/api/displayprofile`);
+    const profiles = await xibo<Array<{ displayProfileId: number; name: string; type: string; isDefault?: number; commands?: Array<{ commandId: number; commandString?: string }> }>>(`/api/displayprofile`);
     const androidProfiles = (Array.isArray(profiles) ? profiles : []).filter(p => p.type === "android");
     for (const prof of androidProfiles) {
       const ja = (prof.commands ?? []).some(c => c.commandId === commandId);
       if (ja) continue;
       try {
-        // Atualiza o profile injetando o command com o shell. API: PUT /api/displayprofile/{id}
-        // Body precisa de commandKey/commandString por command — formato CMS v3.
+        // PUT /api/displayprofile/{id} exige 'name' obrigatorio (e Xibo recusa
+        // body sem ele). Preservamos o name atual + sufixamos nosso command.
         const body = new URLSearchParams();
+        body.set("name", prof.name);
+        body.set("type", prof.type);
+        body.set("isDefault", String(prof.isDefault ?? 0));
         body.append(`commands[${COMMAND_CODE}][commandString]`, COMMAND_SHELL);
         body.append(`commands[${COMMAND_CODE}][validationString]`, "");
-        // PUT preserva o resto via merge no Xibo
         await xibo(`/api/displayprofile/${prof.displayProfileId}`, { method: "PUT", body });
       } catch (e) {
         console.warn(`[sync-relogio] anexar command no profile ${prof.displayProfileId} falhou:`, (e as Error).message);

@@ -320,12 +320,15 @@ export async function lancarCampanha(campanhaId: string): Promise<{ ok: boolean;
         xiboCampaignId = await criarAdCampaign({ nome: camp.nome, layoutId: camp.xibo_layout_id, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: groupsPub, dayPartId, diasSemana: camp.dias_semana ?? undefined });
       }
     } else if (xiboCampaignId) {
-      // SO tem locais de veiculacao (encarte/gondola) — esvazia displayGroups
-      // da Ad Campaign existente pra evitar que ela continue agendada nesses grupos.
+      // SO tem locais de veiculacao (encarte/gondola). Ad Campaign nao funciona
+      // sem displayGroups (Xibo recusa), e ela so atrapalha porque os eventos
+      // agendados dela tomariam precedencia sobre o Default Layout intercalado.
+      // Solucao: DELETAR a Ad Campaign no Xibo + remover ref no DB.
       try {
-        await editarAdCampaign(xiboCampaignId, { nome: camp.nome, targetPlays, dataInicio: inicio, dataFim: fim, displayGroupIds: [] });
-        console.log(`[lancar] Ad Campaign ${xiboCampaignId} com displayGroups vazio (so locais de veiculacao)`);
-      } catch (e) { console.warn("[lancar] esvaziar displayGroups falhou:", (e as Error).message); }
+        await excluirCampanha(xiboCampaignId);
+        console.log(`[lancar] Ad Campaign ${xiboCampaignId} excluida (so locais de veiculacao — anuncio entra via interleave)`);
+      } catch (e) { console.warn("[lancar] excluir ad campaign falhou:", (e as Error).message); }
+      xiboCampaignId = undefined;
     }
 
     const jaEstavaNoAr = camp.status === "no_ar";
