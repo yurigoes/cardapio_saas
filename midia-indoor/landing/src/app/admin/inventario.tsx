@@ -42,7 +42,9 @@ export function Inventario({ token }: { token: string }) {
   const [filtro, setFiltro] = useState("");
   const [loading, setLoading] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  const [aba, setAba] = useState<"itens" | "kits">("itens");
+  const [aba, setAba] = useState<"itens" | "kits" | "os">("itens");
+  const [desvincularItem, setDesvincularItem] = useState<ItemInv | null>(null);
+  const [moverItem, setMoverItem] = useState<ItemInv | null>(null);
 
   function toggleSel(id: string) {
     setSelecionados(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -96,11 +98,15 @@ export function Inventario({ token }: { token: string }) {
           📦 Itens ({itens.length})
         </button>
         <button onClick={() => setAba("kits")} className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${aba === "kits" ? "border-brand text-white" : "border-transparent text-slate-400 hover:text-white"}`}>
-          🧰 Kits / Totens
+          🔗 Pares (Box ↔ TV)
+        </button>
+        <button onClick={() => setAba("os")} className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${aba === "os" ? "border-brand text-white" : "border-transparent text-slate-400 hover:text-white"}`}>
+          🚨 Chamados (OS)
         </button>
       </div>
 
-      {aba === "kits" && <KitsInventario token={token} itensDisponiveis={itens} locais={locais} />}
+      {aba === "kits" && <ParesInventario token={token} itens={itens} locais={locais} onChange={load} onDesvincular={setDesvincularItem} onMover={setMoverItem} />}
+      {aba === "os" && <OSInventario token={token} />}
 
       {aba === "itens" && (
       <div className="overflow-x-auto rounded-xl border border-white/10">
@@ -161,6 +167,289 @@ export function Inventario({ token }: { token: string }) {
       {editar && <EditarItemModal token={token} item={editar} locais={locais} onClose={() => setEditar(null)} onSaved={() => { setEditar(null); load(); }} />}
       {verPrint && <PrintModal token={token} item={verPrint} onClose={() => setVerPrint(null)} />}
       {vincular && <VincularModal token={token} item={vincular} todos={itens} onClose={() => setVincular(null)} onSaved={() => { setVincular(null); load(); }} />}
+      {desvincularItem && <DesvincularModal token={token} item={desvincularItem} onClose={() => setDesvincularItem(null)} onSaved={() => { setDesvincularItem(null); load(); }} />}
+      {moverItem && <MoverLocalModal token={token} item={moverItem} locais={locais} onClose={() => setMoverItem(null)} onSaved={() => { setMoverItem(null); load(); }} />}
+    </div>
+  );
+}
+
+// ════════ Aba: Pares (kits Box ↔ TV) ════════
+function ParesInventario({ token, itens, locais, onChange, onDesvincular, onMover }: { token: string; itens: ItemInv[]; locais: LocalSimples[]; onChange: () => void; onDesvincular: (i: ItemInv) => void; onMover: (i: ItemInv) => void }) {
+  void token; void onChange;
+  // Cada par = lado A (qualquer) + lado B (vinculado_a_id). Pega só pares com vínculo bidirecional.
+  const pares: Array<{ a: ItemInv; b: ItemInv | null }> = [];
+  const visto = new Set<string>();
+  for (const a of itens) {
+    if (visto.has(a.id)) continue;
+    if (!a.vinculado_a_id) continue;
+    const b = itens.find(x => x.id === a.vinculado_a_id);
+    visto.add(a.id);
+    if (b) visto.add(b.id);
+    pares.push({ a, b: b ?? null });
+  }
+  if (!pares.length) return <p className="rounded-xl border border-white/10 bg-white/[0.02] p-8 text-center text-sm text-slate-400">Nenhum par vinculado ainda. Vincule um Box a uma TV/Monitor na aba “Itens” → coluna “Vínculo”.</p>;
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {pares.map(({ a, b }) => (
+        <div key={a.id} className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <div className="mb-2 flex items-center gap-2 text-xs text-emerald-300">
+            🔗 KIT · <code className="text-[10px]">{a.local_nome ?? "estoque"}</code>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <ItemMini i={a} />
+            <ItemMini i={b} fallback="(item órfão)" />
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button onClick={() => onMover(a)} className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs hover:bg-white/10">📍 Mover local</button>
+            <button onClick={() => onDesvincular(a)} className="flex-1 rounded-lg border border-red-500/30 py-1.5 text-xs text-red-300 hover:bg-red-500/10">🔌 Desvincular</button>
+          </div>
+          {locais.length === 0 && <p className="mt-2 text-[10px] text-amber-400">⚠ Sem locais cadastrados</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+function ItemMini({ i, fallback }: { i: ItemInv | null; fallback?: string }) {
+  if (!i) return <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-300">{fallback ?? "—"}</div>;
+  return (
+    <div className="rounded-lg bg-white/5 p-2 text-xs">
+      <p className="font-medium">
+        {i.tipo === "box" ? "📦" : i.tipo === "tv" ? "📺" : i.tipo === "totem" ? "🗼" : "📎"} {i.nome}
+      </p>
+      {i.modelo && <p className="text-slate-500">{i.modelo}</p>}
+      {i.mac && <p className="font-mono text-[10px] text-slate-500">{i.mac}</p>}
+    </div>
+  );
+}
+
+// ════════ Aba: Ordens de Servico ════════
+interface OsRow {
+  id: string; status: string; motivo: string; descricao: string; criada_em: string;
+  item_nome: string; item_tipo: string; local_nome: string | null;
+  veredito: string | null; em_garantia: boolean; aberta_por_nome: string | null; atribuido_a: string | null;
+}
+function OSInventario({ token }: { token: string }) {
+  const [status, setStatus] = useState<"aberto" | "em_analise" | "resolvido" | "descartado" | "todos">("aberto");
+  const [lista, setLista] = useState<OsRow[]>([]);
+  const [verOs, setVerOs] = useState<OsRow | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const load = useCallback(async () => {
+    setCarregando(true);
+    const r = await aapi(token, `/api/admin/inventario/os?status=${status}`);
+    const d = await r.json(); setCarregando(false);
+    if (d.ok) setLista(d.ordens);
+  }, [token, status]);
+  useEffect(() => { load(); }, [load]);
+  return (
+    <div>
+      <div className="mb-3 flex gap-1">
+        {(["aberto","em_analise","resolvido","descartado","todos"] as const).map(s => (
+          <button key={s} onClick={() => setStatus(s)} className={`rounded-lg px-3 py-1 text-xs ${status === s ? "bg-brand text-white" : "border border-white/10 bg-white/5 text-slate-400 hover:bg-white/10"}`}>
+            {s === "aberto" ? "🔴 Aberto" : s === "em_analise" ? "🟡 Análise" : s === "resolvido" ? "🟢 Resolvido" : s === "descartado" ? "⚫ Descartado" : "Todos"}
+          </button>
+        ))}
+        <button onClick={load} disabled={carregando} className="ml-2 rounded-lg border border-white/15 p-1.5 hover:bg-white/5 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${carregando ? "animate-spin" : ""}`} /></button>
+      </div>
+      {lista.length === 0 ? (
+        <p className="rounded-xl border border-white/10 bg-white/[0.02] p-8 text-center text-sm text-slate-400">Nenhuma OS {status === "todos" ? "" : `em ${status}`}.</p>
+      ) : (
+        <div className="space-y-2">
+          {lista.map(o => (
+            <button key={o.id} onClick={() => setVerOs(o)} className={`w-full rounded-xl border p-3 text-left hover:bg-white/5 ${o.status === "aberto" ? "border-red-500/30 bg-red-500/5" : o.status === "em_analise" ? "border-amber-500/30 bg-amber-500/5" : o.status === "resolvido" ? "border-emerald-500/20 bg-emerald-500/5" : "border-white/10 bg-white/[0.02] opacity-70"}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">
+                    {o.motivo === "problema" ? "🚨" : o.motivo === "manutencao" ? "🔧" : "📎"} {o.item_nome}
+                    {o.em_garantia && <span className="ml-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-300">🛡 garantia</span>}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {o.local_nome ? `📍 ${o.local_nome} · ` : ""}
+                    {new Date(o.criada_em).toLocaleDateString("pt-BR")}
+                    {o.aberta_por_nome ? ` · por ${o.aberta_por_nome}` : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-300 line-clamp-2">{o.descricao}</p>
+                </div>
+                <div className="text-right">
+                  <code className="text-[10px] text-slate-500">{o.id.slice(0, 8)}</code>
+                  {o.veredito && <p className="mt-1 text-[10px] text-emerald-300">→ {o.veredito}</p>}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {verOs && <OSDetalheModal token={token} osId={verOs.id} onClose={() => setVerOs(null)} onSaved={() => { setVerOs(null); load(); }} />}
+    </div>
+  );
+}
+
+function OSDetalheModal({ token, osId, onClose, onSaved }: { token: string; osId: string; onClose: () => void; onSaved: () => void }) {
+  const [d, setD] = useState<{ os: Record<string, unknown>; movimentos: Record<string, unknown>[]; candidatos_substituicao: { id: string; nome: string; modelo: string | null }[] } | null>(null);
+  const [veredito, setVeredito] = useState<"consertado" | "queimado" | "sem_problema" | "substituir" | "descartar">("consertado");
+  const [obs, setObs] = useState("");
+  const [subst, setSubst] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { aapi(token, `/api/admin/inventario/os/${osId}`).then(r => r.json()).then(x => x.ok && setD(x)); }, [token, osId]);
+  async function resolver() {
+    setBusy(true);
+    const r = await aapi(token, `/api/admin/inventario/os/${osId}/resolver`, { method: "POST", body: JSON.stringify({ veredito, veredito_obs: obs, substituido_por_id: veredito === "substituir" ? subst : undefined }) });
+    const x = await r.json(); setBusy(false);
+    if (!x.ok) { notify(x.error || "Erro", "error"); return; }
+    notify("OS resolvida!", "success"); onSaved();
+  }
+  async function patch(status: string) {
+    await aapi(token, `/api/admin/inventario/os/${osId}`, { method: "PATCH", body: JSON.stringify({ status }) });
+    onSaved();
+  }
+  if (!d) return null;
+  const o = d.os as { id: string; item_nome: string; item_tipo: string; item_modelo?: string; item_mac?: string; local_nome?: string; motivo: string; descricao: string; status: string; veredito?: string; aberta_por_nome?: string; criada_em: string; em_garantia: boolean; fotos?: string[] };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-white/10 bg-[#12121c]" onClick={e => e.stopPropagation()}>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 p-5">
+          <div>
+            <h3 className="font-bold">OS #{o.id.slice(0, 8)} · {o.item_nome}</h3>
+            <p className="text-xs text-slate-400">{o.item_tipo}{o.item_modelo ? ` · ${o.item_modelo}` : ""}{o.local_nome ? ` · 📍 ${o.local_nome}` : ""}</p>
+          </div>
+          <button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button>
+        </div>
+        <div className="overflow-y-auto p-5">
+          <div className="mb-3 grid grid-cols-3 gap-2 text-xs">
+            <div><p className="text-slate-500">Status</p><p className="font-medium">{o.status}</p></div>
+            <div><p className="text-slate-500">Motivo</p><p className="font-medium">{o.motivo}</p></div>
+            <div><p className="text-slate-500">Aberta</p><p className="font-medium">{new Date(o.criada_em).toLocaleDateString("pt-BR")}</p></div>
+          </div>
+          {o.em_garantia && <p className="mb-3 rounded bg-blue-500/15 px-2 py-1 text-xs text-blue-300">🛡 Item em garantia</p>}
+          <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-3">
+            <p className="text-xs text-slate-400">Descrição</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm">{o.descricao}</p>
+            {o.aberta_por_nome && <p className="mt-2 text-[11px] text-slate-500">— por {o.aberta_por_nome}</p>}
+          </div>
+          {o.status !== "resolvido" && o.status !== "descartado" && (
+            <>
+              <div className="mb-3 flex gap-2">
+                {o.status === "aberto" && <button onClick={() => patch("em_analise")} className="rounded-lg border border-amber-500/30 px-3 py-1 text-xs text-amber-300 hover:bg-amber-500/10">→ Em análise</button>}
+                <button onClick={() => patch("descartado")} className="rounded-lg border border-white/15 px-3 py-1 text-xs text-slate-400 hover:bg-white/10">Descartar (sem ação)</button>
+              </div>
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                <p className="mb-2 text-xs font-semibold text-emerald-300">Resolver com veredito</p>
+                <select value={veredito} onChange={e => setVeredito(e.target.value as typeof veredito)} className="mb-2 w-full rounded border border-white/10 bg-white/5 px-2 py-1.5 text-sm">
+                  <option value="consertado">✓ Consertado (volta a ativo)</option>
+                  <option value="sem_problema">✓ Sem problema (volta a ativo)</option>
+                  <option value="queimado">💀 Queimado (marca como fora de uso)</option>
+                  <option value="substituir">🔄 Substituir por outro item</option>
+                  <option value="descartar">🗑 Descartar (não usar mais)</option>
+                </select>
+                {veredito === "substituir" && (
+                  <select value={subst} onChange={e => setSubst(e.target.value)} className="mb-2 w-full rounded border border-white/10 bg-white/5 px-2 py-1.5 text-sm">
+                    <option value="">— escolha um item livre —</option>
+                    {d.candidatos_substituicao.map(c => <option key={c.id} value={c.id}>{c.nome}{c.modelo ? ` · ${c.modelo}` : ""}</option>)}
+                  </select>
+                )}
+                <textarea value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação (opcional)" rows={2}
+                  className="mb-2 w-full rounded border border-white/10 bg-white/5 px-2 py-1.5 text-sm" />
+                <button onClick={resolver} disabled={busy || (veredito === "substituir" && !subst)} className="w-full rounded-lg bg-emerald-600 py-2 text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                  {busy ? "Resolvendo…" : "Resolver OS"}
+                </button>
+              </div>
+            </>
+          )}
+          {d.movimentos.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-semibold text-slate-400">Histórico do item</p>
+              <div className="space-y-1 text-xs">
+                {d.movimentos.slice(0, 10).map((m, i) => {
+                  const mm = m as { tipo: string; criado_em: string; autor_nome?: string };
+                  return (
+                    <div key={i} className="flex items-center gap-2 rounded bg-white/5 px-2 py-1">
+                      <span className="text-slate-500">{new Date(mm.criado_em).toLocaleString("pt-BR")}</span>
+                      <span className="font-medium">{mm.tipo}</span>
+                      {mm.autor_nome && <span className="text-slate-400">· {mm.autor_nome}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════ Modal: Desvincular ════════
+function DesvincularModal({ token, item, onClose, onSaved }: { token: string; item: ItemInv; onClose: () => void; onSaved: () => void }) {
+  const [motivo, setMotivo] = useState<"substituicao" | "manutencao" | "problema" | "outro">("substituicao");
+  const [desc, setDesc] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function enviar() {
+    setBusy(true);
+    const r = await aapi(token, `/api/admin/inventario/${item.id}/desvincular`, { method: "POST", body: JSON.stringify({ motivo, descricao: desc }) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify(d.osId ? `Desvinculado · OS aberta #${d.osId.slice(0,8)}` : "Desvinculado", "success");
+    onSaved();
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#12121c] p-5" onClick={e => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-bold">Desvincular: {item.nome}</h3>
+          <button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button>
+        </div>
+        <label className="mb-1 block text-xs text-slate-400">Motivo</label>
+        <select value={motivo} onChange={e => setMotivo(e.target.value as typeof motivo)} className="mb-3 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">
+          <option value="substituicao">🔄 Substituição planejada</option>
+          <option value="manutencao">🔧 Manutenção preventiva</option>
+          <option value="problema">🚨 Problema (abre OS automática)</option>
+          <option value="outro">📎 Outro</option>
+        </select>
+        <label className="mb-1 block text-xs text-slate-400">Descrição{motivo === "problema" ? " *" : " (opcional)"}</label>
+        <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3} className="mb-3 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm" />
+        {motivo === "problema" && <p className="mb-2 text-[11px] text-amber-300">⚠ Vai abrir uma OS automaticamente.</p>}
+        <button onClick={enviar} disabled={busy || (motivo === "problema" && desc.trim().length < 10)} className="w-full rounded-xl bg-red-600 py-2 font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+          {busy ? "Desvinculando…" : "Confirmar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ════════ Modal: Mover de local ════════
+function MoverLocalModal({ token, item, locais, onClose, onSaved }: { token: string; item: ItemInv; locais: LocalSimples[]; onClose: () => void; onSaved: () => void }) {
+  const [novoLocal, setNovoLocal] = useState(item.local_id ?? "");
+  const [moverXibo, setMoverXibo] = useState(true);
+  const [busy, setBusy] = useState(false);
+  async function enviar() {
+    setBusy(true);
+    const r = await aapi(token, `/api/admin/inventario/${item.id}/mover-local`, { method: "POST", body: JSON.stringify({ local_id: novoLocal || null, mover_display_xibo: moverXibo }) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify("Movido!", "success"); onSaved();
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#12121c] p-5" onClick={e => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-bold">Mover {item.nome}</h3>
+          <button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button>
+        </div>
+        <p className="mb-2 text-xs text-slate-400">De: <strong>{item.local_nome ?? "estoque"}</strong></p>
+        <label className="mb-1 block text-xs text-slate-400">Para</label>
+        <select value={novoLocal} onChange={e => setNovoLocal(e.target.value)} className="mb-3 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">
+          <option value="">— estoque (sem local) —</option>
+          {locais.map(l => <option key={l.id} value={l.id}>{l.nome}{l.cidade ? ` · ${l.cidade}` : ""}</option>)}
+        </select>
+        {item.xibo_display_id && (
+          <label className="mb-3 flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={moverXibo} onChange={e => setMoverXibo(e.target.checked)} className="h-4 w-4 accent-brand" />
+            <span>Também mover display Xibo #{item.xibo_display_id} entre display groups</span>
+          </label>
+        )}
+        <button onClick={enviar} disabled={busy} className="w-full rounded-xl bg-brand py-2 font-semibold hover:bg-brand-dark disabled:opacity-50">
+          {busy ? "Movendo…" : "Mover"}
+        </button>
+      </div>
     </div>
   );
 }

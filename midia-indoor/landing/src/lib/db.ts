@@ -575,6 +575,51 @@ export async function ensureSchema(): Promise<void> {
   // Resolucao/polegadas tambem aplicam quando tipo='tv' (display em si)
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS resolucao TEXT;`);
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS polegadas INT;`);
+  // Status operacional do item (independente do 'ativo' que e flag de uso)
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS status_item TEXT NOT NULL DEFAULT 'em_estoque';`);
+  // ativo (boolean) ja existe — vamos usar status_item pra granularidade operacional
+
+  // Historico de movimentacoes do item (entrou no estoque, foi pra local X,
+  // desvinculou, abriu OS, etc) — pra auditoria e rastreabilidade
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_inventario_movimentos (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      inventario_id UUID NOT NULL REFERENCES midia_inventario(id) ON DELETE CASCADE,
+      tipo          TEXT NOT NULL,     -- 'criado'|'vinculou'|'desvinculou'|'mudou_local'|'os_aberta'|'os_resolvida'|'status_mudou'
+      detalhes      JSONB,             -- { de:..., para:..., motivo:..., os_id:... }
+      autor_tipo    TEXT,              -- 'admin'|'tecnico'|'sistema'|'publico'
+      autor_id      TEXT,
+      autor_nome    TEXT,
+      criado_em     TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_inv_mov_inv ON midia_inventario_movimentos(inventario_id, criado_em DESC);
+  `);
+
+  // Ordens de servico (chamado tecnico de manutencao)
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_inventario_os (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      inventario_id   UUID NOT NULL REFERENCES midia_inventario(id) ON DELETE CASCADE,
+      motivo          TEXT NOT NULL,    -- 'problema'|'manutencao'|'substituicao'|'perda'|'instalacao'|'outro'
+      descricao       TEXT NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'aberto',  -- 'aberto'|'em_analise'|'resolvido'|'descartado'
+      veredito        TEXT,             -- 'queimado'|'consertado'|'sem_problema'|'substituir'|'descartar'|null
+      veredito_obs    TEXT,
+      atribuido_a     TEXT,             -- nome livre do tecnico
+      custo_centavos  INTEGER,
+      fotos           JSONB,            -- array de URLs base64 (cap 5)
+      aberta_por_tipo TEXT,             -- 'admin'|'publico_qr'|'master'
+      aberta_por      TEXT,
+      aberta_por_nome TEXT,
+      criada_em       TIMESTAMPTZ DEFAULT NOW(),
+      fechada_em      TIMESTAMPTZ,
+      resolvida_por   TEXT,
+      em_garantia     BOOLEAN DEFAULT FALSE,
+      substituido_por_id UUID            -- inventario_id que substituiu este (se queimado)
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_inv_os_inv ON midia_inventario_os(inventario_id, criada_em DESC);
+    CREATE INDEX IF NOT EXISTS idx_midia_inv_os_status ON midia_inventario_os(status);
+  `);
   // 2FA (TOTP) pra admins
   await p.query(`ALTER TABLE midia_admins ADD COLUMN IF NOT EXISTS totp_secret TEXT;`);
   await p.query(`ALTER TABLE midia_admins ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;`);

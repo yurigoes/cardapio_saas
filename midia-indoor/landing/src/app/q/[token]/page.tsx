@@ -1,8 +1,10 @@
 /**
  * /q/[token] — página pública aberta ao escanear QR do equipamento
- * Mostra dados básicos pra técnico/instalador identificar o item
+ * Mostra dados básicos pra técnico/instalador identificar o item.
+ * Inclui botão "Abrir chamado" pra reportar problema na hora.
  */
 import { db, ensureSchema } from "@/lib/db";
+import { AbrirChamadoBtn } from "./AbrirChamadoBtn";
 
 interface Props { params: { token: string } }
 
@@ -10,9 +12,12 @@ async function buscar(token: string) {
   try {
     await ensureSchema();
     const r = await db().query(
-      `SELECT i.*, l.nome AS local_nome, l.cidade AS local_cidade
+      `SELECT i.*, l.nome AS local_nome, l.cidade AS local_cidade,
+              v.nome AS vinculado_nome, v.tipo AS vinculado_tipo, v.qr_token AS vinculado_qr,
+              (SELECT COUNT(*)::int FROM midia_inventario_os os WHERE os.inventario_id = i.id AND os.status IN ('aberto','em_analise')) AS os_abertas
          FROM midia_inventario i
          LEFT JOIN midia_locais l ON l.id = i.local_id
+         LEFT JOIN midia_inventario v ON v.id = i.vinculado_a_id
         WHERE i.qr_token = $1 LIMIT 1`,
       [token.toUpperCase()]
     );
@@ -38,8 +43,22 @@ export default async function QrPage({ params }: Props) {
         <p style={{ color: "#666", fontSize: 14 }}>{item.tipo?.toUpperCase()} · ID: {item.qr_token}</p>
       </div>
 
+      {item.status_item && item.status_item !== "ativo" && item.status_item !== "em_estoque" && (
+        <div style={{ marginBottom: 16, padding: 10, borderRadius: 8, background: item.status_item === "queimado" ? "#fee2e2" : "#fef3c7", border: `1px solid ${item.status_item === "queimado" ? "#fca5a5" : "#fcd34d"}` }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: item.status_item === "queimado" ? "#991b1b" : "#92400e" }}>
+            Status: {item.status_item.toUpperCase().replace("_", " ")}
+          </p>
+        </div>
+      )}
+      {item.os_abertas > 0 && (
+        <div style={{ marginBottom: 16, padding: 10, borderRadius: 8, background: "#fef3c7", border: "1px solid #fcd34d", color: "#92400e", fontSize: 13 }}>
+          ⚠ Já tem <strong>{item.os_abertas}</strong> chamado(s) aberto(s) pra este item.
+        </div>
+      )}
+
       <div style={{ display: "grid", gap: 12 }}>
         {item.local_nome && <Linha label="Local" v={`${item.local_nome}${item.local_cidade ? " · " + item.local_cidade : ""}`} />}
+        {item.vinculado_nome && <Linha label={`Vinculado a (${item.vinculado_tipo})`} v={item.vinculado_nome} />}
         {item.fabricante && <Linha label="Fabricante" v={item.fabricante} />}
         {item.modelo && <Linha label="Modelo" v={item.modelo} />}
         {item.mac && <Linha label="MAC" v={item.mac} mono />}
@@ -52,8 +71,10 @@ export default async function QrPage({ params }: Props) {
         {item.observacao && <Linha label="Obs" v={item.observacao} />}
       </div>
 
+      <AbrirChamadoBtn token={item.qr_token} itemNome={item.nome} />
+
       <p style={{ marginTop: 30, paddingTop: 15, borderTop: "1px solid #ddd", color: "#999", fontSize: 11, textAlign: "center" }}>
-        Em caso de problemas, contate o suporte Three Digital.
+        Three Digital · suporte técnico
       </p>
     </div>
   );
