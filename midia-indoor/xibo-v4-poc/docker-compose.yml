@@ -1,0 +1,104 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Xibo v4 POC — paralelo ao v3 (NAO toca em produção)
+#
+# Portas: bind local 127.0.0.1:8086 (v3 fica em 8085)
+# XMR:    127.0.0.1:9506 (v3 em 9505)
+# Rede:   xibo_v4_net (isolada do midia_net)
+# Volumes: prefixados xibo4_ (nao conflita com xibo_)
+#
+# Subir:
+#   1. cp .env.example .env  (preencher MYSQL_PASSWORD e CMS_SERVER_NAME)
+#   2. docker compose -f docker-compose.yml up -d
+#   3. Espera 2-3min (CMS faz setup inicial do DB)
+#   4. Acessa http://127.0.0.1:8086 — login: xibo_admin / senha em CMS_SERVER_NAME log
+#
+# Restaurar dump do v3 (opcional, pra testar migração real):
+#   docker exec midia_xibo_db mysqldump -u cms -p$SENHA cms > /tmp/dump-v3.sql
+#   docker cp /tmp/dump-v3.sql midia_xibo_db_v4:/tmp/dump.sql
+#   docker exec midia_xibo_db_v4 sh -c 'mysql -u cms -p$MYSQL_PASSWORD cms < /tmp/dump.sql'
+#   # Reinicia o CMS pra ele rodar as migrations
+#   docker compose restart cms-web
+#
+# Desmontar (sem perder dados):
+#   docker compose down
+# Apagar tudo (zero dump):
+#   docker compose down -v
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  cms-db:
+    image: mysql:8.0
+    container_name: midia_xibo_db_v4
+    restart: unless-stopped
+    volumes:
+      - xibo4_db:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: cms
+      MYSQL_USER: cms
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    command: --default-authentication-plugin=caching_sha2_password
+    mem_limit: 1g
+    networks: [xibo_v4_net]
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
+  cms-xmr:
+    image: ghcr.io/xibosignage/xibo-xmr:1.0
+    container_name: midia_xibo_xmr_v4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9506:9505"
+    mem_limit: 256m
+    networks: [xibo_v4_net]
+    logging:
+      driver: "json-file"
+      options: { max-size: "10m", max-file: "3" }
+
+  cms-web:
+    # v4.2 e a serie mais estavel atual; troque pra release-4.3 quando sair
+    image: ghcr.io/xibosignage/xibo-cms:release-4.2
+    container_name: midia_xibo_web_v4
+    restart: unless-stopped
+    depends_on: [cms-db, cms-xmr]
+    ports:
+      - "127.0.0.1:8086:80"
+    volumes:
+      - xibo4_library:/var/www/cms/library
+      - xibo4_custom:/var/www/cms/custom
+      - xibo4_backup:/var/www/backup
+      - xibo4_web:/var/www/cms/web/theme/custom
+    environment:
+      MYSQL_HOST: cms-db
+      MYSQL_USER: cms
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+      MYSQL_DATABASE: cms
+      MYSQL_PORT: "3306"
+      CMS_SERVER_NAME: "${CMS_SERVER_NAME:-localhost:8086}"
+      XMR_HOST: cms-xmr
+      CMS_SMTP_SERVER: "${CMS_SMTP_SERVER:-}"
+      CMS_SMTP_USERNAME: "${CMS_SMTP_USERNAME:-}"
+      CMS_SMTP_PASSWORD: "${CMS_SMTP_PASSWORD:-}"
+      CMS_SMTP_FROM: "${CMS_SMTP_FROM:-noreply@tthreedigital.com.br}"
+      CMS_PHP_UPLOAD_MAX_FILESIZE: "256M"
+      CMS_PHP_POST_MAX_SIZE: "256M"
+      CMS_PHP_MEMORY_LIMIT: "512M"
+      CMS_PHP_MAX_EXECUTION_TIME: "300"
+    mem_limit: 1500m
+    networks: [xibo_v4_net]
+    logging:
+      driver: "json-file"
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  xibo4_db:
+  xibo4_library:
+  xibo4_custom:
+  xibo4_backup:
+  xibo4_web:
+
+networks:
+  xibo_v4_net:
+    driver: bridge
+    name: xibo_v4_net
