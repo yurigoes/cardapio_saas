@@ -41,23 +41,31 @@ Login inicial:
 - **Usuário**: `xibo_admin`
 - **Senha**: aparece no log do CMS na 1ª inicialização (procura `Initial password:` em `docker compose logs cms-web`)
 
-## Cria credenciais OAuth pro nosso teste
+## Cria credenciais OAuth automaticamente
 
-No painel CMS v4:
-1. **Administration → Applications → Add Application**
-2. Nome: `SaaS POC v4`
-3. Marca **Client Credentials** (sim)
-4. Escopos: marque todos (pro POC ler tudo)
-5. Salva, copia **Client ID** e **Client Secret**
+```bash
+chmod +x seed-credenciais.sh
+./seed-credenciais.sh
+```
+
+O script:
+- Espera o CMS terminar setup inicial (até 5min)
+- Gera Client ID + Secret aleatórios
+- Insere direto no MySQL com todos os escopos atribuídos
+- Imprime as 3 linhas pra colar no `.env` da landing
+- Mostra também a senha inicial do `xibo_admin` (pra debug visual no painel)
+
+Idempotente — se já rodou antes, reusa o mesmo client.
 
 ## Aponta o SaaS pro POC (sem mexer em produção)
 
-Adiciona ao `.env` da landing (`/opt/cardapio_saas/midia-indoor/landing/.env`):
+Pega as 3 linhas que o `seed-credenciais.sh` imprimiu e adiciona ao `.env` da landing
+(`/opt/cardapio_saas/midia-indoor/landing/.env`):
 
 ```
 XIBO_V4_URL=http://midia_xibo_web_v4
-XIBO_V4_CLIENT_ID=<copiou_do_passo_anterior>
-XIBO_V4_CLIENT_SECRET=<copiou_do_passo_anterior>
+XIBO_V4_CLIENT_ID=<vem-do-script>
+XIBO_V4_CLIENT_SECRET=<vem-do-script>
 ```
 
 Conecta a landing à rede do POC (pra resolver `midia_xibo_web_v4`):
