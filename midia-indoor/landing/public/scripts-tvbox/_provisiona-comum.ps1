@@ -449,7 +449,8 @@ function Instalar-LauncherThree {
   param(
     [string]$device,
     [string]$apk,           # caminho do APK do Three Launcher
-    [string]$wallpaper,     # caminho da imagem (PNG/JPG) — opcional
+    [string]$wallpaper,     # caminho da imagem (PNG/JPG) - opcional
+    [ValidateSet("retrato","paisagem","")] [string]$orientacao = "",  # sufixo do arquivo no device
     [switch]$NaoFixarComoHome  # se setado, instala mas nao fixa como HOME
   )
   Step "Instalando Three Launcher"
@@ -467,7 +468,7 @@ function Instalar-LauncherThree {
   if ($wallpaper -and (Test-Path $wallpaper)) {
     $ext = [System.IO.Path]::GetExtension($wallpaper).ToLower().TrimStart(".")
     if ($ext -notin @("png","jpg","jpeg")) { $ext = "png" }
-    $nomeArq = "three_wallpaper.$ext"
+    $nomeArq = if ($orientacao) { "three_wallpaper-$orientacao.$ext" } else { "three_wallpaper.$ext" }
 
     # 1. /sdcard publico
     adb -s $device push $wallpaper "/sdcard/$nomeArq" | Out-Null

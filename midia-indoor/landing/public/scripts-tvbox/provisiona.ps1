@@ -1,14 +1,15 @@
 # provisiona.ps1
-# Wrapper interativo: pergunta orientacao e chama o script certo.
+# Wrapper universal: pergunta orientacao + componentes e chama o script certo.
 # Uso:
 #   .\provisiona.ps1 -Ip 192.168.15.51
 #   .\provisiona.ps1 -Ip 192.168.15.51 -DisplayName "TD-LOJA-01"
-#   .\provisiona.ps1 -Ip 192.168.15.51 -Orientacao retrato   # pula o menu
+#   .\provisiona.ps1 -Ip 192.168.15.51 -Orientacao retrato -Componentes "launcher"
 
 param(
   [Parameter(Mandatory=$true)] [string]$Ip,
   [string]$DisplayName = "",
-  [ValidateSet("retrato","paisagem","")] [string]$Orientacao = ""
+  [ValidateSet("retrato","paisagem","")] [string]$Orientacao = "",
+  [string]$Componentes = ""
 )
 
 if (-not $Orientacao) {
@@ -35,5 +36,6 @@ Write-Host ""
 
 $argsFwd = @{ Ip = $Ip }
 if ($DisplayName) { $argsFwd.DisplayName = $DisplayName }
+if ($Componentes) { $argsFwd.Componentes = $Componentes }
 
 & $script @argsFwd

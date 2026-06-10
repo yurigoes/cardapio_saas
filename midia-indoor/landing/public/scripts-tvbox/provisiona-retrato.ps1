@@ -96,7 +96,7 @@ if ($flags.Xibo) {
 # 9. Three Launcher: relogio + wifi + botoes + wallpaper retrato. Auto-launch Xibo apos 30s.
 if ($flags.Launcher) {
   Desinstalar-Pacote $device "com.threedigital.launcher"
-  Instalar-LauncherThree -device $device -apk $LauncherApk -wallpaper $WallpaperRetrato
+  Instalar-LauncherThree -device $device -apk $LauncherApk -wallpaper $WallpaperRetrato -orientacao "retrato"
 } else {
   Step "Pulando Three Launcher (nao selecionado)"
 }

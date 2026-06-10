@@ -139,25 +139,30 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun carregarWallpaper() {
-        val candidatos = mutableListOf<String>().apply {
-            // 1. Pasta privada do app — sem permissao, funciona em qualquer Android
-            filesDir?.let {
-                add("${it.absolutePath}/three_wallpaper.png")
-                add("${it.absolutePath}/three_wallpaper.jpg")
-            }
-            // 2. Pasta externa do app — sem permissao, funciona em qualquer Android
-            getExternalFilesDir(null)?.let {
-                add("${it.absolutePath}/three_wallpaper.png")
-                add("${it.absolutePath}/three_wallpaper.jpg")
-            }
-            // 3. /sdcard publico — fallback (precisa READ_EXTERNAL_STORAGE em Android <13)
-            add("/sdcard/three_wallpaper.png")
-            add("/sdcard/three_wallpaper.jpg")
-            add("/sdcard/Download/three_wallpaper.png")
-            add("/sdcard/Download/three_wallpaper.jpg")
-            add("/storage/emulated/0/three_wallpaper.png")
-            add("/storage/emulated/0/three_wallpaper.jpg")
+        // Detecta orientacao atual da tela e prioriza o wallpaper certo
+        val ehPaisagem = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val sufixoPreferido = if (ehPaisagem) "paisagem" else "retrato"
+        val sufixoFallback  = if (ehPaisagem) "retrato"  else "paisagem"
+        android.util.Log.d("ThreeLauncher", "Orientacao=${if (ehPaisagem) "paisagem" else "retrato"}, prefere wallpaper-$sufixoPreferido")
+
+        // Ordem de busca: sufixo preferido > sem sufixo > sufixo fallback
+        val nomes = listOf(
+            "three_wallpaper-$sufixoPreferido.png",
+            "three_wallpaper-$sufixoPreferido.jpg",
+            "three_wallpaper.png",
+            "three_wallpaper.jpg",
+            "three_wallpaper-$sufixoFallback.png",
+            "three_wallpaper-$sufixoFallback.jpg"
+        )
+        val pastas = mutableListOf<String>().apply {
+            filesDir?.let { add(it.absolutePath) }
+            getExternalFilesDir(null)?.let { add(it.absolutePath) }
+            add("/sdcard")
+            add("/sdcard/Download")
+            add("/storage/emulated/0")
         }
+        val candidatos = mutableListOf<String>()
+        for (nome in nomes) for (pasta in pastas) candidatos.add("$pasta/$nome")
         android.util.Log.d("ThreeLauncher", "Procurando wallpaper em ${candidatos.size} caminhos...")
         for (path in candidatos) {
             val f = File(path)

@@ -176,7 +176,7 @@ if ($flags.Xibo) {
 # 9. Three Launcher (so se flags.Launcher)
 if ($flags.Launcher) {
   Desinstalar-Pacote $device "com.threedigital.launcher"
-  Instalar-LauncherThree -device $device -apk $LauncherApk -wallpaper $WallpaperPaisagem
+  Instalar-LauncherThree -device $device -apk $LauncherApk -wallpaper $WallpaperPaisagem -orientacao "paisagem"
 } else {
   Step "Pulando Three Launcher (nao selecionado)"
 }
