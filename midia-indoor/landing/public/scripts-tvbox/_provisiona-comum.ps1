@@ -889,14 +889,15 @@ function Instalar-Tailscale {
   Ok "Binarios Tailscale ($arch) instalados"
 
   # Cria ts-up.sh (idempotente + best-effort: anuncio tem prioridade).
-  #  - GOMEMLIMIT/GOGC capam a RAM do tailscaled (~28MB) em boxes fracos.
   #  - oom_score_adj=1000: kernel mata o tailscaled ANTES do Xibo sob pressao.
+  #  NAO usar GOMEMLIMIT/GOGC apertado: sufoca o netstack/magicsock e a rede
+  #  para de responder (ping/inbound falham). A protecao vem do oom_score_adj.
   $script = @"
 #!/system/bin/sh
 SOCK=/data/local/tmp/tailscaled.sock
 STATE=/data/local/tmp/tsstate
 if ! /data/local/tmp/tailscale --socket=`$SOCK status >/dev/null 2>&1; then
-  GOMEMLIMIT=28MiB GOGC=10 nohup /data/local/tmp/tailscaled --tun=userspace-networking --statedir=`$STATE --socket=`$SOCK >/data/local/tmp/tsd.log 2>&1 &
+  nohup /data/local/tmp/tailscaled --tun=userspace-networking --statedir=`$STATE --socket=`$SOCK >/data/local/tmp/tsd.log 2>&1 &
   sleep 3
   for pid in `$(pgrep tailscaled); do echo 1000 > /proc/`$pid/oom_score_adj 2>/dev/null; done
 fi
