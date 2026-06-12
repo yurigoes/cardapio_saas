@@ -20,6 +20,8 @@ param(
   [string]$BootVideo = "A:\Sistemas\xibo-mod\boot-retrato.mp4",
   [string]$LauncherApk = "A:\Sistemas\three-launcher\app-release.apk",
   [string]$WallpaperRetrato = "A:\Sistemas\three-launcher\wallpaper-retrato.png",
+  [string]$TailscaleKey = "",
+  [string]$TailscaleDir = "A:\Sistemas\tailscale",
   [int]$BootFps = 24,
   [string]$CmsAddress = "https://midia.tthreedigital.com.br",
   [string]$ServerKey = "2IG5P8rP",
@@ -99,6 +101,13 @@ if ($flags.Launcher) {
   Instalar-LauncherThree -device $device -apk $LauncherApk -wallpaper $WallpaperRetrato -orientacao "retrato"
 } else {
   Step "Pulando Three Launcher (nao selecionado)"
+}
+
+# 9b. Tailscale: acesso remoto via tailnet (auto-start pelo launcher no boot)
+if ($flags.Tailscale) {
+  Instalar-Tailscale -device $device -authKey $TailscaleKey -hostname $DisplayName.ToLower() -tsDir $TailscaleDir
+} else {
+  Step "Pulando Tailscale (nao selecionado)"
 }
 
 # 10. Resumo + reboot

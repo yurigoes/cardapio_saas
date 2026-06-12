@@ -858,6 +858,63 @@ function Resumo([hashtable]$data) {
   Write-Host ""
 }
 
+# ---------- Tailscale (acesso remoto via tailnet) ----------
+# Instala os binarios estaticos (arm/arm64), autentica com auth key e cria o
+# script de boot ts-up.sh (o Three Launcher dispara ele no arranque).
+# Userspace networking (sem depender de /dev/net/tun no kernel).
+function Instalar-Tailscale {
+  param(
+    [string]$device,
+    [string]$authKey,
+    [string]$hostname,
+    [string]$tsDir = "A:\Sistemas\tailscale"   # pasta com tailscale/tailscaled (arm e arm64)
+  )
+  Step "Instalando Tailscale (acesso remoto)"
+  if (-not $authKey) { Warn "Sem auth key (-TailscaleKey) - pulando Tailscale"; return }
+
+  # Detecta arquitetura
+  $abi = (cmd /c "adb -s $device shell getprop ro.product.cpu.abi").Trim()
+  $arch = if ($abi -match "arm64|aarch64") { "arm64" } else { "arm" }
+  $bin  = Join-Path $tsDir $arch
+  if (-not (Test-Path (Join-Path $bin "tailscaled"))) {
+    Warn "Binarios Tailscale ($arch) nao encontrados em $bin - pulando"
+    Warn "Baixe tailscale_<ver>_$arch.tgz de pkgs.tailscale.com/stable/#static e extraia tailscale+tailscaled em $bin"
+    return
+  }
+
+  # Push binarios
+  adb -s $device push (Join-Path $bin "tailscale")  /data/local/tmp/tailscale  | Out-Null
+  adb -s $device push (Join-Path $bin "tailscaled") /data/local/tmp/tailscaled | Out-Null
+  adb -s $device shell "su -c 'chmod 755 /data/local/tmp/tailscale /data/local/tmp/tailscaled'" | Out-Null
+  Ok "Binarios Tailscale ($arch) instalados"
+
+  # Cria ts-up.sh (idempotente: sobe daemon se nao estiver rodando + up)
+  $script = @"
+#!/system/bin/sh
+SOCK=/data/local/tmp/tailscaled.sock
+STATE=/data/local/tmp/tsstate
+if ! /data/local/tmp/tailscale --socket=`$SOCK status >/dev/null 2>&1; then
+  nohup /data/local/tmp/tailscaled --tun=userspace-networking --statedir=`$STATE --socket=`$SOCK >/data/local/tmp/tsd.log 2>&1 &
+  sleep 3
+fi
+/data/local/tmp/tailscale --socket=`$SOCK up --authkey=$authKey --hostname=$hostname --accept-dns=false >/dev/null 2>&1
+"@
+  $tmp = New-TemporaryFile
+  [System.IO.File]::WriteAllText($tmp.FullName, ($script -replace "`r`n", "`n"))
+  adb -s $device push $tmp.FullName /data/local/tmp/ts-up.sh | Out-Null
+  Remove-Item $tmp.FullName -ErrorAction SilentlyContinue
+  adb -s $device shell "su -c 'chmod 755 /data/local/tmp/ts-up.sh'" | Out-Null
+  Ok "Script de boot ts-up.sh criado"
+
+  # Sobe agora (primeira vez)
+  adb -s $device shell "su -c 'sh /data/local/tmp/ts-up.sh'" | Out-Null
+  Start-Sleep -Seconds 4
+  $tsIp = (cmd /c "adb -s $device shell su -c '/data/local/tmp/tailscale --socket=/data/local/tmp/tailscaled.sock ip -4'").Trim()
+  if ($tsIp -match "100\.") { Ok "Tailscale conectado: $tsIp (hostname $hostname)" }
+  else { Warn "Tailscale instalado mas IP nao confirmado - veja /data/local/tmp/tsd.log" }
+  return $tsIp
+}
+
 # ---------- Helpers de provisionamento seletivo ----------
 
 # Retorna $true se o pacote esta instalado no device.
@@ -887,40 +944,44 @@ function Selecionar-Componentes {
   Write-Host "    1 - Xibo (player)"
   Write-Host "    2 - RustDesk (acesso remoto)"
   Write-Host "    3 - Three Launcher (HOME + wallpaper)"
+  Write-Host "    4 - Tailscale (acesso remoto via tailnet)"
   Write-Host "    T - Tudo (inclui boot animation + rotacao tela)"
   Write-Host ""
   Write-Host "  Digite numeros separados por virgula (ex: 1,3) ou T pra tudo:" -ForegroundColor Yellow
   $resp = (Read-Host "  Opcao").Trim().ToUpper()
   if (-not $resp) { $resp = "T" }
 
-  $flags = @{ Xibo=$false; RustDesk=$false; Launcher=$false; Boot=$false }
+  $flags = @{ Xibo=$false; RustDesk=$false; Launcher=$false; Boot=$false; Tailscale=$false }
   if ($resp -eq "T" -or $resp -eq "TUDO") {
-    $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true
+    $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true; $flags.Tailscale = $true
   } else {
     $partes = $resp -split '[,;\s]+' | Where-Object { $_ }
     foreach ($p in $partes) {
       switch ($p) {
-        "1"        { $flags.Xibo = $true }
-        "XIBO"     { $flags.Xibo = $true }
-        "2"        { $flags.RustDesk = $true }
-        "RUSTDESK" { $flags.RustDesk = $true }
-        "3"        { $flags.Launcher = $true }
-        "LAUNCHER" { $flags.Launcher = $true }
-        default    { Warn "Opcao ignorada: $p" }
+        "1"         { $flags.Xibo = $true }
+        "XIBO"      { $flags.Xibo = $true }
+        "2"         { $flags.RustDesk = $true }
+        "RUSTDESK"  { $flags.RustDesk = $true }
+        "3"         { $flags.Launcher = $true }
+        "LAUNCHER"  { $flags.Launcher = $true }
+        "4"         { $flags.Tailscale = $true }
+        "TAILSCALE" { $flags.Tailscale = $true }
+        default     { Warn "Opcao ignorada: $p" }
       }
     }
   }
 
-  if (-not ($flags.Xibo -or $flags.RustDesk -or $flags.Launcher -or $flags.Boot)) {
+  if (-not ($flags.Xibo -or $flags.RustDesk -or $flags.Launcher -or $flags.Boot -or $flags.Tailscale)) {
     Write-Host "  Nada selecionado - abortando." -ForegroundColor Red
     exit 1
   }
 
   $resumo = @()
-  if ($flags.Boot)     { $resumo += "Boot+Rotacao" }
-  if ($flags.RustDesk) { $resumo += "RustDesk" }
-  if ($flags.Xibo)     { $resumo += "Xibo" }
-  if ($flags.Launcher) { $resumo += "Launcher" }
+  if ($flags.Boot)      { $resumo += "Boot+Rotacao" }
+  if ($flags.RustDesk)  { $resumo += "RustDesk" }
+  if ($flags.Xibo)      { $resumo += "Xibo" }
+  if ($flags.Launcher)  { $resumo += "Launcher" }
+  if ($flags.Tailscale) { $resumo += "Tailscale" }
   Write-Host ("  Selecionado: " + ($resumo -join ", ")) -ForegroundColor Green
   Write-Host ""
   return $flags
@@ -928,17 +989,18 @@ function Selecionar-Componentes {
 
 # Converte string CSV em hashtable de flags (uso via -Componentes "xibo,launcher")
 function Parse-Componentes([string]$csv) {
-  $flags = @{ Xibo=$false; RustDesk=$false; Launcher=$false; Boot=$false }
+  $flags = @{ Xibo=$false; RustDesk=$false; Launcher=$false; Boot=$false; Tailscale=$false }
   $partes = $csv -split '[,;\s]+' | Where-Object { $_ }
   foreach ($p in $partes) {
     switch ($p.ToLower()) {
-      "tudo"     { $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true }
-      "all"      { $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true }
-      "xibo"     { $flags.Xibo = $true }
-      "rustdesk" { $flags.RustDesk = $true }
-      "launcher" { $flags.Launcher = $true }
-      "boot"     { $flags.Boot = $true }
-      default    { Warn "Componente desconhecido: $p" }
+      "tudo"      { $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true; $flags.Tailscale = $true }
+      "all"       { $flags.Xibo = $true; $flags.RustDesk = $true; $flags.Launcher = $true; $flags.Boot = $true; $flags.Tailscale = $true }
+      "xibo"      { $flags.Xibo = $true }
+      "rustdesk"  { $flags.RustDesk = $true }
+      "launcher"  { $flags.Launcher = $true }
+      "boot"      { $flags.Boot = $true }
+      "tailscale" { $flags.Tailscale = $true }
+      default     { Warn "Componente desconhecido: $p" }
     }
   }
   return $flags

@@ -9,7 +9,8 @@ param(
   [Parameter(Mandatory=$true)] [string]$Ip,
   [string]$DisplayName = "",
   [ValidateSet("retrato","paisagem","")] [string]$Orientacao = "",
-  [string]$Componentes = ""
+  [string]$Componentes = "",
+  [string]$TailscaleKey = ""
 )
 
 if (-not $Orientacao) {
@@ -37,5 +38,6 @@ Write-Host ""
 $argsFwd = @{ Ip = $Ip }
 if ($DisplayName) { $argsFwd.DisplayName = $DisplayName }
 if ($Componentes) { $argsFwd.Componentes = $Componentes }
+if ($TailscaleKey) { $argsFwd.TailscaleKey = $TailscaleKey }
 
 & $script @argsFwd

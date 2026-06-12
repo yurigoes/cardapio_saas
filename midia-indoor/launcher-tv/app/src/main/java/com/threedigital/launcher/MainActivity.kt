@@ -77,6 +77,27 @@ class MainActivity : AppCompatActivity() {
         }
 
         carregarWallpaper()
+        iniciarTailscale()
+    }
+
+    /**
+     * Sobe o tailscaled no boot (acesso remoto via Tailscale). O script
+     * /data/local/tmp/ts-up.sh e criado pelo provisionamento; se nao existir,
+     * nao faz nada. Box e rooted, entao roda via su. Fire-and-forget.
+     */
+    private fun iniciarTailscale() {
+        try {
+            val script = File("/data/local/tmp/ts-up.sh")
+            if (!script.exists()) return
+            Thread {
+                try {
+                    Runtime.getRuntime().exec(arrayOf("su", "-c", "sh /data/local/tmp/ts-up.sh"))
+                    android.util.Log.d("ThreeLauncher", "ts-up.sh disparado")
+                } catch (e: Exception) {
+                    android.util.Log.w("ThreeLauncher", "Falha ao subir tailscale: ${e.message}")
+                }
+            }.start()
+        } catch (e: Exception) { /* ignora */ }
     }
 
     override fun onResume() {
