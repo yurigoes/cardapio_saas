@@ -6,7 +6,7 @@ import {
   Tv, Search, Plus, X, RefreshCw, MapPin, Megaphone, Upload, PlayCircle, StopCircle, BarChart3,
   LifeBuoy, Send, MonitorPlay, Trash2, Pencil, Wifi, WifiOff, Palette, Server, Camera, Power, Undo2, ScrollText, Map, MessageCircle,
   Ticket, CalendarDays, Check, ChevronLeft, ChevronRight, History, Grid3x3, Database,
-  FileSpreadsheet, Repeat, HandCoins, Archive, Zap,
+  FileSpreadsheet, Repeat, HandCoins, Archive, Zap, Printer,
 } from "lucide-react";
 import { NotifyHost, notify, confirmModal, promptModal } from "@/components/Notify";
 import { aplicarCorBranding } from "@/components/Branding";
@@ -1829,11 +1829,52 @@ function TemplateModal({ token, tpl, modeloPadrao, onClose, onSaved }: { token: 
     </Modal>
   );
 }
+interface BrandingPrint { nome?: string; logo_url?: string | null; cor?: string; site?: string | null; email?: string | null; cnpj?: string | null; }
+
+/** Abre janela nova só com o documento + cabeçalho de branding e dispara o print. */
+function imprimirDocumento(htmlConteudo: string, titulo: string, branding?: BrandingPrint | null) {
+  const w = window.open("", "_blank", "width=900,height=1000");
+  if (!w) { notify("Permita pop-ups pra imprimir o documento", "error"); return; }
+  const cor = branding?.cor ?? "#7c3aed";
+  const logo = branding?.logo_url
+    ? `<img src="${branding.logo_url}" alt="logo" style="max-height:60px;max-width:220px;object-fit:contain;" />`
+    : `<div style="font-size:22px;font-weight:800;color:${cor};">${branding?.nome ?? "Three Digital Mídia"}</div>`;
+  const rodapeDados = [branding?.nome, branding?.cnpj ? `CNPJ ${branding.cnpj}` : null, branding?.email, branding?.site]
+    .filter(Boolean).join(" · ");
+  const doc = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>${titulo}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color:#1a1a2e; line-height:1.6; margin:0; }
+  .cabecalho { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid ${cor}; padding-bottom:12px; margin-bottom:24px; }
+  .cabecalho .data { font-size:12px; color:#666; text-align:right; }
+  .rodape { margin-top:40px; border-top:1px solid #ccc; padding-top:8px; font-size:11px; color:#666; text-align:center; }
+  img { max-width:100%; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { border:1px solid #999; padding:6px 8px; font-size:12px; }
+  @media print { .noprint { display:none; } }
+</style></head>
+<body>
+  <div class="cabecalho">${logo}<div class="data">Documento gerado em<br>${new Date().toLocaleString("pt-BR")}</div></div>
+  ${htmlConteudo}
+  <div class="rodape">${rodapeDados || "Three Digital Mídia"}</div>
+  <div class="noprint" style="text-align:center;margin-top:24px;">
+    <button onclick="window.print()" style="background:${cor};color:#fff;border:0;border-radius:8px;padding:10px 24px;font-size:14px;cursor:pointer;">Imprimir / Salvar PDF</button>
+  </div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},400);};</script>
+</body></html>`;
+  w.document.open();
+  w.document.write(doc);
+  w.document.close();
+}
+
 function GerarContratoModal({ token, conta, onClose }: { token: string; conta: { id: string; empresa: string }; onClose: () => void }) {
   const [tpls, setTpls] = useState<Template[]>([]);
   const [sel, setSel] = useState(""); const [busy, setBusy] = useState(false);
   const [html, setHtml] = useState(""); const [err, setErr] = useState("");
+  const [branding, setBranding] = useState<BrandingPrint | null>(null);
   useEffect(() => { aapi(token, "/api/admin/contratos/templates").then(r => r.json()).then(d => { if (d.ok) { setTpls(d.templates.filter((t: Template) => t.ativo)); } }); }, [token]);
+  useEffect(() => { fetch("/api/branding").then(r => r.json()).then(d => { if (d?.ok) setBranding(d.branding); }).catch(() => {}); }, []);
   async function gerar() {
     if (!sel) { setErr("Escolha um modelo"); return; }
     setBusy(true); setErr("");
@@ -1842,6 +1883,7 @@ function GerarContratoModal({ token, conta, onClose }: { token: string; conta: {
     if (!d.ok) { setErr(d.error || "Erro"); return; }
     setHtml(d.conteudo_html);
   }
+  const tituloSel = tpls.find(t => t.id === sel)?.titulo ?? "Contrato";
   return (
     <Modal onClose={onClose} title={`Contrato — ${conta.empresa}`} wide>
       {!html ? (
@@ -1857,7 +1899,7 @@ function GerarContratoModal({ token, conta, onClose }: { token: string; conta: {
       ) : (
         <>
           <div className="mb-3 max-h-[50vh] overflow-y-auto rounded-xl border border-white/10 bg-white p-5 text-sm text-black" dangerouslySetInnerHTML={{ __html: html }} />
-          <button onClick={() => window.print()} className="w-full rounded-xl border border-white/15 py-2.5 text-sm hover:bg-white/5">Imprimir / Salvar PDF</button>
+          <button onClick={() => imprimirDocumento(html, tituloSel, branding)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 text-sm font-semibold hover:bg-brand-dark"><Printer className="h-4 w-4" /> Imprimir / Salvar PDF</button>
         </>
       )}
     </Modal>
