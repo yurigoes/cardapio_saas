@@ -143,12 +143,14 @@ export function Inventario({ token }: { token: string }) {
                 <td className="p-3 text-xs font-mono">{i.rustdesk_id ?? "—"}</td>
                 <td className="p-3 text-xs">
                   {i.vinculado_nome ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300" title={`Vinculado a ${i.vinculado_tipo}`}>
+                    <button onClick={() => setVincular(i)} className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:bg-emerald-500/25" title="Clique pra editar par / atribuir empresa">
                       🔗 {i.vinculado_nome}
-                    </span>
+                    </button>
                   ) : (i.tipo === "box" || i.tipo === "tv" || i.tipo === "tv-box") ? (
-                    <button onClick={() => setVincular(i)} className="text-[11px] text-slate-500 underline hover:text-slate-300">vincular</button>
-                  ) : "—"}
+                    <button onClick={() => setVincular(i)} className="text-[11px] text-slate-500 underline hover:text-slate-300">vincular / empresa</button>
+                  ) : (
+                    <button onClick={() => setVincular(i)} className="text-[11px] text-slate-500 underline hover:text-slate-300">empresa</button>
+                  )}
                 </td>
                 <td className="p-3 text-right">
                   <div className="flex justify-end gap-1">
