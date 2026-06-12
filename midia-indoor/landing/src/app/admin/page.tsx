@@ -1832,77 +1832,173 @@ function TemplateModal({ token, tpl, modeloPadrao, onClose, onSaved }: { token: 
 interface BrandingPrint { nome?: string; logo_url?: string | null; cor?: string; site?: string | null; email?: string | null; cnpj?: string | null; }
 
 /** Abre janela nova só com o documento + cabeçalho de branding e dispara o print. */
-function imprimirDocumento(htmlConteudo: string, titulo: string, branding?: BrandingPrint | null) {
-  const w = window.open("", "_blank", "width=900,height=1000");
-  if (!w) { notify("Permita pop-ups pra imprimir o documento", "error"); return; }
+async function imprimirDocumento(htmlConteudo: string, titulo: string, branding?: BrandingPrint | null) {
   const cor = branding?.cor ?? "#7c3aed";
   const nomeMarca = branding?.nome ?? "Three Digital Mídia";
-  // Usa o logo de impressao (versao escura). Se nao existir (404), o onerror
-  // troca pelo nome em texto — assim nunca fica logo branco invisivel no papel.
-  const fallbackTexto = `<div style=\\"font-size:22px;font-weight:800;color:${cor};\\">${nomeMarca}</div>`;
-  const logo = `<img src="/api/publico/logo-print?t=${Date.now()}" alt="${nomeMarca}" style="max-height:60px;max-width:220px;object-fit:contain;" onerror="this.outerHTML='${fallbackTexto}';" />`;
+
+  // Checa antes se existe logo de impressao — evita img quebrada / fallback inline
+  let logo: string;
+  try {
+    const head = await fetch(`/api/publico/logo-print?t=${Date.now()}`, { method: "HEAD" });
+    logo = head.ok
+      ? `<img src="/api/publico/logo-print?t=${Date.now()}" alt="${nomeMarca}" style="max-height:60px;max-width:240px;object-fit:contain;" />`
+      : `<div style="font-size:22px;font-weight:800;color:${cor};">${nomeMarca}</div>`;
+  } catch {
+    logo = `<div style="font-size:22px;font-weight:800;color:${cor};">${nomeMarca}</div>`;
+  }
+
+  const w = window.open("", "_blank", "width=900,height=1000");
+  if (!w) { notify("Permita pop-ups pra imprimir o documento", "error"); return; }
+
   const rodapeDados = [branding?.nome, branding?.cnpj ? `CNPJ ${branding.cnpj}` : null, branding?.email, branding?.site]
     .filter(Boolean).join(" · ");
+  const geradoEm = new Date().toLocaleString("pt-BR");
   const doc = `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="utf-8"><title>${titulo}</title>
 <style>
-  @page { size: A4; margin: 18mm 16mm; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color:#1a1a2e; line-height:1.6; margin:0; }
+  /* margin:0 no @page remove cabecalho/rodape automaticos do navegador (data, url, pagina) */
+  @page { size: A4; margin: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color:#1a1a2e; line-height:1.6; margin:0; padding:18mm 16mm; }
   .cabecalho { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid ${cor}; padding-bottom:12px; margin-bottom:24px; }
-  .cabecalho .data { font-size:12px; color:#666; text-align:right; }
   .rodape { margin-top:40px; border-top:1px solid #ccc; padding-top:8px; font-size:11px; color:#666; text-align:center; }
+  .rodape .gerado { display:block; margin-top:4px; color:#999; font-size:10px; }
   img { max-width:100%; }
   table { width:100%; border-collapse:collapse; }
   th,td { border:1px solid #999; padding:6px 8px; font-size:12px; }
   @media print { .noprint { display:none; } }
 </style></head>
 <body>
-  <div class="cabecalho">${logo}<div class="data">Documento gerado em<br>${new Date().toLocaleString("pt-BR")}</div></div>
+  <div class="cabecalho">${logo}</div>
   ${htmlConteudo}
-  <div class="rodape">${rodapeDados || "Three Digital Mídia"}</div>
+  <div class="rodape">
+    ${rodapeDados || "Three Digital Mídia"}
+    <span class="gerado">Documento gerado em ${geradoEm}</span>
+  </div>
   <div class="noprint" style="text-align:center;margin-top:24px;">
     <button onclick="window.print()" style="background:${cor};color:#fff;border:0;border-radius:8px;padding:10px 24px;font-size:14px;cursor:pointer;">Imprimir / Salvar PDF</button>
   </div>
-  <script>window.onload=function(){setTimeout(function(){window.print();},400);};</script>
+  <script>window.onload=function(){setTimeout(function(){window.print();},500);};</script>
 </body></html>`;
   w.document.open();
   w.document.write(doc);
   w.document.close();
 }
 
+interface ContratoGerado {
+  id: string; titulo: string; aceito: boolean; aceito_em: string | null;
+  aceito_nome: string | null; aceito_ip: string | null;
+  visivel_cliente: boolean; disponibilizado_em: string | null; criado_em: string;
+}
+
 function GerarContratoModal({ token, conta, onClose }: { token: string; conta: { id: string; empresa: string }; onClose: () => void }) {
   const [tpls, setTpls] = useState<Template[]>([]);
+  const [lista, setLista] = useState<ContratoGerado[]>([]);
   const [sel, setSel] = useState(""); const [busy, setBusy] = useState(false);
-  const [html, setHtml] = useState(""); const [err, setErr] = useState("");
+  const [err, setErr] = useState("");
   const [branding, setBranding] = useState<BrandingPrint | null>(null);
+  const [novoForm, setNovoForm] = useState(false);
+
+  const loadLista = useCallback(async () => {
+    const r = await aapi(token, `/api/admin/contratos?conta_id=${conta.id}`); const d = await r.json();
+    if (d.ok) setLista(d.contratos);
+  }, [token, conta.id]);
+
   useEffect(() => { aapi(token, "/api/admin/contratos/templates").then(r => r.json()).then(d => { if (d.ok) { setTpls(d.templates.filter((t: Template) => t.ativo)); } }); }, [token]);
   useEffect(() => { fetch("/api/branding").then(r => r.json()).then(d => { if (d?.ok) setBranding(d.branding); }).catch(() => {}); }, []);
+  useEffect(() => { loadLista(); }, [loadLista]);
+
   async function gerar() {
     if (!sel) { setErr("Escolha um modelo"); return; }
     setBusy(true); setErr("");
     const r = await aapi(token, "/api/admin/contratos", { method: "POST", body: JSON.stringify({ conta_id: conta.id, template_id: sel }) });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { setErr(d.error || "Erro"); return; }
-    setHtml(d.conteudo_html);
+    notify("Contrato gerado", "success");
+    setNovoForm(false); setSel(""); loadLista();
   }
-  const tituloSel = tpls.find(t => t.id === sel)?.titulo ?? "Contrato";
+
+  async function toggleVisivel(c: ContratoGerado) {
+    const r = await aapi(token, "/api/admin/contratos", { method: "PATCH", body: JSON.stringify({ id: c.id, visivel_cliente: !c.visivel_cliente }) });
+    const d = await r.json();
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify(c.visivel_cliente ? "Contrato ocultado do cliente" : "Contrato disponibilizado pro cliente assinar", "success");
+    loadLista();
+  }
+
+  async function verImprimir(c: ContratoGerado) {
+    const r = await aapi(token, `/api/admin/contratos?id=${c.id}`); const d = await r.json();
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    imprimirDocumento(d.contrato.conteudo_html, c.titulo, branding);
+  }
+
+  async function excluir(c: ContratoGerado) {
+    if (c.aceito) { notify("Contrato já aceito não pode ser excluído", "error"); return; }
+    if (!await confirmModal(`Excluir o contrato "${c.titulo}"?`)) return;
+    const r = await aapi(token, `/api/admin/contratos?id=${c.id}`, { method: "DELETE" });
+    const d = await r.json();
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify("Contrato excluído", "success"); loadLista();
+  }
+
   return (
-    <Modal onClose={onClose} title={`Contrato — ${conta.empresa}`} wide>
-      {!html ? (
-        <>
+    <Modal onClose={onClose} title={`Contratos — ${conta.empresa}`} wide>
+      {/* Lista de contratos gerados */}
+      <div className="mb-4 space-y-2">
+        {lista.length === 0 && <p className="text-sm text-slate-500">Nenhum contrato gerado ainda.</p>}
+        {lista.map(c => (
+          <div key={c.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-medium">{c.titulo}</p>
+                <p className="text-xs text-slate-500">Gerado em {new Date(c.criado_em).toLocaleDateString("pt-BR")}</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {c.aceito ? (
+                  <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">✓ Assinado</span>
+                ) : c.visivel_cliente ? (
+                  <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">Aguardando assinatura</span>
+                ) : (
+                  <span className="rounded-full bg-slate-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-slate-400">Rascunho</span>
+                )}
+              </div>
+            </div>
+            {c.aceito && (
+              <p className="mt-2 rounded-lg bg-emerald-500/5 px-2 py-1 text-[11px] text-emerald-200/80">
+                Assinado por <strong>{c.aceito_nome}</strong> em {c.aceito_em ? new Date(c.aceito_em).toLocaleString("pt-BR") : "—"}
+                {c.aceito_ip ? ` · IP ${c.aceito_ip}` : ""}
+              </p>
+            )}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button onClick={() => verImprimir(c)} className="flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1 text-xs hover:bg-white/5"><Printer className="h-3 w-3" /> Ver / Imprimir</button>
+              {!c.aceito && (
+                <button onClick={() => toggleVisivel(c)} className={`rounded-lg border px-2.5 py-1 text-xs ${c.visivel_cliente ? "border-amber-500/30 text-amber-300 hover:bg-amber-500/10" : "border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"}`}>
+                  {c.visivel_cliente ? "Ocultar do cliente" : "Disponibilizar pro cliente"}
+                </button>
+              )}
+              {!c.aceito && (
+                <button onClick={() => excluir(c)} className="rounded-lg border border-red-500/30 px-2.5 py-1 text-xs text-red-300 hover:bg-red-500/10"><Trash2 className="h-3 w-3" /></button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Gerar novo */}
+      {!novoForm ? (
+        <button onClick={() => setNovoForm(true)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Gerar novo contrato</button>
+      ) : (
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
           <label className="mb-1 block text-sm text-slate-300">Modelo</label>
           <select value={sel} onChange={e => setSel(e.target.value)} className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
             <option value="">{tpls.length ? "Selecione…" : "Nenhum modelo ativo"}</option>
             {tpls.map(t => <option key={t.id} value={t.id}>{t.titulo}</option>)}
           </select>
           {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
-          <button onClick={gerar} disabled={busy || !sel} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Gerar contrato</button>
-        </>
-      ) : (
-        <>
-          <div className="mb-3 max-h-[50vh] overflow-y-auto rounded-xl border border-white/10 bg-white p-5 text-sm text-black" dangerouslySetInnerHTML={{ __html: html }} />
-          <button onClick={() => imprimirDocumento(html, tituloSel, branding)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 text-sm font-semibold hover:bg-brand-dark"><Printer className="h-4 w-4" /> Imprimir / Salvar PDF</button>
-        </>
+          <div className="flex gap-2">
+            <button onClick={gerar} disabled={busy || !sel} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand py-2 text-sm font-semibold hover:bg-brand-dark disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Gerar</button>
+            <button onClick={() => { setNovoForm(false); setErr(""); }} className="rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5">Cancelar</button>
+          </div>
+        </div>
       )}
     </Modal>
   );

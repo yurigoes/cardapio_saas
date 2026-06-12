@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import Link from "next/link";
 import {
   Tv, Upload, Loader2, LogOut, Megaphone, BarChart3, RefreshCw, Calendar, MapPin, Clock,
-  CreditCard, LifeBuoy, Plus, Send, X, UserCog, Trash2,
+  CreditCard, LifeBuoy, Plus, Send, X, UserCog, Trash2, FileText, Printer, Check,
 } from "lucide-react";
 import { NotifyHost, notify } from "@/components/Notify";
 
@@ -39,7 +39,7 @@ function Painel() {
   const [me, setMe] = useState<Me | null>(null);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState<"campanhas" | "suporte" | "usuarios">("campanhas");
+  const [aba, setAba] = useState<"campanhas" | "contratos" | "suporte" | "usuarios">("campanhas");
 
   const [email, setEmail] = useState(""); const [senha, setSenha] = useState("");
   const [logBusy, setLogBusy] = useState(false); const [logErr, setLogErr] = useState("");
@@ -112,7 +112,7 @@ function Painel() {
 
       <nav className="mt-6 flex gap-1 border-b border-white/10">
         {(() => {
-          const tabs: [typeof aba, string, React.ElementType][] = [["campanhas", "Campanhas", Megaphone], ["suporte", "Suporte", LifeBuoy]];
+          const tabs: [typeof aba, string, React.ElementType][] = [["campanhas", "Campanhas", Megaphone], ["contratos", "Contratos", FileText], ["suporte", "Suporte", LifeBuoy]];
           if ((me.conta.papel ?? "owner") === "owner") tabs.push(["usuarios", "Usuários", UserCog]);
           return tabs.map(([id, label, Icon]) => (
             <button key={id} onClick={() => setAba(id)} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition ${aba === id ? "border-b-2 border-brand text-white" : "text-slate-400 hover:text-white"}`}>
@@ -133,6 +133,7 @@ function Painel() {
           )}
         </div>
       )}
+      {aba === "contratos" && <ContratosCliente token={token} nomeConta={me.conta.nome} />}
       {aba === "suporte"  && <Suporte token={token} />}
       {aba === "usuarios" && <Usuarios token={token} />}
     </div>
@@ -481,6 +482,127 @@ function ChatChamado({ token, chamado, onClose }: { token: string; chamado: Cham
         <input value={txt} onChange={e => setTxt(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder="Escreva uma mensagem…" className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-brand/50" />
         <button onClick={enviar} disabled={busy} className="rounded-xl bg-brand px-4 hover:bg-brand-dark disabled:opacity-50"><Send className="h-4 w-4" /></button>
       </div>
+    </Modal>
+  );
+}
+
+interface ContratoCli {
+  id: string; titulo: string; aceito: boolean; aceito_em: string | null;
+  aceito_nome: string | null; criado_em: string; disponibilizado_em: string | null;
+}
+
+function ContratosCliente({ token, nomeConta }: { token: string; nomeConta: string }) {
+  const [lista, setLista] = useState<ContratoCli[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [aberto, setAberto] = useState<{ id: string; titulo: string; html: string; aceito: boolean } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const r = await api(token, "/api/painel/contratos"); const d = await r.json();
+    if (d.ok) setLista(d.contratos);
+    setLoading(false);
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  async function abrir(c: ContratoCli) {
+    const r = await api(token, `/api/painel/contratos?id=${c.id}`); const d = await r.json();
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    setAberto({ id: c.id, titulo: c.titulo, html: d.contrato.conteudo_html, aceito: d.contrato.aceito });
+  }
+
+  if (loading) return <div className="mt-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>;
+
+  return (
+    <div className="mt-6 space-y-3">
+      {lista.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-white/15 p-10 text-center text-slate-500">
+          <FileText className="mx-auto mb-3 h-8 w-8" />
+          Nenhum contrato disponível. Quando a Three Digital disponibilizar um contrato, ele aparece aqui pra você assinar.
+        </div>
+      )}
+      {lista.map(c => (
+        <div key={c.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="font-semibold">{c.titulo}</p>
+              <p className="text-xs text-slate-500">Disponibilizado em {c.disponibilizado_em ? new Date(c.disponibilizado_em).toLocaleDateString("pt-BR") : new Date(c.criado_em).toLocaleDateString("pt-BR")}</p>
+            </div>
+            {c.aceito ? (
+              <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300"><Check className="h-3.5 w-3.5" /> Assinado</span>
+            ) : (
+              <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-300">Pendente de assinatura</span>
+            )}
+          </div>
+          {c.aceito && <p className="mt-2 text-[11px] text-emerald-200/70">Assinado por {c.aceito_nome} em {c.aceito_em ? new Date(c.aceito_em).toLocaleString("pt-BR") : "—"}</p>}
+          <button onClick={() => abrir(c)} className="mt-3 flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm font-medium hover:bg-white/5">
+            <FileText className="h-4 w-4" /> {c.aceito ? "Ver contrato" : "Ler e assinar"}
+          </button>
+        </div>
+      ))}
+      {aberto && <ContratoLeitor token={token} contrato={aberto} nomeConta={nomeConta} onClose={() => setAberto(null)} onAssinado={() => { setAberto(null); load(); }} />}
+    </div>
+  );
+}
+
+function ContratoLeitor({ token, contrato, nomeConta, onClose, onAssinado }: {
+  token: string; contrato: { id: string; titulo: string; html: string; aceito: boolean };
+  nomeConta: string; onClose: () => void; onAssinado: () => void;
+}) {
+  const [nome, setNome] = useState(nomeConta);
+  const [concordo, setConcordo] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function assinar() {
+    if (!concordo) { setErr("Marque que leu e concorda com o contrato"); return; }
+    if (nome.trim().length < 3) { setErr("Digite seu nome completo"); return; }
+    setBusy(true); setErr("");
+    const r = await api(token, `/api/painel/contratos/${contrato.id}/aceitar`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: nome.trim(), concordo: true }),
+    });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { setErr(d.error || "Erro ao assinar"); return; }
+    notify("Contrato assinado com sucesso!", "success");
+    onAssinado();
+  }
+
+  function imprimir() {
+    const w = window.open("", "_blank", "width=900,height=1000");
+    if (!w) { notify("Permita pop-ups pra imprimir", "error"); return; }
+    w.document.open();
+    w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>${contrato.titulo}</title>
+<style>@page{size:A4;margin:0}body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;line-height:1.6;margin:0;padding:18mm 16mm}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:6px 8px;font-size:12px}@media print{.noprint{display:none}}</style></head>
+<body>${contrato.html}<div class="noprint" style="text-align:center;margin-top:24px"><button onclick="window.print()" style="background:#7c3aed;color:#fff;border:0;border-radius:8px;padding:10px 24px;font-size:14px;cursor:pointer">Imprimir / Salvar PDF</button></div>
+<script>window.onload=function(){setTimeout(function(){window.print()},500)}</script></body></html>`);
+    w.document.close();
+  }
+
+  return (
+    <Modal title={contrato.titulo} onClose={onClose} wide>
+      <div className="mb-4 max-h-[55vh] overflow-y-auto rounded-xl border border-white/10 bg-white p-5 text-sm text-black" dangerouslySetInnerHTML={{ __html: contrato.html }} />
+      <button onClick={imprimir} className="mb-4 flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/5"><Printer className="h-4 w-4" /> Imprimir / Salvar PDF</button>
+
+      {contrato.aceito ? (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm text-emerald-200">
+          <Check className="mb-1 h-5 w-5" /> Este contrato já foi assinado.
+        </div>
+      ) : (
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <p className="mb-3 text-sm font-semibold text-slate-200">Assinatura eletrônica</p>
+          <label className="mb-3 flex items-start gap-2 text-sm text-slate-300">
+            <input type="checkbox" checked={concordo} onChange={e => setConcordo(e.target.checked)} className="mt-1 h-4 w-4 accent-brand" />
+            Declaro que li, compreendi e concordo integralmente com os termos deste contrato, assinando-o eletronicamente.
+          </label>
+          <label className="mb-1 block text-xs text-slate-400">Nome completo do responsável</label>
+          <input value={nome} onChange={e => setNome(e.target.value)} className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-brand/50" />
+          {err && <p className="mb-3 text-sm text-red-400">{err}</p>}
+          <button onClick={assinar} disabled={busy || !concordo} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Assinar contrato
+          </button>
+          <p className="mt-2 text-[11px] text-slate-500">Sua assinatura registra data, hora e IP, com validade jurídica (MP 2.200-2/2001, Lei 14.063/2020).</p>
+        </div>
+      )}
     </Modal>
   );
 }

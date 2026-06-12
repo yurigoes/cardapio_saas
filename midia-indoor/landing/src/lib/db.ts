@@ -263,6 +263,10 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS logo_print_data BYTEA;`);
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS logo_print_mime TEXT;`);
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS logo_print_updated_at TIMESTAMPTZ;`);
+  // Contrato visivel/disponibilizado pro cliente assinar no portal
+  await p.query(`ALTER TABLE midia_conta_contratos ADD COLUMN IF NOT EXISTS visivel_cliente BOOLEAN NOT NULL DEFAULT false;`);
+  await p.query(`ALTER TABLE midia_conta_contratos ADD COLUMN IF NOT EXISTS disponibilizado_em TIMESTAMPTZ;`);
+  await p.query(`ALTER TABLE midia_conta_contratos ADD COLUMN IF NOT EXISTS aceito_user_agent TEXT;`);
   // Splash do local (tela de espera quando não há conteúdo agendado)
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_layout_id INTEGER;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_nome TEXT;`);

@@ -15,17 +15,74 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   if (!await autenticarAdmin(req)) return NextResponse.json({ ok: false, error: "não autenticado" }, { status: 401 });
   const contaId = req.nextUrl.searchParams.get("conta_id");
-  if (!contaId) return NextResponse.json({ ok: false, error: "conta_id obrigatório" }, { status: 400 });
+  const contratoId = req.nextUrl.searchParams.get("id");
   try {
     await ensureSchema();
+    // Buscar 1 contrato completo (com html) pra visualizar/imprimir
+    if (contratoId) {
+      const row = await db().query(
+        `SELECT id, conta_id, titulo, conteudo_html, conteudo_hash, aceito, aceito_em,
+                aceito_nome, aceito_ip, visivel_cliente, disponibilizado_em, criado_em
+           FROM midia_conta_contratos WHERE id = $1`, [contratoId]
+      ).then(r => r.rows[0]);
+      if (!row) return NextResponse.json({ ok: false, error: "contrato não encontrado" }, { status: 404 });
+      return NextResponse.json({ ok: true, contrato: row });
+    }
+    if (!contaId) return NextResponse.json({ ok: false, error: "conta_id obrigatório" }, { status: 400 });
     const rows = await db().query(
-      `SELECT id, titulo, conteudo_hash, aceito, aceito_em, aceito_nome, criado_em
+      `SELECT id, titulo, conteudo_hash, aceito, aceito_em, aceito_nome, aceito_ip,
+              visivel_cliente, disponibilizado_em, criado_em
          FROM midia_conta_contratos WHERE conta_id = $1 ORDER BY criado_em DESC`,
       [contaId]
     ).then(r => r.rows);
     return NextResponse.json({ ok: true, contratos: rows });
   } catch (err) {
     console.error("[admin/contratos GET]", err);
+    return NextResponse.json({ ok: false, error: "erro" }, { status: 500 });
+  }
+}
+
+const patchSchema = z.object({
+  id: z.string().uuid(),
+  visivel_cliente: z.boolean().optional(),
+});
+
+export async function PATCH(req: NextRequest) {
+  if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
+  const parsed = patchSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ ok: false, error: "dados inválidos" }, { status: 400 });
+  const { id, visivel_cliente } = parsed.data;
+  if (visivel_cliente === undefined) return NextResponse.json({ ok: false, error: "nada para atualizar" }, { status: 400 });
+  try {
+    await ensureSchema();
+    await db().query(
+      `UPDATE midia_conta_contratos
+          SET visivel_cliente = $1,
+              disponibilizado_em = CASE WHEN $1 = true AND disponibilizado_em IS NULL THEN NOW() ELSE disponibilizado_em END
+        WHERE id = $2`,
+      [visivel_cliente, id]
+    );
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[admin/contratos PATCH]", err);
+    return NextResponse.json({ ok: false, error: "erro" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ ok: false, error: "id obrigatório" }, { status: 400 });
+  try {
+    await ensureSchema();
+    // Não deixa excluir contrato já aceito (registro legal)
+    const c = await db().query<{ aceito: boolean }>(`SELECT aceito FROM midia_conta_contratos WHERE id = $1`, [id]).then(r => r.rows[0]);
+    if (!c) return NextResponse.json({ ok: false, error: "não encontrado" }, { status: 404 });
+    if (c.aceito) return NextResponse.json({ ok: false, error: "contrato já aceito não pode ser excluído" }, { status: 400 });
+    await db().query(`DELETE FROM midia_conta_contratos WHERE id = $1`, [id]);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[admin/contratos DELETE]", err);
     return NextResponse.json({ ok: false, error: "erro" }, { status: 500 });
   }
 }
