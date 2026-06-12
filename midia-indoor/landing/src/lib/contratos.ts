@@ -13,34 +13,51 @@ import crypto from "crypto";
 export interface DadosContrato {
   cliente_nome: string; cliente_empresa: string; cliente_email: string;
   cliente_whatsapp?: string | null; cliente_cidade?: string | null;
+  cliente_cnpj?: string | null; cliente_endereco?: string | null;
   plano?: string; qtd_telas?: number; preco_tela?: number; total_mensal?: number;
+  vigencia_meses?: number; data_inicio?: string | null; data_fim?: string | null;
+  foro_comarca?: string | null;
 }
 
 export interface Contratada {
   contratada_nome: string; contratada_cnpj: string; contratada_email: string; contratada_site: string;
+  contratada_endereco?: string; contratada_foro?: string;
 }
 const CONTRATADA_ENV: Contratada = {
   contratada_nome:  process.env.CONTRATADA_NOME  ?? "Three Digital",
   contratada_cnpj:  process.env.CONTRATADA_CNPJ  ?? "",
   contratada_email: process.env.CONTRATADA_EMAIL ?? "contato@tthreedigital.com.br",
   contratada_site:  process.env.CONTRATADA_SITE  ?? "https://tthreedigital.com.br",
+  contratada_endereco: process.env.CONTRATADA_ENDERECO ?? "",
+  contratada_foro:  process.env.CONTRATADA_FORO  ?? "Salvador/BA",
 };
 
 export function renderContrato(html: string, d: DadosContrato, contratada?: Partial<Contratada>): string {
   const CONTRATADA = { ...CONTRATADA_ENV, ...(contratada ?? {}) };
   const hoje = new Date();
+  const fmtData = (s?: string | null) => {
+    if (!s) return "";
+    const dt = new Date(s);
+    return isNaN(dt.getTime()) ? String(s) : dt.toLocaleDateString("pt-BR");
+  };
   const vars: Record<string, string> = {
-    cliente_nome:     d.cliente_nome ?? "",
-    cliente_empresa:  d.cliente_empresa ?? "",
-    cliente_email:    d.cliente_email ?? "",
-    cliente_whatsapp: d.cliente_whatsapp ?? "",
-    cliente_cidade:   d.cliente_cidade ?? "",
-    plano:            d.plano ?? "",
-    qtd_telas:        String(d.qtd_telas ?? ""),
-    preco_tela:       d.preco_tela != null ? d.preco_tela.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
-    total_mensal:     d.total_mensal != null ? d.total_mensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
-    data:             hoje.toLocaleDateString("pt-BR"),
-    data_extenso:     hoje.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }),
+    cliente_nome:      d.cliente_nome ?? "",
+    cliente_empresa:   d.cliente_empresa ?? "",
+    cliente_email:     d.cliente_email ?? "",
+    cliente_whatsapp:  d.cliente_whatsapp ?? "",
+    cliente_cidade:    d.cliente_cidade ?? "",
+    cliente_cnpj:      d.cliente_cnpj ?? "",
+    cliente_endereco:  d.cliente_endereco ?? "",
+    plano:             d.plano ?? "",
+    qtd_telas:         String(d.qtd_telas ?? ""),
+    preco_tela:        d.preco_tela != null ? d.preco_tela.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
+    total_mensal:      d.total_mensal != null ? d.total_mensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
+    vigencia_meses:    String(d.vigencia_meses ?? ""),
+    data_inicio:       fmtData(d.data_inicio),
+    data_fim:          fmtData(d.data_fim),
+    foro_comarca:      d.foro_comarca ?? CONTRATADA.contratada_foro ?? "",
+    data:              hoje.toLocaleDateString("pt-BR"),
+    data_extenso:      hoje.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }),
     ...CONTRATADA,
   };
   return html.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => vars[k] ?? "");

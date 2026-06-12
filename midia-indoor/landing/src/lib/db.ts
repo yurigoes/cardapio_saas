@@ -834,9 +834,26 @@ export async function ensureSchema(): Promise<void> {
 
   await seedPlanos();
   await seedPacotes();
+  await seedContratoModelos();
   await seedMasterAdmin();
 
   _bootstrapped = true;
+}
+
+/** Popula midia_contrato_templates com os modelos pré-prontos (uma vez). */
+async function seedContratoModelos(): Promise<void> {
+  const p = db();
+  const { rows } = await p.query<{ n: string }>(`SELECT COUNT(*)::text AS n FROM midia_contrato_templates`);
+  if (Number(rows[0]?.n ?? "0") > 0) return;
+
+  const { MODELOS_CONTRATO } = await import("./contratos-modelos");
+  for (const m of MODELOS_CONTRATO) {
+    await p.query(
+      `INSERT INTO midia_contrato_templates (titulo, conteudo_html) VALUES ($1, $2)`,
+      [m.titulo, m.conteudo_html]
+    );
+  }
+  console.log(`[seed] ${MODELOS_CONTRATO.length} modelos de contrato inseridos`);
 }
 
 /** Seed de pacotes-exemplo (o master ajusta depois). */

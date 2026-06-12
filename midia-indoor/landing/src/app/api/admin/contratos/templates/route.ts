@@ -29,7 +29,33 @@ const novo = z.object({ titulo: z.string().min(1).max(160), conteudo_html: z.str
 
 export async function POST(req: NextRequest) {
   if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
-  const parsed = novo.safeParse(await req.json().catch(() => null));
+  const body = await req.json().catch(() => null);
+
+  // Ação especial: importar os modelos pré-prontos (não duplica por título)
+  if (body && body.acao === "importar_modelos") {
+    try {
+      await ensureSchema();
+      const { MODELOS_CONTRATO } = await import("@/lib/contratos-modelos");
+      const existentes = await db().query<{ titulo: string }>(
+        `SELECT titulo FROM midia_contrato_templates`
+      ).then(r => new Set(r.rows.map(x => x.titulo)));
+      let inseridos = 0;
+      for (const m of MODELOS_CONTRATO) {
+        if (existentes.has(m.titulo)) continue;
+        await db().query(
+          `INSERT INTO midia_contrato_templates (titulo, conteudo_html) VALUES ($1, $2)`,
+          [m.titulo, m.conteudo_html]
+        );
+        inseridos++;
+      }
+      return NextResponse.json({ ok: true, inseridos, total_modelos: MODELOS_CONTRATO.length });
+    } catch (err) {
+      console.error("[contratos/templates importar]", err);
+      return NextResponse.json({ ok: false, error: "erro ao importar" }, { status: 500 });
+    }
+  }
+
+  const parsed = novo.safeParse(body);
   if (!parsed.success) return NextResponse.json({ ok: false, error: "dados inválidos" }, { status: 400 });
   try {
     await ensureSchema();

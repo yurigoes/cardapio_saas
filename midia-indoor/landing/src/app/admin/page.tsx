@@ -1762,16 +1762,35 @@ function Contratos({ token }: { token: string }) {
   const [modelo, setModelo] = useState("");
   const [novo, setNovo] = useState(false);
   const [editing, setEditing] = useState<Template | null>(null);
+  const [importando, setImportando] = useState(false);
   const load = useCallback(async () => { const r = await aapi(token, "/api/admin/contratos/templates"); const d = await r.json(); if (d.ok) { setTpls(d.templates); setModelo(d.modelo_padrao); } }, [token]);
   useEffect(() => { load(); }, [load]);
+
+  async function importarModelos() {
+    if (!await confirmModal("Importar os 9 modelos prontos (publicidade, nichos, comodato, aditivo, uso de imagem)? Modelos já existentes com o mesmo título não serão duplicados.")) return;
+    setImportando(true);
+    const r = await aapi(token, "/api/admin/contratos/templates", { method: "POST", body: JSON.stringify({ acao: "importar_modelos" }) });
+    const d = await r.json(); setImportando(false);
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify(`${d.inseridos} modelo(s) importado(s)`, "success");
+    load();
+  }
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-bold">Modelos de contrato</h2>
-        <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo modelo</button>
+        <div className="flex gap-2">
+          <button onClick={importarModelos} disabled={importando} className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-300 hover:bg-amber-500/20 disabled:opacity-50">
+            {importando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />} Importar modelos prontos
+          </button>
+          <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo modelo</button>
+        </div>
       </div>
-      <p className="mb-4 text-xs text-slate-500">Placeholders: {"{{cliente_nome}} {{cliente_empresa}} {{cliente_email}} {{plano}} {{qtd_telas}} {{preco_tela}} {{total_mensal}} {{contratada_nome}} {{data_extenso}}"}</p>
+      <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200/90">
+        ⚠️ Os modelos prontos foram redigidos com base na legislação brasileira (Código Civil, CDC, LGPD, Lei de Direitos Autorais), mas <strong>não substituem revisão por advogado</strong>. Antes de usar, preencha os dados da empresa (CNPJ/endereço/foro) e revise os campos entre colchetes [ ... ].
+      </div>
+      <p className="mb-4 text-xs text-slate-500">Placeholders: {"{{cliente_nome}} {{cliente_empresa}} {{cliente_cnpj}} {{cliente_endereco}} {{cliente_email}} {{plano}} {{qtd_telas}} {{preco_tela}} {{total_mensal}} {{vigencia_meses}} {{data_inicio}} {{data_fim}} {{foro_comarca}} {{contratada_nome}} {{contratada_cnpj}} {{data_extenso}}"}</p>
       <div className="space-y-2">
         {tpls.map(t => (
           <div key={t.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
@@ -1779,7 +1798,7 @@ function Contratos({ token }: { token: string }) {
             <button onClick={() => setEditing(t)} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs hover:bg-white/5">Editar</button>
           </div>
         ))}
-        {!tpls.length && <p className="text-sm text-slate-500">Nenhum modelo. Crie um a partir do modelo padrão.</p>}
+        {!tpls.length && <p className="text-sm text-slate-500">Nenhum modelo. Clique em &quot;Importar modelos prontos&quot; ou crie um do zero.</p>}
       </div>
       {novo && <TemplateModal token={token} modeloPadrao={modelo} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); load(); }} />}
       {editing && <TemplateModal token={token} tpl={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
