@@ -377,17 +377,9 @@ do Código Penal), sujeitando a CONTRATANTE às medidas cíveis e criminais cab�
 do valor de reposição dos equipamentos.</p>
 
 <h2>Anexo I — Inventário dos Equipamentos Cedidos</h2>
-<table>
-  <thead><tr><th>#</th><th>Equipamento</th><th>Marca/Modelo</th><th>Nº de Série</th><th>MAC/ID</th><th>Estado</th><th>Valor de Reposição (R$)</th></tr></thead>
-  <tbody>
-    <tr><td>1</td><td>[Ex.: Android TV-Box]</td><td>[ ]</td><td>[ ]</td><td>[ ]</td><td>[Novo/Usado]</td><td>[R$ ___ ]</td></tr>
-    <tr><td>2</td><td>[Ex.: Monitor/TV 43"]</td><td>[ ]</td><td>[ ]</td><td>[ ]</td><td>[ ]</td><td>[R$ ___ ]</td></tr>
-    <tr><td>3</td><td>[Ex.: Suporte/Totem]</td><td>[ ]</td><td>[ ]</td><td>[ ]</td><td>[ ]</td><td>[R$ ___ ]</td></tr>
-    <tr><td>4</td><td>[Ex.: Fonte/Cabos]</td><td>[ ]</td><td>[ ]</td><td>[ ]</td><td>[ ]</td><td>[R$ ___ ]</td></tr>
-    <tr><td colspan="6" style="text-align:right;"><strong>VALOR TOTAL DE REPOSIÇÃO</strong></td><td><strong>[R$ ___ ]</strong></td></tr>
-  </tbody>
-</table>
-<p><small>O inventário acima é parte integrante e indissociável deste termo. A assinatura confirma o
+{{inventario_equipamentos}}
+<p><small>O inventário acima — gerado automaticamente a partir dos equipamentos vinculados a esta
+empresa no sistema — é parte integrante e indissociável deste termo. A assinatura confirma o
 recebimento dos equipamentos nas condições descritas, bem como a ciência dos valores de reposição.</small></p>
 
 ${CLAUSULA_LIMITACAO}

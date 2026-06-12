@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db, ensureSchema } from "@/lib/db";
 import { exigirMaster, autenticarAdmin } from "@/lib/admin-auth";
-import { renderContrato, hashConteudo, type DadosContrato } from "@/lib/contratos";
+import { renderContrato, hashConteudo, montarTabelaEquipamentos, type DadosContrato, type EquipamentoComodato } from "@/lib/contratos";
 import { getBranding } from "@/lib/branding";
 
 export const dynamic = "force-dynamic";
@@ -129,13 +129,29 @@ export async function POST(req: NextRequest) {
       total_mensal:     Number((preco * qtd).toFixed(2)),
     };
 
+    // Equipamentos cedidos em comodato (pra termos que usam {{inventario_equipamentos}})
+    let tabelaEquip = "";
+    if (tpl.conteudo_html.includes("{{inventario_equipamentos}}")) {
+      const equips = await p.query<EquipamentoComodato>(
+        `SELECT i.tipo, i.nome, i.fabricante, i.modelo, i.serial, i.mac, i.valor,
+                l.nome AS local_nome, v.nome AS vinculado_nome
+           FROM midia_inventario i
+           LEFT JOIN midia_locais l ON l.id = i.local_id
+           LEFT JOIN midia_inventario v ON v.id = i.vinculado_a_id
+          WHERE i.conta_id = $1
+          ORDER BY i.tipo, i.nome`,
+        [conta_id]
+      ).then(r => r.rows);
+      tabelaEquip = montarTabelaEquipamentos(equips);
+    }
+
     const br = await getBranding();
     const html = renderContrato(tpl.conteudo_html, dados, {
       contratada_nome:  br.razao_social ?? br.nome,
       contratada_cnpj:  br.cnpj ?? "",
       contratada_email: br.email ?? "",
       contratada_site:  br.site ?? "",
-    });
+    }, { inventario_equipamentos: tabelaEquip });
     const hash = hashConteudo(html);
 
     const id = await p.query<{ id: string }>(

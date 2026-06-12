@@ -22,6 +22,7 @@ interface ItemInv {
   monitor_resolucao: string | null; monitor_polegadas: number | null;
   resolucao: string | null; polegadas: number | null;
   vinculado_a_id: string | null; vinculado_nome: string | null; vinculado_tipo: string | null;
+  conta_id: string | null; conta_nome: string | null;
 }
 interface LocalSimples { id: string; nome: string; cidade?: string | null; }
 
@@ -31,9 +32,12 @@ function qrImgUrl(data: string, sizePx = 300): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${sizePx}x${sizePx}&data=${encodeURIComponent(data)}&format=png&margin=4`;
 }
 
+interface ContaSimples { id: string; empresa: string; nome?: string | null; }
+
 export function Inventario({ token }: { token: string }) {
   const [itens, setItens] = useState<ItemInv[]>([]);
   const [locais, setLocais] = useState<LocalSimples[]>([]);
+  const [contas, setContas] = useState<ContaSimples[]>([]);
   const [novo, setNovo] = useState(false);
   const [verQR, setVerQR] = useState<ItemInv | null>(null);
   const [editar, setEditar] = useState<ItemInv | null>(null);
@@ -57,12 +61,14 @@ export function Inventario({ token }: { token: string }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [r1, r2] = await Promise.all([
+    const [r1, r2, r3] = await Promise.all([
       aapi(token, "/api/admin/inventario").then(r => r.json()),
       aapi(token, "/api/admin/locais").then(r => r.json()),
+      aapi(token, "/api/admin/contas").then(r => r.json()).catch(() => ({ ok: false })),
     ]);
     if (r1.ok) setItens(r1.itens);
     if (r2.ok) setLocais(r2.locais);
+    if (r3.ok) setContas((r3.contas ?? []).map((c: any) => ({ id: c.id, empresa: c.empresa, nome: c.nome })));
     setLoading(false);
   }, [token]);
   useEffect(() => { load(); }, [load]);
@@ -118,7 +124,7 @@ export function Inventario({ token }: { token: string }) {
                   onChange={e => setSelecionados(e.target.checked ? new Set(filtrados.map(i => i.id)) : new Set())}
                   className="h-4 w-4 cursor-pointer accent-brand" />
               </th>
-              <th className="p-3">Tipo</th><th className="p-3">Nome</th><th className="p-3">MAC</th><th className="p-3">Serial</th><th className="p-3">Local</th><th className="p-3">Xibo</th><th className="p-3">RustDesk</th><th className="p-3">Vínculo</th><th className="p-3"></th>
+              <th className="p-3">Tipo</th><th className="p-3">Nome</th><th className="p-3">MAC</th><th className="p-3">Serial</th><th className="p-3">Local</th><th className="p-3">Empresa</th><th className="p-3">Xibo</th><th className="p-3">RustDesk</th><th className="p-3">Vínculo</th><th className="p-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -132,6 +138,7 @@ export function Inventario({ token }: { token: string }) {
                 <td className="p-3 font-mono text-xs">{i.mac ?? "—"}</td>
                 <td className="p-3 font-mono text-xs">{i.serial ?? "—"}</td>
                 <td className="p-3 text-xs">{i.local_nome ?? "—"}</td>
+                <td className="p-3 text-xs">{i.conta_nome ? <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">{i.conta_nome}</span> : "—"}</td>
                 <td className="p-3 text-xs">{i.xibo_display_id ? `#${i.xibo_display_id}` : "—"}</td>
                 <td className="p-3 text-xs font-mono">{i.rustdesk_id ?? "—"}</td>
                 <td className="p-3 text-xs">
@@ -156,7 +163,7 @@ export function Inventario({ token }: { token: string }) {
                 </td>
               </tr>
             ))}
-            {!filtrados.length && <tr><td colSpan={10} className="p-6 text-center text-slate-500">Nenhum item.</td></tr>}
+            {!filtrados.length && <tr><td colSpan={11} className="p-6 text-center text-slate-500">Nenhum item.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -166,7 +173,7 @@ export function Inventario({ token }: { token: string }) {
       {verQR && <QRCodeModal item={verQR} onClose={() => setVerQR(null)} />}
       {editar && <EditarItemModal token={token} item={editar} locais={locais} onClose={() => setEditar(null)} onSaved={() => { setEditar(null); load(); }} />}
       {verPrint && <PrintModal token={token} item={verPrint} onClose={() => setVerPrint(null)} />}
-      {vincular && <VincularModal token={token} item={vincular} todos={itens} onClose={() => setVincular(null)} onSaved={() => { setVincular(null); load(); }} />}
+      {vincular && <VincularModal token={token} item={vincular} todos={itens} contas={contas} onClose={() => setVincular(null)} onSaved={() => { setVincular(null); load(); }} />}
       {desvincularItem && <DesvincularModal token={token} item={desvincularItem} onClose={() => setDesvincularItem(null)} onSaved={() => { setDesvincularItem(null); load(); }} />}
       {moverItem && <MoverLocalModal token={token} item={moverItem} locais={locais} onClose={() => setMoverItem(null)} onSaved={() => { setMoverItem(null); load(); }} />}
     </div>
@@ -636,7 +643,7 @@ function MoverLocalModal({ token, item, locais, onClose, onSaved }: { token: str
   );
 }
 
-function VincularModal({ token, item, todos, onClose, onSaved }: { token: string; item: ItemInv; todos: ItemInv[]; onClose: () => void; onSaved: () => void }) {
+function VincularModal({ token, item, todos, contas, onClose, onSaved }: { token: string; item: ItemInv; todos: ItemInv[]; contas: ContaSimples[]; onClose: () => void; onSaved: () => void }) {
   // Candidatos: tipo oposto + sem vínculo
   // 'box' e 'tv-box' são equivalentes (ambos são players Android com display interno opcional)
   const ehBox = item.tipo === "box" || item.tipo === "tv-box";
@@ -645,14 +652,23 @@ function VincularModal({ token, item, todos, onClose, onSaved }: { token: string
   const tiposAlvo = alvo === "box" ? ["box", "tv-box"] : alvo === "tv" ? ["tv"] : [];
   const candidatos = alvo ? todos.filter(t => tiposAlvo.includes(t.tipo) && !t.vinculado_a_id && t.id !== item.id) : [];
   const [selId, setSelId] = useState("");
+  const [contaId, setContaId] = useState(item.conta_id ?? "");
   const [busy, setBusy] = useState(false);
+
   async function salvar() {
     if (!selId) { notify("Escolha um item pra vincular", "error"); return; }
     setBusy(true);
-    const r = await aapi(token, "/api/admin/inventario", { method: "PATCH", body: JSON.stringify({ id: item.id, vinculado_a_id: selId }) });
+    const r = await aapi(token, "/api/admin/inventario", { method: "PATCH", body: JSON.stringify({ id: item.id, vinculado_a_id: selId, conta_id: contaId || null }) });
     const d = await r.json(); setBusy(false);
     if (!d.ok) { notify(d.error || "Erro", "error"); return; }
     notify("Vinculado!", "success"); onSaved();
+  }
+  async function salvarEmpresa() {
+    setBusy(true);
+    const r = await aapi(token, "/api/admin/inventario", { method: "PATCH", body: JSON.stringify({ id: item.id, conta_id: contaId || null }) });
+    const d = await r.json(); setBusy(false);
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify(contaId ? "Empresa atribuída ao kit" : "Empresa removida do kit", "success"); onSaved();
   }
   async function desvincular() {
     setBusy(true);
@@ -661,6 +677,7 @@ function VincularModal({ token, item, todos, onClose, onSaved }: { token: string
     if (!d.ok) { notify(d.error || "Erro", "error"); return; }
     notify("Desvinculado", "success"); onSaved();
   }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#12121c] p-5" onClick={e => e.stopPropagation()}>
@@ -668,16 +685,32 @@ function VincularModal({ token, item, todos, onClose, onSaved }: { token: string
           <h3 className="font-bold">Vincular {item.nome}</h3>
           <button onClick={onClose}><X className="h-4 w-4 text-slate-400" /></button>
         </div>
+
+        {/* Empresa contratante (comodato) — sempre disponível */}
+        <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+          <label className="mb-1 block text-sm text-amber-200">🏢 Empresa contratante (comodato)</label>
+          <p className="mb-2 text-xs text-slate-400">Vincule o equipamento à empresa onde está instalado. O termo de comodato puxa automaticamente todos os equipamentos desta empresa.</p>
+          <select value={contaId} onChange={e => setContaId(e.target.value)} className="mb-2 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
+            <option value="">— sem empresa (em estoque) —</option>
+            {contas.map(c => <option key={c.id} value={c.id}>{c.empresa}</option>)}
+          </select>
+          <button onClick={salvarEmpresa} disabled={busy} className="w-full rounded-lg border border-amber-500/30 py-1.5 text-sm text-amber-200 hover:bg-amber-500/10 disabled:opacity-50">
+            {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Salvar empresa"}
+          </button>
+          {item.conta_nome && <p className="mt-2 text-xs text-emerald-300">Atual: {item.conta_nome}</p>}
+        </div>
+
+        {/* Vínculo 1:1 Box <-> TV */}
         {item.vinculado_nome ? (
           <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
-            <p className="text-sm">Atualmente vinculado a: <strong>{item.vinculado_nome}</strong></p>
+            <p className="text-sm">Pareado com: <strong>{item.vinculado_nome}</strong></p>
             <p className="text-xs text-slate-400 capitalize">{item.vinculado_tipo}</p>
             <button onClick={desvincular} disabled={busy} className="mt-3 w-full rounded-lg border border-red-500/30 py-1.5 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50">
-              {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Desvincular"}
+              {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Desvincular par"}
             </button>
           </div>
         ) : !alvo ? (
-          <p className="text-sm text-slate-400">Vínculo 1:1 só faz sentido entre <strong>Box ↔ TV/Monitor</strong>. Este item é {LABELS_TIPO[item.tipo] ?? item.tipo}.</p>
+          <p className="text-sm text-slate-400">Pareamento 1:1 só faz sentido entre <strong>Box ↔ TV/Monitor</strong>. Este item é {LABELS_TIPO[item.tipo] ?? item.tipo}.</p>
         ) : candidatos.length === 0 ? (
           <p className="text-sm text-slate-400">
             Não há {alvo === "tv" ? "TVs/Monitores" : "Boxes"} disponíveis sem vínculo.
@@ -685,13 +718,13 @@ function VincularModal({ token, item, todos, onClose, onSaved }: { token: string
           </p>
         ) : (
           <>
-            <label className="mb-1 block text-sm text-slate-300">Vincular a:</label>
+            <label className="mb-1 block text-sm text-slate-300">Parear com {alvo === "tv" ? "TV/Monitor" : "Box"}:</label>
             <select value={selId} onChange={e => setSelId(e.target.value)} className="mb-3 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none">
               <option value="">— escolha —</option>
               {candidatos.map(c => <option key={c.id} value={c.id}>{c.nome}{c.modelo ? ` · ${c.modelo}` : ""}</option>)}
             </select>
             <button onClick={salvar} disabled={busy || !selId} className="w-full rounded-xl bg-brand py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
-              {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Vincular"}
+              {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Parear (e atribuir empresa selecionada)"}
             </button>
           </>
         )}

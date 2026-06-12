@@ -32,7 +32,7 @@ const CONTRATADA_ENV: Contratada = {
   contratada_foro:  process.env.CONTRATADA_FORO  ?? "Salvador/BA",
 };
 
-export function renderContrato(html: string, d: DadosContrato, contratada?: Partial<Contratada>): string {
+export function renderContrato(html: string, d: DadosContrato, contratada?: Partial<Contratada>, extras?: Record<string, string>): string {
   const CONTRATADA = { ...CONTRATADA_ENV, ...(contratada ?? {}) };
   const hoje = new Date();
   const fmtData = (s?: string | null) => {
@@ -59,8 +59,51 @@ export function renderContrato(html: string, d: DadosContrato, contratada?: Part
     data:              hoje.toLocaleDateString("pt-BR"),
     data_extenso:      hoje.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }),
     ...CONTRATADA,
+    ...(extras ?? {}),
   };
   return html.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => vars[k] ?? "");
+}
+
+/** Item de inventario pra montar a tabela de comodato. */
+export interface EquipamentoComodato {
+  tipo: string; nome: string; fabricante?: string | null; modelo?: string | null;
+  serial?: string | null; mac?: string | null; valor?: number | null;
+  local_nome?: string | null; vinculado_nome?: string | null;
+}
+
+const LABEL_TIPO_EQUIP: Record<string, string> = {
+  box: "Android Box", tv: "TV/Monitor", "tv-box": "TV-Box", totem: "Totem",
+  cabo: "Cabo", fonte: "Fonte", suporte: "Suporte", outro: "Item",
+};
+
+/** Monta o HTML da tabela de equipamentos cedidos (Anexo I do comodato). */
+export function montarTabelaEquipamentos(itens: EquipamentoComodato[]): string {
+  if (!itens.length) {
+    return `<p style="color:#a00;"><em>Nenhum equipamento vinculado a esta empresa. Vincule os equipamentos no Inventário antes de gerar o termo.</em></p>`;
+  }
+  const fmtV = (v?: number | null) => v != null && v > 0 ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
+  let total = 0;
+  const linhas = itens.map((it, i) => {
+    if (it.valor && it.valor > 0) total += it.valor;
+    const tipoLabel = LABEL_TIPO_EQUIP[it.tipo] ?? it.tipo;
+    const marcaModelo = [it.fabricante, it.modelo].filter(Boolean).join(" ") || "—";
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${tipoLabel}${it.nome ? ` — ${it.nome}` : ""}</td>
+      <td>${marcaModelo}</td>
+      <td>${it.serial || "—"}</td>
+      <td>${it.mac || "—"}</td>
+      <td>${it.local_nome || "—"}</td>
+      <td>${fmtV(it.valor)}</td>
+    </tr>`;
+  }).join("\n");
+  return `<table>
+  <thead><tr><th>#</th><th>Equipamento</th><th>Marca/Modelo</th><th>Nº de Série</th><th>MAC/ID</th><th>Local de Instalação</th><th>Valor de Reposição</th></tr></thead>
+  <tbody>
+    ${linhas}
+    <tr><td colspan="6" style="text-align:right;"><strong>VALOR TOTAL DE REPOSIÇÃO</strong></td><td><strong>${total > 0 ? total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}</strong></td></tr>
+  </tbody>
+</table>`;
 }
 
 export function hashConteudo(html: string): string {

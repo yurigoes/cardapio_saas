@@ -606,6 +606,9 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS polegadas INT;`);
   // Status operacional do item (independente do 'ativo' que e flag de uso)
   await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS status_item TEXT NOT NULL DEFAULT 'em_estoque';`);
+  // Empresa contratante (conta) onde o equipamento esta cedido em comodato
+  await p.query(`ALTER TABLE midia_inventario ADD COLUMN IF NOT EXISTS conta_id UUID REFERENCES midia_contas(id) ON DELETE SET NULL;`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_midia_inv_conta ON midia_inventario(conta_id);`);
   // ativo (boolean) ja existe — vamos usar status_item pra granularidade operacional
 
   // Historico de movimentacoes do item (entrou no estoque, foi pra local X,

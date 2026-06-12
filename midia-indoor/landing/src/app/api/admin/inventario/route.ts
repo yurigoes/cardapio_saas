@@ -18,10 +18,12 @@ export async function GET(req: NextRequest) {
   await ensureSchema();
   const rows = await db().query(
     `SELECT i.*, l.nome AS local_nome,
-            v.nome AS vinculado_nome, v.tipo AS vinculado_tipo
+            v.nome AS vinculado_nome, v.tipo AS vinculado_tipo,
+            ct.empresa AS conta_nome
        FROM midia_inventario i
        LEFT JOIN midia_locais l ON l.id = i.local_id
        LEFT JOIN midia_inventario v ON v.id = i.vinculado_a_id
+       LEFT JOIN midia_contas ct ON ct.id = i.conta_id
       ORDER BY i.tipo, i.nome`
   ).then(r => r.rows);
   return NextResponse.json({ ok: true, itens: rows });
@@ -96,6 +98,7 @@ const patch = z.object({
   resolucao:       z.string().max(20).optional().or(z.literal("")),
   polegadas:       z.coerce.number().int().min(7).max(150).optional(),
   vinculado_a_id:  z.string().uuid().optional().nullable().or(z.literal("")),
+  conta_id:        z.string().uuid().optional().nullable().or(z.literal("")),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -107,7 +110,7 @@ export async function PATCH(req: NextRequest) {
 
   const sets: string[] = []; const vals: unknown[] = [];
   const add = (c: string, v: unknown) => { vals.push(v === "" ? null : v); sets.push(`${c} = $${vals.length}`); };
-  for (const k of ["tipo", "nome", "mac", "serial", "fabricante", "modelo", "local_id", "xibo_display_id", "valor", "observacao", "ativo", "resolucao", "polegadas", "vinculado_a_id"] as const)
+  for (const k of ["tipo", "nome", "mac", "serial", "fabricante", "modelo", "local_id", "xibo_display_id", "valor", "observacao", "ativo", "resolucao", "polegadas", "vinculado_a_id", "conta_id"] as const)
     if (b[k] !== undefined) add(k, k === "mac" && b[k] ? String(b[k]).toUpperCase() : b[k]);
   if (!sets.length) return NextResponse.json({ ok: false, error: "nada para atualizar" }, { status: 400 });
   vals.push(b.id);
@@ -121,6 +124,13 @@ export async function PATCH(req: NextRequest) {
           WHERE id = $2 AND (vinculado_a_id IS NULL OR vinculado_a_id = $1)`,
         [b.id, b.vinculado_a_id]
       );
+      // Propaga a conta tambem pro item vinculado (kit inteiro fica na mesma empresa)
+      if (b.conta_id !== undefined) {
+        await db().query(
+          `UPDATE midia_inventario SET conta_id = $1, updated_at = NOW() WHERE id = $2`,
+          [b.conta_id === "" ? null : b.conta_id, b.vinculado_a_id]
+        );
+      }
     } else {
       // Desvinculo: limpa o outro lado tambem se apontar pra este
       await db().query(
@@ -128,6 +138,14 @@ export async function PATCH(req: NextRequest) {
           WHERE vinculado_a_id = $1`, [b.id]
       );
     }
+  }
+  // Se mudou a conta de um item que tem par, propaga pro par tambem
+  if (b.conta_id !== undefined && b.vinculado_a_id === undefined) {
+    await db().query(
+      `UPDATE midia_inventario SET conta_id = $1, updated_at = NOW()
+        WHERE vinculado_a_id = $2`,
+      [b.conta_id === "" ? null : b.conta_id, b.id]
+    );
   }
   return NextResponse.json({ ok: true });
 }
