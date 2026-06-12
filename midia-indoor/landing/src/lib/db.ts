@@ -855,16 +855,32 @@ export async function ensureSchema(): Promise<void> {
 async function seedContratoModelos(): Promise<void> {
   const p = db();
   const { rows } = await p.query<{ n: string }>(`SELECT COUNT(*)::text AS n FROM midia_contrato_templates`);
-  if (Number(rows[0]?.n ?? "0") > 0) return;
-
   const { MODELOS_CONTRATO } = await import("./contratos-modelos");
-  for (const m of MODELOS_CONTRATO) {
+
+  if (Number(rows[0]?.n ?? "0") === 0) {
+    for (const m of MODELOS_CONTRATO) {
+      await p.query(
+        `INSERT INTO midia_contrato_templates (titulo, conteudo_html) VALUES ($1, $2)`,
+        [m.titulo, m.conteudo_html]
+      );
+    }
+    console.log(`[seed] ${MODELOS_CONTRATO.length} modelos de contrato inseridos`);
+    return;
+  }
+
+  // Migracao idempotente: comodato antigo tinha tabela manual [ ... ]. Atualiza
+  // pro modelo novo que usa {{inventario_equipamentos}} (auto-puxa do inventario).
+  // So mexe se o template NAO tiver o placeholder novo (preserva edicoes do master).
+  const modeloComodato = MODELOS_CONTRATO.find(m => m.titulo.toLowerCase().includes("comodato"));
+  if (modeloComodato) {
     await p.query(
-      `INSERT INTO midia_contrato_templates (titulo, conteudo_html) VALUES ($1, $2)`,
-      [m.titulo, m.conteudo_html]
+      `UPDATE midia_contrato_templates
+          SET conteudo_html = $1, versao = versao + 1, updated_at = NOW()
+        WHERE titulo ILIKE '%comodato%'
+          AND conteudo_html NOT LIKE '%inventario_equipamentos%'`,
+      [modeloComodato.conteudo_html]
     );
   }
-  console.log(`[seed] ${MODELOS_CONTRATO.length} modelos de contrato inseridos`);
 }
 
 /** Seed de pacotes-exemplo (o master ajusta depois). */

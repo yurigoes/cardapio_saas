@@ -77,6 +77,29 @@ const patch = z.object({
   ativo: z.boolean().optional(),
 });
 
+export async function DELETE(req: NextRequest) {
+  if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ ok: false, error: "id obrigatório" }, { status: 400 });
+  try {
+    await ensureSchema();
+    // Não deixa excluir modelo que já gerou contratos (mantém integridade do snapshot)
+    const usos = await db().query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM midia_conta_contratos WHERE template_id = $1`, [id]
+    ).then(r => Number(r.rows[0]?.n ?? "0"));
+    if (usos > 0) {
+      // Em vez de excluir, desativa (preserva histórico)
+      await db().query(`UPDATE midia_contrato_templates SET ativo = false, updated_at = NOW() WHERE id = $1`, [id]);
+      return NextResponse.json({ ok: true, desativado: true, usos });
+    }
+    await db().query(`DELETE FROM midia_contrato_templates WHERE id = $1`, [id]);
+    return NextResponse.json({ ok: true, excluido: true });
+  } catch (err) {
+    console.error("[contratos/templates DELETE]", err);
+    return NextResponse.json({ ok: false, error: "erro" }, { status: 500 });
+  }
+}
+
 export async function PATCH(req: NextRequest) {
   if (!await exigirMaster(req)) return NextResponse.json({ ok: false, error: "apenas master" }, { status: 403 });
   const parsed = patch.safeParse(await req.json().catch(() => null));

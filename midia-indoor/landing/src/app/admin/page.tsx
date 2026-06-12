@@ -1776,6 +1776,15 @@ function Contratos({ token }: { token: string }) {
     load();
   }
 
+  async function excluir(t: Template) {
+    if (!await confirmModal(`Excluir o modelo "${t.titulo}"? Se já tiver gerado contratos, ele será apenas desativado (histórico preservado).`)) return;
+    const r = await aapi(token, `/api/admin/contratos/templates?id=${t.id}`, { method: "DELETE" });
+    const d = await r.json();
+    if (!d.ok) { notify(d.error || "Erro", "error"); return; }
+    notify(d.desativado ? `Modelo desativado (tem ${d.usos} contrato(s) gerado(s))` : "Modelo excluído", "success");
+    load();
+  }
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -1795,7 +1804,10 @@ function Contratos({ token }: { token: string }) {
         {tpls.map(t => (
           <div key={t.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
             <div><span className="font-medium">{t.titulo}</span> <span className="text-xs text-slate-500">v{t.versao} · {t.ativo ? "ativo" : "inativo"}</span></div>
-            <button onClick={() => setEditing(t)} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs hover:bg-white/5">Editar</button>
+            <div className="flex gap-1.5">
+              <button onClick={() => setEditing(t)} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs hover:bg-white/5">Editar</button>
+              <button onClick={() => excluir(t)} className="rounded-lg border border-red-500/30 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10"><Trash2 className="h-3.5 w-3.5" /></button>
+            </div>
           </div>
         ))}
         {!tpls.length && <p className="text-sm text-slate-500">Nenhum modelo. Clique em &quot;Importar modelos prontos&quot; ou crie um do zero.</p>}
