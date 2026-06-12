@@ -259,6 +259,10 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS login_wallpaper_data BYTEA;`);
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS login_wallpaper_mime TEXT;`);
   await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS login_wallpaper_updated_at TIMESTAMPTZ;`);
+  // Logo p/ impressao/documentos (versao escura, pois o logo do sistema e branco)
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS logo_print_data BYTEA;`);
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS logo_print_mime TEXT;`);
+  await p.query(`ALTER TABLE midia_branding ADD COLUMN IF NOT EXISTS logo_print_updated_at TIMESTAMPTZ;`);
   // Splash do local (tela de espera quando não há conteúdo agendado)
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_layout_id INTEGER;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_nome TEXT;`);

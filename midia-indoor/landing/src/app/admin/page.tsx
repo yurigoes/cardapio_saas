@@ -1836,9 +1836,11 @@ function imprimirDocumento(htmlConteudo: string, titulo: string, branding?: Bran
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) { notify("Permita pop-ups pra imprimir o documento", "error"); return; }
   const cor = branding?.cor ?? "#7c3aed";
-  const logo = branding?.logo_url
-    ? `<img src="${branding.logo_url}" alt="logo" style="max-height:60px;max-width:220px;object-fit:contain;" />`
-    : `<div style="font-size:22px;font-weight:800;color:${cor};">${branding?.nome ?? "Three Digital Mídia"}</div>`;
+  const nomeMarca = branding?.nome ?? "Three Digital Mídia";
+  // Usa o logo de impressao (versao escura). Se nao existir (404), o onerror
+  // troca pelo nome em texto — assim nunca fica logo branco invisivel no papel.
+  const fallbackTexto = `<div style=\\"font-size:22px;font-weight:800;color:${cor};\\">${nomeMarca}</div>`;
+  const logo = `<img src="/api/publico/logo-print?t=${Date.now()}" alt="${nomeMarca}" style="max-height:60px;max-width:220px;object-fit:contain;" onerror="this.outerHTML='${fallbackTexto}';" />`;
   const rodapeDados = [branding?.nome, branding?.cnpj ? `CNPJ ${branding.cnpj}` : null, branding?.email, branding?.site]
     .filter(Boolean).join(" · ");
   const doc = `<!DOCTYPE html>
@@ -2248,6 +2250,12 @@ function Marca({ token }: { token: string }) {
           <LoginWallpaperUploader token={token} />
         </div>
 
+        <div className="border-t border-white/10 pt-4">
+          <p className="mb-1 text-sm font-semibold text-slate-300">Logo para impressão / documentos</p>
+          <p className="mb-3 text-xs text-slate-500">O logo do sistema é branco (tema escuro) e some no papel. Suba aqui a <strong>versão escura/colorida</strong> do logo, usada no cabeçalho de contratos e documentos impressos (PNG/JPG/WebP/SVG, máx 5 MB). Fundo transparente recomendado.</p>
+          <LogoPrintUploader token={token} />
+        </div>
+
         <div className="flex items-center gap-3 pt-2">
           <button onClick={salvar} disabled={busy} className="flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 font-semibold hover:bg-brand-dark disabled:opacity-50">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar
@@ -2314,6 +2322,63 @@ function LoginWallpaperUploader({ token }: { token: string }) {
     </div>
   );
 }
+function LogoPrintUploader({ token }: { token: string }) {
+  const [hasLogo, setHasLogo] = useState<boolean | null>(null);
+  const [bust, setBust] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch(`/api/publico/logo-print?v=${bust}`, { method: "HEAD" })
+      .then(r => setHasLogo(r.ok))
+      .catch(() => setHasLogo(false));
+  }, [bust]);
+
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { notify("Imagem maior que 5MB", "error"); return; }
+    setBusy(true);
+    const fd = new FormData(); fd.append("file", f);
+    const r = await fetch("/api/admin/logo-print", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    const d = await r.json(); setBusy(false);
+    if (e.target) e.target.value = "";
+    if (!d.ok) { notify(d.error || "Erro ao enviar", "error"); return; }
+    notify("Logo de impressão atualizado", "success");
+    setBust(Date.now());
+  }
+
+  async function remover() {
+    if (!await confirmModal("Remover o logo de impressão? Os documentos voltam a usar o nome em texto.")) return;
+    setBusy(true);
+    await fetch("/api/admin/logo-print", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    setBusy(false);
+    notify("Logo de impressão removido", "success");
+    setBust(Date.now());
+  }
+
+  return (
+    <div className="space-y-3">
+      {hasLogo && (
+        <div className="inline-block overflow-hidden rounded-xl border border-white/10 bg-white p-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/api/publico/logo-print?v=${bust}`} alt="logo impressão" className="h-16 max-w-[220px] object-contain" />
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" onChange={upload} className="hidden" />
+      <div className="flex gap-2">
+        <button onClick={() => inputRef.current?.click()} disabled={busy} className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm hover:bg-white/5 disabled:opacity-50">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          {hasLogo ? "Trocar logo" : "Subir logo de impressão"}
+        </button>
+        {hasLogo && (
+          <button onClick={remover} disabled={busy} className="rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50">Remover</button>
+        )}
+      </div>
+      <p className="text-xs text-slate-500">Pré-visualização em fundo branco (como sairá no papel).</p>
+    </div>
+  );
+}
+
 function CorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
