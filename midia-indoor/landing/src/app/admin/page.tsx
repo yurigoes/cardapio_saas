@@ -21,6 +21,7 @@ import { PageHeader, PrimaryBtn, GhostBtn, PremiumTable, THead, TRow, StatusBadg
 import { TelasOrfas } from "./telas-orfas";
 import { Inventario } from "./inventario";
 import { WhatsApp } from "./whatsapp";
+import { Pedidos } from "./pedidos";
 
 const TOKEN_KEY = "midia_admin_token";
 function aapi(token: string, path: string, init?: RequestInit) {
@@ -31,7 +32,7 @@ function aapi(token: string, path: string, init?: RequestInit) {
 }
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type Aba = "dashboard" | "campanhas" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis" | "calculadora" | "tenants" | "orfas" | "inventario" | "whatsapp";
+type Aba = "dashboard" | "campanhas" | "pedidos" | "anunciantes" | "locais" | "telas" | "pacotes" | "chamados" | "contratos" | "usuarios" | "marca" | "noxibo" | "mapa" | "auditoria" | "cupons" | "calendario" | "grade" | "templates" | "notas" | "cobrancas" | "afiliados" | "backups" | "arquivados" | "perfis" | "calculadora" | "tenants" | "orfas" | "inventario" | "whatsapp";
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -70,6 +71,7 @@ export default function AdminPage() {
   const abas: { id: Aba; label: string; icon: typeof LayoutDashboard; master?: boolean }[] = [
     { id: "dashboard",   label: "Dashboard",   icon: LayoutDashboard },
     { id: "campanhas",   label: "Campanhas",   icon: Megaphone },
+    { id: "pedidos",     label: "Pedidos",     icon: BarChart3, master: true },
     { id: "anunciantes", label: "Anunciantes", icon: Users },
     { id: "locais",      label: "Locais",      icon: MapPin, master: true },
     { id: "telas",       label: "Telas",       icon: MonitorPlay, master: true },
@@ -149,6 +151,7 @@ export default function AdminPage() {
       <div className="mx-auto max-w-7xl px-6 py-8">
         {aba === "dashboard"   && <Dashboard token={token} />}
         {aba === "campanhas"   && <Campanhas token={token} isMaster={isMaster} />}
+        {aba === "pedidos"     && <Pedidos token={token} />}
         {aba === "anunciantes" && <Anunciantes token={token} isMaster={isMaster} />}
         {aba === "locais"      && <Locais token={token} />}
         {aba === "telas"       && <Telas token={token} />}

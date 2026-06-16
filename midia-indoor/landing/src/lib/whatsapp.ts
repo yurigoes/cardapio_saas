@@ -22,7 +22,8 @@ import { db } from "./db";
 
 export type WhatsAppTipo =
   | "campanha_no_ar" | "arte_aprovada" | "arte_rejeitada"
-  | "os_aberta" | "pagamento_ok" | "vencimento" | "manual";
+  | "os_aberta" | "pagamento_ok" | "vencimento" | "manual"
+  | "pedido_novo" | "pedido_aprovado";
 
 interface EnviarOpts {
   destino: string;            // numero E.164 (ex: '5571999998888') ou ja com DDI

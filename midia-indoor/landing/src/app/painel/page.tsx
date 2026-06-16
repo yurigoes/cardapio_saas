@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import Link from "next/link";
 import {
   Tv, Upload, Loader2, LogOut, Megaphone, BarChart3, RefreshCw, Calendar, MapPin, Clock,
-  CreditCard, LifeBuoy, Plus, Send, X, UserCog, Trash2, FileText, Printer, Check,
+  CreditCard, LifeBuoy, Plus, Send, X, UserCog, Trash2, FileText, Printer, Check, Calculator,
 } from "lucide-react";
+import { Simulador } from "./simulador";
 import { NotifyHost, notify } from "@/components/Notify";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -39,7 +40,7 @@ function Painel() {
   const [me, setMe] = useState<Me | null>(null);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState<"campanhas" | "contratos" | "suporte" | "usuarios">("campanhas");
+  const [aba, setAba] = useState<"campanhas" | "simular" | "contratos" | "suporte" | "usuarios">("campanhas");
 
   const [email, setEmail] = useState(""); const [senha, setSenha] = useState("");
   const [logBusy, setLogBusy] = useState(false); const [logErr, setLogErr] = useState("");
@@ -112,7 +113,7 @@ function Painel() {
 
       <nav className="mt-6 flex gap-1 border-b border-white/10">
         {(() => {
-          const tabs: [typeof aba, string, React.ElementType][] = [["campanhas", "Campanhas", Megaphone], ["contratos", "Contratos", FileText], ["suporte", "Suporte", LifeBuoy]];
+          const tabs: [typeof aba, string, React.ElementType][] = [["campanhas", "Campanhas", Megaphone], ["simular", "Simular pedido", Calculator], ["contratos", "Contratos", FileText], ["suporte", "Suporte", LifeBuoy]];
           if ((me.conta.papel ?? "owner") === "owner") tabs.push(["usuarios", "Usuários", UserCog]);
           return tabs.map(([id, label, Icon]) => (
             <button key={id} onClick={() => setAba(id)} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition ${aba === id ? "border-b-2 border-brand text-white" : "text-slate-400 hover:text-white"}`}>
@@ -133,6 +134,7 @@ function Painel() {
           )}
         </div>
       )}
+      {aba === "simular"  && <Simulador token={token} />}
       {aba === "contratos" && <ContratosCliente token={token} nomeConta={me.conta.nome} />}
       {aba === "suporte"  && <Suporte token={token} />}
       {aba === "usuarios" && <Usuarios token={token} />}

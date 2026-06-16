@@ -267,6 +267,43 @@ export async function ensureSchema(): Promise<void> {
   await p.query(`ALTER TABLE midia_conta_contratos ADD COLUMN IF NOT EXISTS visivel_cliente BOOLEAN NOT NULL DEFAULT false;`);
   await p.query(`ALTER TABLE midia_conta_contratos ADD COLUMN IF NOT EXISTS disponibilizado_em TIMESTAMPTZ;`);
   await p.query(`ALTER TABLE midia_conta_contratos ADD COLUMN IF NOT EXISTS aceito_user_agent TEXT;`);
+
+  // ─── Simulador de inserções (self-service por orçamento) ──────────────────
+  // Config singleton (id=1): preco por segundo de insercao + minimos.
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_simulador_config (
+      id                INTEGER PRIMARY KEY DEFAULT 1,
+      preco_segundo     NUMERIC(10,4) NOT NULL DEFAULT 0.05,  -- R$ por (1 insercao de 1s, 1 dia)
+      min_insercoes_dia INTEGER NOT NULL DEFAULT 50,
+      min_dias          INTEGER NOT NULL DEFAULT 7,
+      min_valor         NUMERIC(10,2) NOT NULL DEFAULT 100,
+      duracoes_seg      TEXT NOT NULL DEFAULT '10,15,20,30',  -- opcoes de duracao (csv)
+      ativo             BOOLEAN NOT NULL DEFAULT true,
+      updated_at        TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT midia_simulador_single CHECK (id = 1)
+    );
+    INSERT INTO midia_simulador_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+  `);
+  // Pedidos/orcamentos gerados pelo simulador (anunciante) — master revisa.
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS midia_pedidos (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      conta_id      UUID NOT NULL REFERENCES midia_contas(id) ON DELETE CASCADE,
+      orientacao    TEXT NOT NULL DEFAULT 'retrato',  -- retrato|paisagem
+      insercoes_dia INTEGER NOT NULL,
+      segundos      INTEGER NOT NULL,
+      dias          INTEGER NOT NULL,
+      valor         NUMERIC(10,2) NOT NULL,
+      observacao    TEXT,
+      status        TEXT NOT NULL DEFAULT 'pendente', -- pendente|aprovado|recusado|convertido
+      campanha_id   UUID REFERENCES midia_campanhas(id) ON DELETE SET NULL,
+      motivo_recusa TEXT,
+      criado_em     TIMESTAMPTZ DEFAULT NOW(),
+      revisado_em   TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_midia_pedidos_conta ON midia_pedidos(conta_id, criado_em DESC);
+    CREATE INDEX IF NOT EXISTS idx_midia_pedidos_status ON midia_pedidos(status);
+  `);
   // Splash do local (tela de espera quando não há conteúdo agendado)
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_layout_id INTEGER;`);
   await p.query(`ALTER TABLE midia_locais ADD COLUMN IF NOT EXISTS splash_nome TEXT;`);
