@@ -29,6 +29,8 @@ class MainActivity : AppCompatActivity() {
         status = findViewById(R.id.status)
         valorView = findViewById(R.id.valor)
 
+        CieloPayment.init(this)
+
         val token = prefs.getString("agent_token", null)
         if (token.isNullOrBlank()) mostrarPareamento() else iniciarLoop(token)
     }
@@ -65,11 +67,8 @@ class MainActivity : AppCompatActivity() {
         valorView.text = "R$ " + "%.2f".format(cobranca.valor).replace(".", ",")
         status.text = "Cobrança recebida — iniciando…"
         try {
-            val res = withContext(Dispatchers.IO) {
-                CieloPayment.cobrar(this@MainActivity, cobranca) { msg ->
-                    scope.launch { status.text = msg }
-                }
-            }
+            // cobrar() roda na main thread (o SDK abre a UI de pagamento no terminal)
+            val res = CieloPayment.cobrar(this@MainActivity, cobranca) { msg -> status.text = msg }
             withContext(Dispatchers.IO) {
                 runCatching {
                     api.resultado(
@@ -103,5 +102,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         scope.cancel()
+        CieloPayment.release()
     }
 }

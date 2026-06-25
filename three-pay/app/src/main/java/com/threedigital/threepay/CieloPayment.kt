@@ -1,29 +1,35 @@
 package com.threedigital.threepay
 
+import android.app.Activity
 import android.content.Context
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 /**
- * Ponte com o SDK de pagamento da Cielo (Order Manager) no terminal Smart/L400.
+ * Integração real com o SDK Cielo Order Manager (Cielo Smart / LIO / L400).
  *
- * ⚠️ STUB: hoje SIMULA uma aprovação após 3s. Substitua a função `cobrar()`
- * pela chamada real do OrderManager quando tiver o SDK + Client-Id/Access-Token
- * (Cielo Dev Portal > Perfil > Client-IDs Cadastrados).
+ * Fluxo: createDraftOrder → addItem → placeOrder → checkoutOrder(PaymentListener).
+ * Ao aprovar, imprime o comprovante do pedido no próprio terminal (PrinterManager).
+ * O comprovante de pagamento (transação) o SDK já imprime automaticamente.
  *
- * Esboço da integração real (pseudo-código, ajuste conforme a versão do SDK):
+ * Doc/SDK: https://developercielo.github.io/manual/lio-local
+ * Sample:  https://github.com/DeveloperCielo/LIO-SDK-Sample-Integracao-Local
+ * Maven:   com.cielo.lio:order-manager
  *
- *   val credentials = Credentials(CLIENT_ID, ACCESS_TOKEN)
- *   val orderManager = OrderManager(credentials, context)
- *   val order = orderManager.createDraftOrder("Pedido ${cobranca.pedidoId}")
- *   order.addItem(...)            // 1 item com o valor total (em centavos)
- *   order.placeOrder()
- *   orderManager.checkout(order, object : PaymentListener {
- *      override fun onPayment(order) { -> ResultadoPagamento.aprovada(...) }
- *      override fun onCancel()        { -> ResultadoPagamento.cancelada() }
- *      override fun onError(e)        { -> ResultadoPagamento.erro(e.message) }
- *   })
- *
- * O método de pagamento (crédito/débito/PIX) vem de `cobranca.metodo`.
+ * ⚠️ Os nomes de classe/método do SDK podem variar conforme a versão. Se algo
+ * não compilar, confira contra o sample acima (PaymentActivity / PrintSampleActivity).
+ * Pra testar SEM o SDK (ou sem terminal), ligue USAR_SIMULADOR = true.
  */
+
+import cielo.orders.domain.Credentials
+import cielo.sdk.order.OrderManager
+import cielo.sdk.order.ServiceBindListener
+import cielo.sdk.order.payment.Payment
+import cielo.sdk.order.payment.PaymentError
+import cielo.sdk.order.payment.PaymentListener
+import cielo.sdk.printer.PrinterManager
+import cielo.sdk.printer.PrinterAttributes
+import cielo.sdk.printer.image.PrinterImage
 
 data class ResultadoPagamento(
     val resultado: String,           // aprovada | recusada | cancelada | erro
@@ -44,30 +50,98 @@ data class ResultadoPagamento(
 
 object CieloPayment {
 
-    // TODO Estágio 2: receber e guardar as credenciais reais (BuildConfig/local.properties)
-    // const val CLIENT_ID = BuildConfig.CIELO_CLIENT_ID
-    // const val ACCESS_TOKEN = BuildConfig.CIELO_ACCESS_TOKEN
+    /** true = simula aprovação (sem chamar o SDK). Pra testar fluxo sem terminal. */
+    const val USAR_SIMULADOR = false
+
+    private var orderManager: OrderManager? = null
+    @Volatile private var pronto = false
+
+    /** Inicializa e faz bind no serviço da Cielo. Chame no onCreate da Activity. */
+    fun init(activity: Activity) {
+        if (USAR_SIMULADOR) { pronto = true; return }
+        if (orderManager != null) return
+        val creds = Credentials(BuildConfig.CIELO_CLIENT_ID, BuildConfig.CIELO_ACCESS_TOKEN)
+        val om = OrderManager(creds, activity)
+        om.bind(activity, object : ServiceBindListener {
+            override fun onServiceBound() { pronto = true; android.util.Log.d("ThreePay", "Cielo SDK bound") }
+            override fun onServiceBoundError(throwable: Throwable?) { android.util.Log.w("ThreePay", "bind erro: ${throwable?.message}") }
+            override fun onServiceUnbound() { pronto = false }
+        })
+        orderManager = om
+    }
+
+    fun release() {
+        try { orderManager?.unbind() } catch (_: Exception) {}
+        orderManager = null; pronto = false
+    }
+
+    fun estaPronto(): Boolean = pronto
 
     /**
-     * Cobra no terminal. BLOQUEANTE — chame fora da main thread.
-     * @param onProgresso callback opcional pra atualizar a UI ("Insira o cartão", etc)
+     * Cobra no terminal e aguarda o resultado (suspende até o callback do SDK).
+     * Deve ser chamado na main thread (o SDK abre a UI de pagamento no terminal).
      */
-    fun cobrar(
-        context: Context,
-        cobranca: Cobranca,
-        onProgresso: (String) -> Unit = {},
-    ): ResultadoPagamento {
-        // ───────────────────────────────────────────────────────────────
-        // STUB: simula o fluxo do terminal. TROCAR pela chamada do SDK Cielo.
-        // ───────────────────────────────────────────────────────────────
-        onProgresso("Aproxime, insira ou passe o cartão…")
-        Thread.sleep(3000)
-        return ResultadoPagamento.aprovada(
-            auth = "SIM" + (100000..999999).random(),
-            nsu = (100000..999999).random().toString(),
-            bandeira = "visa",
-            u4 = "1234",
-        )
-        // ───────────────────────────────────────────────────────────────
+    suspend fun cobrar(activity: Activity, cobranca: Cobranca, onProgresso: (String) -> Unit = {}): ResultadoPagamento {
+        if (USAR_SIMULADOR) {
+            onProgresso("Aproxime, insira ou passe o cartão… (simulado)")
+            kotlinx.coroutines.delay(3000)
+            return ResultadoPagamento.aprovada("SIM" + (100000..999999).random(), (100000..999999).random().toString(), "visa", "1234")
+        }
+
+        val om = orderManager ?: return ResultadoPagamento.erro("SDK Cielo não inicializado")
+        val centavos = Math.round(cobranca.valor * 100).toInt()
+
+        return suspendCancellableCoroutine { cont ->
+            try {
+                val order = om.createDraftOrder("Pedido ${cobranca.pedidoId ?: cobranca.transacaoId}")
+                order.addItem(
+                    /* sku */ cobranca.pedidoId ?: cobranca.transacaoId,
+                    /* name */ "Pedido",
+                    /* unitPrice (centavos) */ centavos.toLong(),
+                    /* quantity */ 1,
+                    /* unitOfMeasure */ "EACH"
+                )
+                om.placeOrder(order)
+                onProgresso("Aproxime, insira ou passe o cartão…")
+
+                om.checkoutOrder(order, object : PaymentListener {
+                    override fun onStart() { onProgresso("Processando…") }
+                    override fun onPayment(paidOrder: cielo.orders.domain.Order?) {
+                        // pagamento aprovado
+                        val pay = paidOrder?.payments?.firstOrNull()
+                        try { imprimirComprovante(activity, cobranca, pay) } catch (e: Exception) { android.util.Log.w("ThreePay", "print: ${e.message}") }
+                        if (cont.isActive) cont.resume(
+                            ResultadoPagamento.aprovada(
+                                auth = pay?.authCode,
+                                nsu = pay?.cieloCode ?: pay?.id,
+                                bandeira = pay?.brand,
+                                u4 = null,
+                            )
+                        )
+                    }
+                    override fun onCancel() { if (cont.isActive) cont.resume(ResultadoPagamento.cancelada()) }
+                    override fun onError(error: PaymentError?) { if (cont.isActive) cont.resume(ResultadoPagamento.erro(error?.message)) }
+                })
+            } catch (e: Exception) {
+                if (cont.isActive) cont.resume(ResultadoPagamento.erro(e.message))
+            }
+        }
+    }
+
+    /** Imprime o comprovante do pedido no terminal (best-effort). */
+    private fun imprimirComprovante(context: Context, cobranca: Cobranca, pay: Payment?) {
+        val printer = PrinterManager(context)
+        val attrs = HashMap<Int, Int>()  // PrinterAttributes: alinhamento/tamanho (ver sample)
+        val sb = StringBuilder()
+        sb.append("THREE RESTAURANTES\n")
+        sb.append("--------------------------------\n")
+        sb.append("Pedido: ${cobranca.pedidoId ?: cobranca.transacaoId}\n")
+        sb.append("Valor: R$ %.2f\n".format(cobranca.valor))
+        sb.append("Forma: ${cobranca.metodo} ${cobranca.parcelas}x\n")
+        if (pay?.authCode != null) sb.append("Autorizacao: ${pay.authCode}\n")
+        sb.append("--------------------------------\n")
+        sb.append("Obrigado pela preferencia!\n\n\n")
+        // API varia por versão: printText(text, attributes). Ajuste pelo sample se preciso.
+        printer.printText(sb.toString(), attrs as MutableMap<Int, Int>)
     }
 }

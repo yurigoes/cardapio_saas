@@ -47,8 +47,35 @@ implementação `cobrar()` pela chamada real do `OrderManager` quando tiver o SD
 - **Dev/teste:** Build APK no Android Studio e instale via **QR code do Cielo Dev Console** no terminal (adb direto NÃO funciona em terminal de produção).
 - **Produção:** suba o APK no Dev Console → homologação Cielo (~48h úteis) → publique na **Cielo Store** (pública ou privada) → instale no L400 pela conta do EC.
 
+## Build com credenciais
+
+As credenciais Cielo (Client-Id/Access-Token) entram via `local.properties`
+(NÃO commitar):
+
+```
+CIELO_CLIENT_ID=seu_client_id
+CIELO_ACCESS_TOKEN=seu_access_token
+```
+
+Build: `./gradlew assembleRelease` → `app/build/outputs/apk/release/app-release.apk`.
+
+## Testar na maquininha real (antes da homologação)
+
+1. No **Cielo Dev Console**, registre o APK do app (modo teste/sandbox).
+2. O console gera um **QR code de instalação** — abra no L400 pra instalar o app de teste (não precisa adb nem homologação completa pra testar).
+3. Abra o Three Pay no L400, cole o `agent_token` do terminal (Painel > Integrações > Terminais).
+4. Faça um pedido no totem pagando "Cartão (maquininha)" → o L400 abre a tela de pagamento da Cielo → passe o cartão → comprovante imprime no terminal → o totem conclui.
+
+> Pra produção: homologação Cielo (~48h) → publicar na Cielo Store → instalar pela conta do EC.
+
 ## Status
 
-⚠️ **Scaffold.** A rede (polling + post resultado) e a UI estão prontas. A
-chamada real do SDK Cielo está marcada com `TODO` em `CieloPayment.kt` — precisa
-do SDK + credenciais + homologação pra finalizar.
+✅ Rede (polling + resultado), UI e fluxo de pagamento com o **SDK Cielo real**
+(`OrderManager` + `PaymentListener`) + impressão do comprovante no terminal
+(`PrinterManager`) implementados em `CieloPayment.kt`.
+
+⚠️ Os nomes de classe/método do SDK podem variar conforme a versão
+(`com.cielo.lio:order-manager`). Ao compilar no Android Studio, se algo divergir,
+ajuste contra o sample oficial: https://github.com/DeveloperCielo/LIO-SDK-Sample-Integracao-Local
+(veja `PaymentActivity` e `PrintSampleActivity`). Pra testar o fluxo sem o
+terminal, ligue `USAR_SIMULADOR = true` em `CieloPayment.kt`.

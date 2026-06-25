@@ -5,8 +5,8 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google(); mavenCentral()
-        // TODO: adicionar o repositório do SDK Cielo Order Manager (fornecido na homologação)
-        // maven { url = uri("https://...") }
+        // SDK Cielo Order Manager está no Maven Central (com.cielo.lio:order-manager).
+        // Se a homologação indicar um repo privado, adicione aqui.
     }
 }
 rootProject.name = "ThreePay"
