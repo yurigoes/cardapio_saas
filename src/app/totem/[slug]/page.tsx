@@ -1383,7 +1383,7 @@ interface GatewayInfo {
   metodos: string[];
 }
 
-type FormaPagTotem = "pix" | "dinheiro" | "cartao_caixa" | "pagar_entrega";
+type FormaPagTotem = "pix" | "dinheiro" | "cartao_caixa" | "cartao_terminal" | "pagar_entrega";
 
 interface CartDrawerProps {
   cart:        CartItem[];
@@ -1395,12 +1395,59 @@ interface CartDrawerProps {
   tipoConsumo: TipoConsumo;
   taxaInfo?:   { taxa: number; zona_nome: string | null; tempo_min: number | null; fallback: boolean } | null;
   aceitaDinheiro?: boolean;
+  terminalDisponivel?: boolean;
   onClose:     () => void;
   onUpdate:    (uid: string, delta: number) => void;
   onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: FormaPagTotem, cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null, cashbackUsar: number) => Promise<void>;
 }
 
-function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoConsumo, taxaInfo, aceitaDinheiro, onClose, onUpdate, onConfirm }: CartDrawerProps) {
+/** Tela de pagamento na maquininha — polla o status da transação do terminal. */
+function TerminalPaymentScreen({ transacaoId, total, onAprovado, onFalha }: {
+  transacaoId: string; total: number;
+  onAprovado: () => void; onFalha: (msg?: string) => void;
+}) {
+  const [status, setStatus] = useState<string>("processando");
+  useEffect(() => {
+    let vivo = true;
+    let tentativas = 0;
+    const id = setInterval(async () => {
+      tentativas++;
+      try {
+        const r = await fetch(`/api/pub/terminal/${transacaoId}/status`);
+        const d = await r.json();
+        const st = d?.data?.status ?? d?.status;
+        if (!vivo) return;
+        if (st) setStatus(st);
+        if (st === "aprovada") { clearInterval(id); onAprovado(); }
+        else if (["recusada", "cancelada", "erro", "expirada"].includes(st)) {
+          clearInterval(id);
+          onFalha(st === "recusada" ? "Pagamento recusado." : st === "cancelada" ? "Pagamento cancelado." : "Falha no pagamento.");
+        }
+      } catch { /* tenta de novo */ }
+      // timeout de segurança ~3min (90 × 2s)
+      if (tentativas > 90) { clearInterval(id); if (vivo) onFalha("Tempo esgotado."); }
+    }, 2000);
+    return () => { vivo = false; clearInterval(id); };
+  }, [transacaoId, onAprovado, onFalha]);
+
+  const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/95 p-8 text-center text-white">
+      <CreditCard className="h-16 w-16 text-emerald-400" />
+      <p className="mt-6 text-sm uppercase tracking-wider text-slate-400">Pague na maquininha</p>
+      <p className="mt-1 text-5xl font-bold">{brl(total)}</p>
+      <div className="mt-8 flex items-center gap-3 text-emerald-300">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span className="text-lg">{status === "processando" ? "Aproxime, insira ou passe o cartão…" : status}</span>
+      </div>
+      <button onClick={() => onFalha("Cancelado.")} className="mt-10 rounded-xl border border-white/15 px-6 py-2 text-sm text-slate-300 hover:bg-white/5">
+        Cancelar
+      </button>
+    </div>
+  );
+}
+
+function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoConsumo, taxaInfo, aceitaDinheiro, terminalDisponivel, onClose, onUpdate, onConfirm }: CartDrawerProps) {
   const [nome, setNome]           = useState(cliente?.nome ?? "");
   const [tel, setTel]             = useState(cliente?.telefone ?? "");
   const [obs, setObs]             = useState("");
@@ -1727,9 +1774,10 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoCon
           <div className={`grid gap-2 ${tipoConsumo === "delivery" ? "grid-cols-3" : "grid-cols-3"}`}>
             {((tipoConsumo === "delivery"
               ? (["dinheiro", "pix", "pagar_entrega"] as const)
-              // Local/retirada: dinheiro (opcional), pix, cartão no caixa
-              : (["dinheiro", "pix", "cartao_caixa"] as const)) as readonly FormaPagTotem[])
+              // Local/retirada: dinheiro (opcional), pix, cartão no caixa, cartão na maquininha
+              : (["dinheiro", "pix", "cartao_caixa", "cartao_terminal"] as const)) as readonly FormaPagTotem[])
               .filter(m => m !== "dinheiro" || aceitaDinheiro === true)
+              .filter(m => m !== "cartao_terminal" || terminalDisponivel === true)
               .map((metodo) => {
               const ativo      = formaPag === metodo;
               const desabilitado = metodo === "pix" && !isOnline;
@@ -1755,11 +1803,13 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoCon
                   {metodo === "pix"            ? <QrCode className="h-5 w-5" />
                    : metodo === "dinheiro"    ? <Banknote className="h-5 w-5" />
                    : metodo === "cartao_caixa" ? <CreditCard className="h-5 w-5" />
+                   : metodo === "cartao_terminal" ? <CreditCard className="h-5 w-5" />
                    :                            <Bike className="h-5 w-5" />}
                   <span className="text-center leading-tight">
                     {metodo === "pix"           ? t(idioma, "pagamento_pix")
                      : metodo === "dinheiro"   ? t(idioma, "pagamento_dinheiro")
                      : metodo === "cartao_caixa" ? "Cartão no caixa"
+                     : metodo === "cartao_terminal" ? "Cartão (maquininha)"
                      :                           labelEntrega}
                   </span>
                   {desabilitado && (
@@ -2186,6 +2236,8 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
   const mesaNumero   = searchParams.get("mesa_numero");
 
   const [empresa, setEmpresa]       = useState<EmpresaInfo | null>(null);
+  const [terminalDisponivel, setTerminalDisponivel] = useState(false);
+  const [terminalPag, setTerminalPag] = useState<{ transacaoId: string; total: number; numero: number; clienteNome: string } | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [produtos, setProdutos]     = useState<Produto[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -2345,6 +2397,11 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         setEmpresa(emp);
         setCategorias(data.data.categorias);
         setProdutos(data.data.produtos);
+        // Verifica se há terminal de cartão (maquininha) configurado pro totem
+        fetch(`/api/pub/terminal/disponivel/${params.slug}`)
+          .then(r => r.json())
+          .then(d => { if (d?.success && d.data?.disponivel) setTerminalDisponivel(true); })
+          .catch(() => {});
         // Apply brand colors (incl. --color-primary-rgb p/ Tailwind brand)
         // Prefere totem_cor_destaque (config específica do totem) se houver
         applyBrandColors({ primary: emp.totem_cor_destaque || emp.cor_primaria });
@@ -2620,6 +2677,37 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         console.warn("[PIX] Falha ao criar cobrança:", e);
       }
       // Se PIX falhar, cai no fluxo normal de sucesso
+    }
+
+    // Cartão na maquininha (terminal Cielo Smart/L400): enfileira a cobrança
+    // no terminal e mostra modal pollando o status até aprovar/recusar.
+    if (formaPagamento === "cartao_terminal" && empresa?.id) {
+      try {
+        const tRes = await fetch(`/api/pub/terminal/iniciar`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            empresa_id: empresa.id,
+            pedido_id:  data.data.id,
+            valor:      cartTotal,
+            metodo:     "credito",
+            origem:     "totem",
+          }),
+        });
+        const tData = await tRes.json();
+        if (tData.success && tData.data?.transacao_id) {
+          setTerminalPag({
+            transacaoId: tData.data.transacao_id,
+            total:       cartTotal,
+            numero:      data.data.numero,
+            clienteNome: nomeExibido,
+          });
+          return; // modal cuida do sucesso/erro
+        }
+        alert(tData.error || "Falha ao iniciar cobrança no terminal");
+      } catch (e) {
+        console.warn("[terminal] falha:", e);
+        alert("Falha ao acionar a maquininha. Pague no caixa.");
+      }
     }
 
     setPedidoFeito({
@@ -3108,9 +3196,24 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           tipoConsumo={tipoConsumo}
           taxaInfo={tipoConsumo === "delivery" ? taxaEntrega : null}
           aceitaDinheiro={(empresa as { totem_aceita_dinheiro?: boolean })?.totem_aceita_dinheiro === true}
+          terminalDisponivel={terminalDisponivel}
           onClose={() => setCartOpen(false)}
           onUpdate={updateCart}
           onConfirm={handleConfirmarPedido}
+        />
+      )}
+
+      {/* Pagamento na maquininha (terminal Cielo Smart/L400) */}
+      {terminalPag && !pedidoFeito && (
+        <TerminalPaymentScreen
+          transacaoId={terminalPag.transacaoId}
+          total={terminalPag.total}
+          onAprovado={() => {
+            const tp = terminalPag;
+            setTerminalPag(null);
+            setPedidoFeito({ numero: tp.numero, clienteNome: tp.clienteNome, formaPagamento: "cartao_terminal", total: tp.total });
+          }}
+          onFalha={(msg) => { setTerminalPag(null); alert(msg || "Pagamento não concluído. Tente novamente ou pague no caixa."); }}
         />
       )}
 
