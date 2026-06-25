@@ -8,7 +8,7 @@ import {
   Search, MapPin, User, Phone, RotateCcw, Clock, Star, Gift,
   UtensilsCrossed, PackageCheck, Bike,
   Copy, Banknote, QrCode, Tag, CheckCircle2, CreditCard,
-  WifiOff, CloudUpload, Lock,
+  WifiOff, CloudUpload, Lock, Loader2,
 } from "lucide-react";
 import { applyBrandColors } from "@/lib/theme";
 
