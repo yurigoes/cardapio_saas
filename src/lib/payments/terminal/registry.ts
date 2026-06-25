@@ -119,6 +119,17 @@ export const DRIVER_META: DriverMeta[] = [
     campos_cred: [
       { chave: "etiqueta", label: "Identificação do terminal (opcional)", tipo: "text",
         placeholder: "ex: L400 do balcão · POS 02254411-8" },
+      { chave: "max_parcelas", label: "Máx. parcelas no crédito (1 = não parcela)", tipo: "select",
+        opcoes: [
+          { valor: "1",  label: "1x (não parcela)" },
+          { valor: "2",  label: "Até 2x" },
+          { valor: "3",  label: "Até 3x" },
+          { valor: "4",  label: "Até 4x" },
+          { valor: "6",  label: "Até 6x" },
+          { valor: "10", label: "Até 10x" },
+          { valor: "12", label: "Até 12x" },
+        ],
+      },
     ],
     metodos_suportados: ["credito", "debito", "voucher", "pix"],
     docs_url: "https://developercielo.github.io/manual/lio-local",

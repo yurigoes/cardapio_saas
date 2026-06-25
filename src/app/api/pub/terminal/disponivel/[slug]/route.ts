@@ -20,14 +20,17 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
     );
     if (!empresa) return notFound("Empresa não encontrada");
 
-    const term = await queryOne<{ driver: string }>(
-      `SELECT driver FROM empresa_terminais
+    const term = await queryOne<{ driver: string; credenciais: Record<string, unknown> }>(
+      `SELECT driver, credenciais FROM empresa_terminais
         WHERE empresa_id = $1 AND padrao_totem = TRUE AND ativo = TRUE
         LIMIT 1`,
       [empresa.id]
     );
 
-    return ok({ disponivel: !!term, driver: term?.driver ?? null });
+    const rawMax = term?.credenciais?.max_parcelas;
+    const maxParcelas = Math.max(1, Math.min(12, parseInt(String(rawMax ?? "1"), 10) || 1));
+
+    return ok({ disponivel: !!term, driver: term?.driver ?? null, max_parcelas: maxParcelas });
   } catch (err) {
     console.error("[Pub/Terminal/Disponivel/GET]", err);
     return serverError();

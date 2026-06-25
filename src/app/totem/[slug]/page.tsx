@@ -1396,6 +1396,7 @@ interface CartDrawerProps {
   taxaInfo?:   { taxa: number; zona_nome: string | null; tempo_min: number | null; fallback: boolean } | null;
   aceitaDinheiro?: boolean;
   terminalDisponivel?: boolean;
+  terminalMaxParcelas?: number;
   onClose:     () => void;
   onUpdate:    (uid: string, delta: number) => void;
   onConfirm:   (clienteNome: string, clienteTel: string, obs: string, formaPagamento: FormaPagTotem, cupom: { codigo: string; desconto: number } | null, gatewaySlug: string | null, cashbackUsar: number) => Promise<void>;
@@ -1498,7 +1499,7 @@ function TerminalPaymentScreen({ transacaoId, total, onAprovado, onFechar, onTen
   );
 }
 
-function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoConsumo, taxaInfo, aceitaDinheiro, terminalDisponivel, onClose, onUpdate, onConfirm }: CartDrawerProps) {
+function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoConsumo, taxaInfo, aceitaDinheiro, terminalDisponivel, terminalMaxParcelas = 1, onClose, onUpdate, onConfirm }: CartDrawerProps) {
   const [nome, setNome]           = useState(cliente?.nome ?? "");
   const [tel, setTel]             = useState(cliente?.telefone ?? "");
   const [obs, setObs]             = useState("");
@@ -1903,11 +1904,11 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoCon
                   );
                 })}
               </div>
-              {cartaoMetodo === "credito" && (
+              {cartaoMetodo === "credito" && terminalMaxParcelas > 1 && (
                 <div>
                   <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Parcelas</p>
                   <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-                    {Array.from({ length: 6 }, (_, i) => i + 1).map(n => {
+                    {Array.from({ length: terminalMaxParcelas }, (_, i) => i + 1).map(n => {
                       const ativo = parcelas === n;
                       return (
                         <button key={n} type="button" onClick={() => setParcelas(n)}
@@ -2336,6 +2337,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
   const [empresa, setEmpresa]       = useState<EmpresaInfo | null>(null);
   const [terminalDisponivel, setTerminalDisponivel] = useState(false);
+  const [terminalMaxParcelas, setTerminalMaxParcelas] = useState(1);
   const [terminalPag, setTerminalPag] = useState<{ transacaoId: string; total: number; numero: number; clienteNome: string; pedidoId: string; metodo: "credito" | "debito"; parcelas: number } | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [produtos, setProdutos]     = useState<Produto[]>([]);
@@ -2499,7 +2501,12 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
         // Verifica se há terminal de cartão (maquininha) configurado pro totem
         fetch(`/api/pub/terminal/disponivel/${params.slug}`)
           .then(r => r.json())
-          .then(d => { if (d?.success && d.data?.disponivel) setTerminalDisponivel(true); })
+          .then(d => {
+            if (d?.success && d.data?.disponivel) {
+              setTerminalDisponivel(true);
+              setTerminalMaxParcelas(Math.max(1, Number(d.data.max_parcelas ?? 1)));
+            }
+          })
           .catch(() => {});
         // Apply brand colors (incl. --color-primary-rgb p/ Tailwind brand)
         // Prefere totem_cor_destaque (config específica do totem) se houver
@@ -3314,6 +3321,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
           taxaInfo={tipoConsumo === "delivery" ? taxaEntrega : null}
           aceitaDinheiro={(empresa as { totem_aceita_dinheiro?: boolean })?.totem_aceita_dinheiro === true}
           terminalDisponivel={terminalDisponivel}
+          terminalMaxParcelas={terminalMaxParcelas}
           onClose={() => setCartOpen(false)}
           onUpdate={updateCart}
           onConfirm={handleConfirmarPedido}
