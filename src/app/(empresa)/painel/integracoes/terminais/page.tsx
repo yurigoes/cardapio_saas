@@ -28,6 +28,8 @@ interface Terminal {
   credenciais: Record<string, string>;
   config: Record<string, unknown>;
   observacao: string | null;
+  agent_token?: string | null;
+  agente_visto_em?: string | null;
   created_at: string;
 }
 
@@ -146,6 +148,21 @@ export default function TerminaisPage() {
                         </span>
                       ))}
                     </div>
+                    {t.driver === "cielo_smart_agent" && t.agent_token && (
+                      <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Token de pareamento (app do terminal)</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <code className="flex-1 break-all rounded bg-black/30 px-2 py-1 text-[11px] text-slate-200">{t.agent_token}</code>
+                          <button onClick={() => { navigator.clipboard?.writeText(t.agent_token!); }}
+                            className="rounded border border-white/10 px-2 py-1 text-[10px] text-slate-300 hover:bg-white/5">copiar</button>
+                        </div>
+                        <p className="mt-1 text-[10px] text-slate-500">
+                          {t.agente_visto_em ? `App visto ${new Date(t.agente_visto_em).toLocaleString("pt-BR")}` : "App ainda não conectou"}
+                          {" · "}
+                          <a href="/terminal-sim" target="_blank" rel="noopener" className="text-emerald-300 hover:underline">abrir simulador</a>
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1">
                     {!t.padrao_pdv && (

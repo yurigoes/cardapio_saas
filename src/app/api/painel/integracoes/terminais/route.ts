@@ -5,6 +5,7 @@
  */
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import crypto from "node:crypto";
 import { requireAuth, isAuthError } from "@/lib/auth/middleware";
 import { query, queryOne } from "@/lib/db/client";
 import { ok, created, forbidden, badRequest, serverError } from "@/lib/utils/response";
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   try {
     const rows = await query(
       `SELECT id, nome, driver, ativo, padrao_pdv, padrao_totem,
-              credenciais, config, observacao,
+              credenciais, config, observacao, agent_token, agente_visto_em,
               created_at, updated_at
          FROM empresa_terminais
         WHERE empresa_id = $1
@@ -75,17 +76,22 @@ export async function POST(req: NextRequest) {
       await query(`UPDATE empresa_terminais SET padrao_totem = FALSE WHERE empresa_id = $1`, [empresaId]);
     }
 
+    // Driver "cielo_smart_agent" precisa de um token pro app do terminal parear
+    const agentToken = body.driver === "cielo_smart_agent"
+      ? crypto.randomBytes(24).toString("hex")
+      : null;
+
     const r = await queryOne<{ id: string }>(
       `INSERT INTO empresa_terminais
-         (empresa_id, nome, driver, credenciais, config, padrao_pdv, padrao_totem, observacao, created_by)
-       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9)
+         (empresa_id, nome, driver, credenciais, config, padrao_pdv, padrao_totem, observacao, agent_token, created_by)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10)
        RETURNING id`,
       [empresaId, body.nome, body.driver,
        JSON.stringify(body.credenciais), JSON.stringify(body.config ?? {}),
        body.padrao_pdv ?? false, body.padrao_totem ?? false,
-       body.observacao ?? null, sub]
+       body.observacao ?? null, agentToken, sub]
     );
-    return created({ id: r?.id });
+    return created({ id: r?.id, agent_token: agentToken });
   } catch (err) {
     console.error("[Terminais/POST]", err);
     return serverError(err instanceof Error ? err.message : undefined);

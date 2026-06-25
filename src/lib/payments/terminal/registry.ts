@@ -11,6 +11,7 @@ import type { BaseDriver } from "./types";
 import { CieloApiDriver }       from "./cielo-api";
 import { CieloTefIntentDriver } from "./cielo-tef-intent";
 import { CieloLioDriver }       from "./cielo-lio";
+import { CieloSmartAgentDriver } from "./cielo-smart-agent";
 
 export interface DriverMeta {
   id:          string;        // chave única (vai pro banco)
@@ -31,9 +32,10 @@ export interface DriverMeta {
 }
 
 export const DRIVERS: Record<string, BaseDriver> = {
-  cielo_api:        CieloApiDriver,
-  cielo_tef_intent: CieloTefIntentDriver,
-  cielo_lio:        CieloLioDriver,
+  cielo_api:          CieloApiDriver,
+  cielo_tef_intent:   CieloTefIntentDriver,
+  cielo_lio:          CieloLioDriver,
+  cielo_smart_agent:  CieloSmartAgentDriver,
 };
 
 export const DRIVER_META: DriverMeta[] = [
@@ -107,6 +109,19 @@ export const DRIVER_META: DriverMeta[] = [
     ],
     metodos_suportados: ["credito", "debito", "pix"],
     docs_url: "https://developercielo.github.io/manual/cielo-lio",
+  },
+  {
+    id:        "cielo_smart_agent",
+    nome:      "Cielo Smart / L400 (app no terminal)",
+    descricao: "Totem separado + maquininha Cielo Smart (L400) ao lado. O totem envia a cobrança e o app 'Three Pay' no terminal cobra via SDK Cielo. Gera um token de pareamento pro app. Suporta crédito, débito, voucher e PIX.",
+    banco:     "Cielo",
+    tipo:      "tef_intent",
+    campos_cred: [
+      { chave: "etiqueta", label: "Identificação do terminal (opcional)", tipo: "text",
+        placeholder: "ex: L400 do balcão · POS 02254411-8" },
+    ],
+    metodos_suportados: ["credito", "debito", "voucher", "pix"],
+    docs_url: "https://developercielo.github.io/manual/lio-local",
   },
   // ── Stubs prontos pra implementar quando precisar ────────────
   // {
