@@ -1402,12 +1402,15 @@ interface CartDrawerProps {
 }
 
 /** Tela de pagamento na maquininha — polla o status da transação do terminal. */
-function TerminalPaymentScreen({ transacaoId, total, onAprovado, onFalha }: {
+function TerminalPaymentScreen({ transacaoId, total, onAprovado, onFechar }: {
   transacaoId: string; total: number;
-  onAprovado: () => void; onFalha: (msg?: string) => void;
+  onAprovado: () => void; onFechar: () => void;
 }) {
-  const [status, setStatus] = useState<string>("processando");
+  const [fase, setFase] = useState<"processando" | "falha">("processando");
+  const [erroMsg, setErroMsg] = useState<string>("");
+
   useEffect(() => {
+    if (fase !== "processando") return;
     let vivo = true;
     let tentativas = 0;
     const id = setInterval(async () => {
@@ -1417,32 +1420,58 @@ function TerminalPaymentScreen({ transacaoId, total, onAprovado, onFalha }: {
         const d = await r.json();
         const st = d?.data?.status ?? d?.status;
         if (!vivo) return;
-        if (st) setStatus(st);
-        if (st === "aprovada") { clearInterval(id); onAprovado(); }
-        else if (["recusada", "cancelada", "erro", "expirada"].includes(st)) {
+        if (st === "aprovada") { clearInterval(id); onAprovado(); return; }
+        if (["recusada", "cancelada", "erro", "expirada"].includes(st)) {
           clearInterval(id);
-          onFalha(st === "recusada" ? "Pagamento recusado." : st === "cancelada" ? "Pagamento cancelado." : "Falha no pagamento.");
+          setErroMsg(
+            st === "recusada" ? "Pagamento recusado pelo cartão."
+            : st === "cancelada" ? "Pagamento cancelado na maquininha."
+            : st === "expirada" ? "Tempo na maquininha esgotado."
+            : "Não foi possível concluir o pagamento."
+          );
+          setFase("falha");
+          return;
         }
       } catch { /* tenta de novo */ }
       // timeout de segurança ~3min (90 × 2s)
-      if (tentativas > 90) { clearInterval(id); if (vivo) onFalha("Tempo esgotado."); }
+      if (tentativas > 90) {
+        clearInterval(id);
+        if (vivo) { setErroMsg("Tempo esgotado. A maquininha não respondeu."); setFase("falha"); }
+      }
     }, 2000);
     return () => { vivo = false; clearInterval(id); };
-  }, [transacaoId, onAprovado, onFalha]);
+  }, [transacaoId, onAprovado, fase]);
 
   const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/95 p-8 text-center text-white">
-      <CreditCard className="h-16 w-16 text-emerald-400" />
-      <p className="mt-6 text-sm uppercase tracking-wider text-slate-400">Pague na maquininha</p>
-      <p className="mt-1 text-5xl font-bold">{brl(total)}</p>
-      <div className="mt-8 flex items-center gap-3 text-emerald-300">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <span className="text-lg">{status === "processando" ? "Aproxime, insira ou passe o cartão…" : status}</span>
-      </div>
-      <button onClick={() => onFalha("Cancelado.")} className="mt-10 rounded-xl border border-white/15 px-6 py-2 text-sm text-slate-300 hover:bg-white/5">
-        Cancelar
-      </button>
+      {fase === "processando" ? (
+        <>
+          <CreditCard className="h-16 w-16 text-emerald-400" />
+          <p className="mt-6 text-sm uppercase tracking-wider text-slate-400">Pague na maquininha</p>
+          <p className="mt-1 text-5xl font-bold">{brl(total)}</p>
+          <div className="mt-8 flex items-center gap-3 text-emerald-300">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-lg">Aproxime, insira ou passe o cartão…</span>
+          </div>
+          <button onClick={onFechar} className="mt-10 rounded-xl border border-white/15 px-6 py-2 text-sm text-slate-300 hover:bg-white/5">
+            Cancelar
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-red-500/15">
+            <X className="h-12 w-12 text-red-400" />
+          </div>
+          <p className="mt-6 text-2xl font-bold text-red-300">Pagamento não concluído</p>
+          <p className="mt-2 max-w-sm text-base text-slate-300">{erroMsg}</p>
+          <p className="mt-1 text-sm text-slate-500">Tente novamente ou peça ajuda no caixa.</p>
+          <button onClick={onFechar} className="mt-8 rounded-xl bg-emerald-500 px-8 py-3 text-base font-bold text-white hover:bg-emerald-400">
+            Voltar ao pedido
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -3213,7 +3242,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
             setTerminalPag(null);
             setPedidoFeito({ numero: tp.numero, clienteNome: tp.clienteNome, formaPagamento: "cartao_terminal", total: tp.total });
           }}
-          onFalha={(msg) => { setTerminalPag(null); alert(msg || "Pagamento não concluído. Tente novamente ou pague no caixa."); }}
+          onFechar={() => setTerminalPag(null)}
         />
       )}
 
