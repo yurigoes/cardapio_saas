@@ -1402,15 +1402,22 @@ interface CartDrawerProps {
 }
 
 /** Tela de pagamento na maquininha — polla o status da transação do terminal. */
-function TerminalPaymentScreen({ transacaoId, total, onAprovado, onFechar }: {
+function TerminalPaymentScreen({ transacaoId, total, onAprovado, onFechar, onTentarNovamente }: {
   transacaoId: string; total: number;
   onAprovado: () => void; onFechar: () => void;
+  onTentarNovamente: () => Promise<boolean>;
 }) {
-  const [fase, setFase] = useState<"processando" | "falha">("processando");
-  const [erroMsg, setErroMsg] = useState<string>("");
+  const [fase, setFase] = useState<"processando" | "falha">(transacaoId ? "processando" : "falha");
+  const [erroMsg, setErroMsg] = useState<string>(transacaoId ? "" : "Não foi possível acionar a maquininha.");
+  const [retrying, setRetrying] = useState(false);
+
+  // Ao trocar de transação (retry), volta pra "processando"
+  useEffect(() => {
+    if (transacaoId) { setFase("processando"); setErroMsg(""); }
+  }, [transacaoId]);
 
   useEffect(() => {
-    if (fase !== "processando") return;
+    if (fase !== "processando" || !transacaoId) return;
     let vivo = true;
     let tentativas = 0;
     const id = setInterval(async () => {
@@ -1442,6 +1449,14 @@ function TerminalPaymentScreen({ transacaoId, total, onAprovado, onFechar }: {
     return () => { vivo = false; clearInterval(id); };
   }, [transacaoId, onAprovado, fase]);
 
+  async function tentarNovamente() {
+    setRetrying(true);
+    try {
+      const ok = await onTentarNovamente();
+      if (!ok) setErroMsg("Não foi possível reenviar a cobrança. Tente pelo caixa.");
+    } finally { setRetrying(false); }
+  }
+
   const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
@@ -1466,10 +1481,17 @@ function TerminalPaymentScreen({ transacaoId, total, onAprovado, onFechar }: {
           </div>
           <p className="mt-6 text-2xl font-bold text-red-300">Pagamento não concluído</p>
           <p className="mt-2 max-w-sm text-base text-slate-300">{erroMsg}</p>
-          <p className="mt-1 text-sm text-slate-500">Tente novamente ou peça ajuda no caixa.</p>
-          <button onClick={onFechar} className="mt-8 rounded-xl bg-emerald-500 px-8 py-3 text-base font-bold text-white hover:bg-emerald-400">
-            Voltar ao pedido
-          </button>
+          <p className="mt-1 text-sm text-slate-500">Tente de novo ou peça ajuda no caixa.</p>
+          <div className="mt-8 flex flex-col items-center gap-3">
+            <button onClick={tentarNovamente} disabled={retrying}
+              className="flex items-center gap-2 rounded-xl bg-emerald-500 px-8 py-3 text-base font-bold text-white hover:bg-emerald-400 disabled:opacity-50">
+              {retrying ? <Loader2 className="h-5 w-5 animate-spin" /> : <CreditCard className="h-5 w-5" />}
+              Tentar novamente
+            </button>
+            <button onClick={onFechar} className="rounded-xl border border-white/15 px-6 py-2 text-sm text-slate-300 hover:bg-white/5">
+              Voltar ao pedido
+            </button>
+          </div>
         </>
       )}
     </div>
@@ -1484,6 +1506,9 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoCon
     tipoConsumo === "delivery" ? "pagar_entrega" : (aceitaDinheiro ? "dinheiro" : "pix")
   );
   const [sending, setSending]     = useState(false);
+  // Cartão na maquininha: crédito/débito + parcelas
+  const [cartaoMetodo, setCartaoMetodo] = useState<"credito" | "debito">("credito");
+  const [parcelas, setParcelas]   = useState(1);
 
   // Cashback (usar saldo)
   const saldoCashback = Number(cliente?.saldo_cashback ?? 0);
@@ -1581,6 +1606,8 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoCon
         cupomAplicado ? { codigo: cupomAplicado.codigo, desconto: cupomAplicado.desconto } : null,
         formaPag === "pix" ? gatewaySelecionado : null,
         cashbackEfetivo,
+        formaPag === "cartao_terminal" ? cartaoMetodo : undefined,
+        formaPag === "cartao_terminal" && cartaoMetodo === "credito" ? parcelas : 1,
       );
     } finally { setSending(false); }
   }
@@ -1855,6 +1882,49 @@ function CartDrawer({ cart, mesaNumero, cliente, slug, idioma, isOnline, tipoCon
             <p className="mt-2 text-[10px] text-amber-400 leading-snug">
               💵 Você escolherá a forma de pagamento com o entregador (PIX, dinheiro, cartão).
             </p>
+          )}
+
+          {/* Cartão na maquininha: crédito/débito + parcelas */}
+          {formaPag === "cartao_terminal" && (
+            <div className="mt-3 space-y-2.5">
+              <div className="flex gap-2">
+                {(["credito", "debito"] as const).map(m => {
+                  const ativo = cartaoMetodo === m;
+                  return (
+                    <button key={m} type="button" onClick={() => setCartaoMetodo(m)}
+                      className="flex-1 rounded-xl border py-2 text-sm font-semibold transition"
+                      style={ativo ? {
+                        borderColor: "var(--color-primary-50, rgba(16,185,129,0.5))",
+                        background:  "var(--color-primary-15, rgba(16,185,129,0.15))",
+                        color:       "var(--color-primary, #10b981)",
+                      } : { borderColor: "rgba(255,255,255,0.1)", background: "rgb(30,41,59)", color: "rgb(148,163,184)" }}>
+                      {m === "credito" ? "Crédito" : "Débito"}
+                    </button>
+                  );
+                })}
+              </div>
+              {cartaoMetodo === "credito" && (
+                <div>
+                  <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Parcelas</p>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                    {Array.from({ length: 6 }, (_, i) => i + 1).map(n => {
+                      const ativo = parcelas === n;
+                      return (
+                        <button key={n} type="button" onClick={() => setParcelas(n)}
+                          className="flex-shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition"
+                          style={ativo ? {
+                            borderColor: "var(--color-primary-50, rgba(16,185,129,0.5))",
+                            background:  "var(--color-primary-15, rgba(16,185,129,0.15))",
+                            color:       "var(--color-primary, #10b981)",
+                          } : { borderColor: "rgba(255,255,255,0.1)", background: "rgb(30,41,59)", color: "rgb(148,163,184)" }}>
+                          {n}x
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Seletor de gateway PIX (só aparece se há 2+ gateways disponíveis E online) */}
@@ -2266,7 +2336,7 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
   const [empresa, setEmpresa]       = useState<EmpresaInfo | null>(null);
   const [terminalDisponivel, setTerminalDisponivel] = useState(false);
-  const [terminalPag, setTerminalPag] = useState<{ transacaoId: string; total: number; numero: number; clienteNome: string } | null>(null);
+  const [terminalPag, setTerminalPag] = useState<{ transacaoId: string; total: number; numero: number; clienteNome: string; pedidoId: string; metodo: "credito" | "debito"; parcelas: number } | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [produtos, setProdutos]     = useState<Produto[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -2609,6 +2679,24 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
 
   // ── Confirm order ──────────────────────────────────────────────────────────
 
+  /** Enfileira uma cobrança no terminal. Retorna o transacao_id ou null. */
+  async function iniciarCobrancaTerminal(
+    empresaId: string, pedidoId: string, valor: number,
+    metodo: "credito" | "debito", parcelas: number,
+  ): Promise<string | null> {
+    try {
+      const tRes = await fetch(`/api/pub/terminal/iniciar`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ empresa_id: empresaId, pedido_id: pedidoId, valor, metodo, parcelas, origem: "totem" }),
+      });
+      const tData = await tRes.json();
+      return tData.success && tData.data?.transacao_id ? tData.data.transacao_id : null;
+    } catch (e) {
+      console.warn("[terminal] iniciar falhou:", e);
+      return null;
+    }
+  }
+
   async function handleConfirmarPedido(
     clienteNome: string,
     clienteTel: string,
@@ -2617,6 +2705,8 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     cupom: { codigo: string; desconto: number } | null = null,
     gatewaySlug: string | null = null,
     cashbackUsar: number = 0,
+    cartaoMetodo: "credito" | "debito" = "credito",
+    parcelas: number = 1,
   ) {
     // Calcula subtotal considerando variações (preço extra de cada opção)
     const subtotal  = cart.reduce((acc, i) => acc + precoUnitarioItem(i) * i.quantidade, 0);
@@ -2711,32 +2801,30 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
     // Cartão na maquininha (terminal Cielo Smart/L400): enfileira a cobrança
     // no terminal e mostra modal pollando o status até aprovar/recusar.
     if (formaPagamento === "cartao_terminal" && empresa?.id) {
-      try {
-        const tRes = await fetch(`/api/pub/terminal/iniciar`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            empresa_id: empresa.id,
-            pedido_id:  data.data.id,
-            valor:      cartTotal,
-            metodo:     "credito",
-            origem:     "totem",
-          }),
+      const transacaoId = await iniciarCobrancaTerminal(empresa.id, data.data.id, cartTotal, cartaoMetodo, parcelas);
+      if (transacaoId) {
+        setTerminalPag({
+          transacaoId,
+          total:       cartTotal,
+          numero:      data.data.numero,
+          clienteNome: nomeExibido,
+          pedidoId:    data.data.id,
+          metodo:      cartaoMetodo,
+          parcelas,
         });
-        const tData = await tRes.json();
-        if (tData.success && tData.data?.transacao_id) {
-          setTerminalPag({
-            transacaoId: tData.data.transacao_id,
-            total:       cartTotal,
-            numero:      data.data.numero,
-            clienteNome: nomeExibido,
-          });
-          return; // modal cuida do sucesso/erro
-        }
-        alert(tData.error || "Falha ao iniciar cobrança no terminal");
-      } catch (e) {
-        console.warn("[terminal] falha:", e);
-        alert("Falha ao acionar a maquininha. Pague no caixa.");
+        return; // modal cuida do sucesso/erro
       }
+      // Falha ao iniciar — mostra modal de falha já (sem transação não polla)
+      setTerminalPag({
+        transacaoId: "",
+        total:       cartTotal,
+        numero:      data.data.numero,
+        clienteNome: nomeExibido,
+        pedidoId:    data.data.id,
+        metodo:      cartaoMetodo,
+        parcelas,
+      });
+      return;
     }
 
     setPedidoFeito({
@@ -3243,6 +3331,14 @@ export default function TotemPage({ params }: { params: { slug: string } }) {
             setPedidoFeito({ numero: tp.numero, clienteNome: tp.clienteNome, formaPagamento: "cartao_terminal", total: tp.total });
           }}
           onFechar={() => setTerminalPag(null)}
+          onTentarNovamente={async () => {
+            const tp = terminalPag;
+            if (!empresa?.id) return false;
+            const novo = await iniciarCobrancaTerminal(empresa.id, tp.pedidoId, tp.total, tp.metodo, tp.parcelas);
+            if (!novo) return false;
+            setTerminalPag({ ...tp, transacaoId: novo });
+            return true;
+          }}
         />
       )}
 
