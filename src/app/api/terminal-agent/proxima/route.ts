@@ -13,6 +13,8 @@ import { NextRequest } from "next/server";
 import { query, queryOne } from "@/lib/db/client";
 import { ok, badRequest, notFound } from "@/lib/utils/response";
 
+interface ItemPedido { nome: string; quantidade: number; preco_unitario: number; subtotal: number; observacoes: string | null }
+
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
@@ -50,6 +52,30 @@ export async function GET(req: NextRequest) {
 
   if (!cobranca) return ok({ cobranca: null });
 
+  // Dados do pedido pra imprimir o comprovante completo no L400 (best-effort)
+  let pedido: { numero: number | null; cliente_nome: string | null; total: number; itens: ItemPedido[] } | null = null;
+  if (cobranca.pedido_id) {
+    const ped = await queryOne<{ numero: number | null; cliente_nome: string | null; total: string }>(
+      `SELECT numero, cliente_nome, total FROM pedidos WHERE id = $1`, [cobranca.pedido_id]
+    );
+    if (ped) {
+      const itens = await query<ItemPedido>(
+        `SELECT nome, quantidade, preco_unitario, subtotal, observacoes
+           FROM pedido_itens WHERE pedido_id = $1 ORDER BY created_at`, [cobranca.pedido_id]
+      );
+      pedido = {
+        numero: ped.numero,
+        cliente_nome: ped.cliente_nome,
+        total: Number(ped.total),
+        itens: (itens as ItemPedido[]).map(i => ({
+          nome: i.nome, quantidade: Number(i.quantidade),
+          preco_unitario: Number(i.preco_unitario), subtotal: Number(i.subtotal),
+          observacoes: i.observacoes,
+        })),
+      };
+    }
+  }
+
   return ok({
     cobranca: {
       transacao_id: cobranca.id,
@@ -57,6 +83,7 @@ export async function GET(req: NextRequest) {
       metodo:       cobranca.metodo,
       parcelas:     cobranca.parcelas,
       pedido_id:    cobranca.pedido_id,
+      pedido,
     },
   });
 }

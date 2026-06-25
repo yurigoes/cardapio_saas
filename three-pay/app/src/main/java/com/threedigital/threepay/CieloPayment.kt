@@ -128,19 +128,36 @@ object CieloPayment {
         }
     }
 
-    /** Imprime o comprovante do pedido no terminal (best-effort). */
+    /** Imprime o comprovante completo do pedido no terminal (best-effort). */
     private fun imprimirComprovante(context: Context, cobranca: Cobranca, pay: Payment?) {
         val printer = PrinterManager(context)
         val attrs = HashMap<Int, Int>()  // PrinterAttributes: alinhamento/tamanho (ver sample)
+        val L = "--------------------------------\n"
         val sb = StringBuilder()
-        sb.append("THREE RESTAURANTES\n")
-        sb.append("--------------------------------\n")
-        sb.append("Pedido: ${cobranca.pedidoId ?: cobranca.transacaoId}\n")
-        sb.append("Valor: R$ %.2f\n".format(cobranca.valor))
-        sb.append("Forma: ${cobranca.metodo} ${cobranca.parcelas}x\n")
+        sb.append("      THREE RESTAURANTES\n")
+        sb.append(L)
+        val ped = cobranca.pedido
+        if (ped?.numero != null) sb.append("Pedido #${ped.numero}\n")
+        if (!ped?.clienteNome.isNullOrBlank()) sb.append("Cliente: ${ped?.clienteNome}\n")
+        sb.append(L)
+        if (ped != null && ped.itens.isNotEmpty()) {
+            for (it in ped.itens) {
+                sb.append("${it.quantidade}x ${it.nome}\n")
+                if (!it.observacoes.isNullOrBlank()) sb.append("   obs: ${it.observacoes}\n")
+                sb.append("        R$ %.2f\n".format(it.subtotal))
+            }
+            sb.append(L)
+            sb.append("TOTAL: R$ %.2f\n".format(ped.total))
+        } else {
+            sb.append("Valor: R$ %.2f\n".format(cobranca.valor))
+        }
+        sb.append(L)
+        sb.append("Pagamento: ${cobranca.metodo}")
+        if (cobranca.metodo == "credito" && cobranca.parcelas > 1) sb.append(" ${cobranca.parcelas}x")
+        sb.append("\n")
         if (pay?.authCode != null) sb.append("Autorizacao: ${pay.authCode}\n")
-        sb.append("--------------------------------\n")
-        sb.append("Obrigado pela preferencia!\n\n\n")
+        sb.append(L)
+        sb.append("   Obrigado pela preferencia!\n\n\n")
         // API varia por versão: printText(text, attributes). Ajuste pelo sample se preciso.
         printer.printText(sb.toString(), attrs as MutableMap<Int, Int>)
     }

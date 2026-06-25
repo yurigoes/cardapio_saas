@@ -10,12 +10,15 @@ import java.net.URL
  *   GET  /api/terminal-agent/proxima?token=AGENT_TOKEN
  *   POST /api/terminal-agent/resultado
  */
+data class ItemPedido(val nome: String, val quantidade: Int, val precoUnitario: Double, val subtotal: Double, val observacoes: String?)
+data class PedidoInfo(val numero: Int?, val clienteNome: String?, val total: Double, val itens: List<ItemPedido>)
 data class Cobranca(
     val transacaoId: String,
     val valor: Double,
     val metodo: String,
     val parcelas: Int,
     val pedidoId: String?,
+    val pedido: PedidoInfo? = null,
 )
 
 class ApiClient(private val backendUrl: String, private val agentToken: String) {
@@ -32,12 +35,34 @@ class ApiClient(private val backendUrl: String, private val agentToken: String) 
             val json = JSONObject(body)
             val data = json.optJSONObject("data") ?: return null
             val c = data.optJSONObject("cobranca") ?: return null
+            var pedido: PedidoInfo? = null
+            c.optJSONObject("pedido")?.let { p ->
+                val itensArr = p.optJSONArray("itens")
+                val itens = ArrayList<ItemPedido>()
+                if (itensArr != null) for (i in 0 until itensArr.length()) {
+                    val it = itensArr.getJSONObject(i)
+                    itens.add(ItemPedido(
+                        nome = it.getString("nome"),
+                        quantidade = it.optInt("quantidade", 1),
+                        precoUnitario = it.optDouble("preco_unitario", 0.0),
+                        subtotal = it.optDouble("subtotal", 0.0),
+                        observacoes = it.optString("observacoes", null),
+                    ))
+                }
+                pedido = PedidoInfo(
+                    numero = if (p.isNull("numero")) null else p.optInt("numero"),
+                    clienteNome = p.optString("cliente_nome", null),
+                    total = p.optDouble("total", 0.0),
+                    itens = itens,
+                )
+            }
             return Cobranca(
                 transacaoId = c.getString("transacao_id"),
                 valor       = c.getDouble("valor"),
                 metodo      = c.getString("metodo"),
                 parcelas    = c.optInt("parcelas", 1),
                 pedidoId    = c.optString("pedido_id", null),
+                pedido      = pedido,
             )
         } finally { conn.disconnect() }
     }
