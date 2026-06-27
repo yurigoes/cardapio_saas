@@ -7,7 +7,6 @@
 
     <application
         android:label="Three Pay"
-        android:icon="@mipmap/ic_launcher"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:allowBackup="false"
         tools:replace="android:allowBackup,android:label">
