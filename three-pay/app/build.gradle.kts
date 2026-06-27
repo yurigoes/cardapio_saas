@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.threedigital.threepay"
-        minSdk = 23
+        minSdk = 25   // exigido pelo SDK Cielo Order Manager
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
