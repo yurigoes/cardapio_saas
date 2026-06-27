@@ -39,4 +39,19 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="Parear" />
+
+    <Button
+        android:id="@+id/btnTeste"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="Pagamento de teste (R$ 1,00)" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Use o botão acima para validar o pagamento na certificação Cielo."
+        android:textColor="#888"
+        android:textSize="12sp" />
 </LinearLayout>

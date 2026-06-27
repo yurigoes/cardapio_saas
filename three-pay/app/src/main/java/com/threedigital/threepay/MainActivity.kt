@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.*
 
@@ -43,6 +44,36 @@ class MainActivity : AppCompatActivity() {
             if (t.length < 8) { input.error = "Token inválido"; return@setOnClickListener }
             prefs.edit().putString("agent_token", t).apply()
             recreate()
+        }
+        findViewById<Button>(R.id.btnTeste).setOnClickListener { pagamentoTeste() }
+    }
+
+    /**
+     * Dispara uma transação de R$ 1,00 direto no SDK Cielo, sem backend.
+     * Usado pelo time de certificação da Cielo para validar o fluxo de pagamento.
+     */
+    private fun pagamentoTeste() {
+        val cobranca = Cobranca(
+            transacaoId = "TESTE-CERT",
+            valor = 1.00,
+            metodo = "credito",
+            parcelas = 1,
+            pedidoId = "TESTE",
+            pedido = null,
+        )
+        scope.launch {
+            Toast.makeText(this@MainActivity, "Iniciando pagamento de teste…", Toast.LENGTH_SHORT).show()
+            val res = try {
+                CieloPayment.cobrar(this@MainActivity, cobranca)
+            } catch (e: Exception) {
+                ResultadoPagamento.erro(e.message)
+            }
+            val msg = when (res.resultado) {
+                "aprovada" -> "✅ Pagamento de teste aprovado"
+                "cancelada" -> "Pagamento cancelado"
+                else -> "Resultado: ${res.mensagem}"
+            }
+            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
         }
     }
 
