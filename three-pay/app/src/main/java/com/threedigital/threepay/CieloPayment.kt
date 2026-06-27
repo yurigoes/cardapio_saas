@@ -53,14 +53,21 @@ object CieloPayment {
     fun init(activity: Activity) {
         if (USAR_SIMULADOR) { pronto = true; return }
         if (orderManager != null) return
-        val creds = Credentials(BuildConfig.CIELO_CLIENT_ID, BuildConfig.CIELO_ACCESS_TOKEN)
-        val om = OrderManager(creds, activity)
-        om.bind(activity, object : ServiceBindListener {
-            override fun onServiceBound() { pronto = true; android.util.Log.d("ThreePay", "Cielo SDK bound") }
-            override fun onServiceBoundError(throwable: Throwable) { android.util.Log.w("ThreePay", "bind erro: ${throwable.message}") }
-            override fun onServiceUnbound() { pronto = false }
-        })
-        orderManager = om
+        // Em dispositivos sem o serviço/SDK Cielo (emuladores comuns como MEmu/BlueStacks),
+        // a inicialização pode lançar UnsatisfiedLinkError/NoClassDefFoundError. Protegemos
+        // pra não derrubar o app — o pagamento só funciona no terminal Cielo real.
+        try {
+            val creds = Credentials(BuildConfig.CIELO_CLIENT_ID, BuildConfig.CIELO_ACCESS_TOKEN)
+            val om = OrderManager(creds, activity)
+            om.bind(activity, object : ServiceBindListener {
+                override fun onServiceBound() { pronto = true; android.util.Log.d("ThreePay", "Cielo SDK bound") }
+                override fun onServiceBoundError(throwable: Throwable) { android.util.Log.w("ThreePay", "bind erro: ${throwable.message}") }
+                override fun onServiceUnbound() { pronto = false }
+            })
+            orderManager = om
+        } catch (e: Throwable) {
+            android.util.Log.e("ThreePay", "SDK Cielo indisponivel (terminal nao-Cielo?): ${e.message}")
+        }
     }
 
     fun release() {
