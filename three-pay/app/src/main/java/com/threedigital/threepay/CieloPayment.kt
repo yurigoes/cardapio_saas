@@ -99,6 +99,7 @@ object CieloPayment {
                 onProgresso("Aproxime, insira ou passe o cartão…")
 
                 om.checkoutOrder(order.id, object : PaymentListener {
+                    override fun onStart() { /* SDK iniciou o fluxo de pagamento no terminal */ }
                     override fun onPayment(paidOrder: Order) {
                         if (cont.isActive) cont.resume(ResultadoPagamento.aprovada())
                     }
