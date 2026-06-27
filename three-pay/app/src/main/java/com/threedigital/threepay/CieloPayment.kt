@@ -35,6 +35,7 @@ data class ResultadoPagamento(
     companion object {
         fun aprovada(auth: String? = null, nsu: String? = null, bandeira: String? = null, u4: String? = null) =
             ResultadoPagamento("aprovada", auth, nsu, bandeira, u4, "Aprovado")
+        fun cancelada() = ResultadoPagamento("cancelada", mensagem = "Cancelado pelo cliente")
         fun erro(msg: String?) = ResultadoPagamento("erro", mensagem = msg ?: "Erro")
     }
 }
@@ -56,6 +57,7 @@ object CieloPayment {
         om.bind(activity, object : ServiceBindListener {
             override fun onServiceBound() { pronto = true; android.util.Log.d("ThreePay", "Cielo SDK bound") }
             override fun onServiceBoundError(throwable: Throwable) { android.util.Log.w("ThreePay", "bind erro: ${throwable.message}") }
+            override fun onServiceUnbound() { pronto = false }
         })
         orderManager = om
     }
@@ -83,7 +85,8 @@ object CieloPayment {
 
         return suspendCancellableCoroutine { cont ->
             try {
-                val order: Order = om.createDraftOrder("Pedido ${cobranca.pedidoId ?: cobranca.transacaoId}")
+                val order: Order? = om.createDraftOrder("Pedido ${cobranca.pedidoId ?: cobranca.transacaoId}")
+                if (order == null) { cont.resume(ResultadoPagamento.erro("Falha ao criar pedido")); return@suspendCancellableCoroutine }
                 order.addItem(
                     /* sku */ cobranca.pedidoId ?: cobranca.transacaoId,
                     /* name */ "Pedido",
@@ -97,6 +100,9 @@ object CieloPayment {
                 om.checkoutOrder(order.id, object : PaymentListener {
                     override fun onPayment(paidOrder: Order) {
                         if (cont.isActive) cont.resume(ResultadoPagamento.aprovada())
+                    }
+                    override fun onCancel() {
+                        if (cont.isActive) cont.resume(ResultadoPagamento.cancelada())
                     }
                 })
             } catch (e: Exception) {
