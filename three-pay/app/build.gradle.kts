@@ -39,7 +39,11 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    // SDK Cielo Order Manager (Cielo Smart/LIO/L400). Confirme a versão mais
-    // recente em mvnrepository.com/artifact/com.cielo.lio/order-manager
-    implementation("com.cielo.lio:order-manager:1.5.6")
+    // SDK Cielo Order Manager — distribuído como AAR LOCAL (não está no Maven).
+    // Baixe order-manager-2.7.2.aar e coloque em three-pay/app/libs/
+    //   Fonte: github.com/DeveloperCielo/LIO-SDK-Sample-Integracao-Local/tree/master/app/libs
+    //   (ou o pacote do SDK no portal de desenvolvedores Cielo)
+    implementation(files("libs/order-manager-2.7.2.aar"))
+    // Dependências transitivas que o SDK costuma exigir (o AAR local não as puxa):
+    implementation("com.google.code.gson:gson:2.10.1")
 }

@@ -1,0 +1,11 @@
+Coloque aqui o SDK da Cielo:  order-manager-2.7.2.aar
+
+Onde baixar:
+- Sample oficial: https://github.com/DeveloperCielo/LIO-SDK-Sample-Integracao-Local/tree/master/app/libs
+  (baixe o arquivo order-manager-2.7.2.aar e salve nesta pasta)
+- Ou o pacote do SDK no portal de desenvolvedores Cielo.
+
+O build.gradle.kts já referencia: implementation(files("libs/order-manager-2.7.2.aar"))
+Se a versão do .aar for diferente, ajuste o nome no build.gradle.kts.
+
+Depois de colocar o .aar, faça Sync no Android Studio.
