@@ -23,6 +23,7 @@ import cielo.orders.domain.Order
 import cielo.sdk.order.OrderManager
 import cielo.sdk.order.ServiceBindListener
 import cielo.sdk.order.payment.PaymentListener
+import cielo.sdk.order.payment.PaymentError
 
 data class ResultadoPagamento(
     val resultado: String,           // aprovada | recusada | cancelada | erro
@@ -103,6 +104,9 @@ object CieloPayment {
                     }
                     override fun onCancel() {
                         if (cont.isActive) cont.resume(ResultadoPagamento.cancelada())
+                    }
+                    override fun onError(error: PaymentError) {
+                        if (cont.isActive) cont.resume(ResultadoPagamento.erro(error.toString()))
                     }
                 })
             } catch (e: Exception) {
