@@ -1,7 +1,12 @@
 package com.threedigital.threepay
 
+import android.animation.Animator
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
 import android.content.Context
 import android.os.Bundle
+import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -22,6 +27,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var prefs: android.content.SharedPreferences
     private lateinit var status: TextView
     private lateinit var valorView: TextView
+    private val animadores = mutableListOf<Animator>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,7 +85,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun iniciarLoop(token: String) {
         val api = ApiClient(BuildConfig.BACKEND_URL, token)
-        status.text = "Aguardando pedido…"
+        iniciarAnimacoes()
+        status.text = "Aguardando pedido"
         valorView.text = ""
         loopJob?.cancel()
         loopJob = scope.launch {
@@ -93,9 +100,45 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Animações suaves da tela ociosa: glow respirando, logo flutuando, pontinhos. */
+    private fun iniciarAnimacoes() {
+        if (animadores.isNotEmpty()) return
+        val glow = findViewById<View>(R.id.glow)
+        val logoBlock = findViewById<View>(R.id.logoBlock)
+
+        // entrada da logo
+        logoBlock.alpha = 0f; logoBlock.scaleX = 0.7f; logoBlock.scaleY = 0.7f
+        logoBlock.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(600).start()
+
+        // flutuar
+        addAnim(ObjectAnimator.ofFloat(logoBlock, "translationY", 0f, -16f).apply {
+            duration = 2200; repeatMode = ObjectAnimator.REVERSE; repeatCount = ObjectAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+        })
+        // glow respirando
+        addAnim(ObjectAnimator.ofPropertyValuesHolder(glow,
+            PropertyValuesHolder.ofFloat("scaleX", 1f, 1.18f),
+            PropertyValuesHolder.ofFloat("scaleY", 1f, 1.18f),
+            PropertyValuesHolder.ofFloat("alpha", 0.35f, 0.6f)).apply {
+            duration = 1800; repeatMode = ObjectAnimator.REVERSE; repeatCount = ObjectAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+        })
+        // pontinhos do "Aguardando"
+        listOf(R.id.dot1, R.id.dot2, R.id.dot3).forEachIndexed { i, id ->
+            val d = findViewById<View>(id)
+            addAnim(ObjectAnimator.ofFloat(d, "alpha", 0.3f, 1f).apply {
+                duration = 600; startDelay = (i * 200).toLong()
+                repeatMode = ObjectAnimator.REVERSE; repeatCount = ObjectAnimator.INFINITE
+            })
+        }
+    }
+
+    private fun addAnim(a: Animator) { animadores.add(a); a.start() }
+
     private suspend fun processarCobranca(api: ApiClient, cobranca: Cobranca) {
         processando = true
         valorView.text = "R$ " + "%.2f".format(cobranca.valor).replace(".", ",")
+        valorView.visibility = View.VISIBLE
         status.text = "Cobrança recebida — iniciando…"
         try {
             // cobrar() roda na main thread (o SDK abre a UI de pagamento no terminal)
@@ -125,13 +168,16 @@ class MainActivity : AppCompatActivity() {
             delay(2500)
         } finally {
             processando = false
-            status.text = "Aguardando pedido…"
+            status.text = "Aguardando pedido"
             valorView.text = ""
+            valorView.visibility = View.GONE
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        animadores.forEach { it.cancel() }
+        animadores.clear()
         scope.cancel()
         CieloPayment.release()
     }

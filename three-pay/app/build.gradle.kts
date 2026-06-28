@@ -24,8 +24,8 @@ android {
         applicationId = "com.tthreedigital.threepay"
         minSdk = 25   // exigido pelo SDK Cielo Order Manager
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
         // Defaults — sobrescreva em local.properties / na tela de pareamento
         buildConfigField("String", "BACKEND_URL", "\"https://app.tthreedigital.com.br\"")
         // Credenciais Cielo (Dev Portal > Perfil > Client-IDs Cadastrados).

@@ -1,36 +1,110 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:background="#0A0A12"
-    android:padding="24dp">
+    android:background="#0E1A26">
+
+    <!-- glow pulsante atrás da logo -->
+    <View
+        android:id="@+id/glow"
+        android:layout_width="240dp"
+        android:layout_height="240dp"
+        android:layout_gravity="center"
+        android:alpha="0.4"
+        android:background="@drawable/glow_circle" />
+
+    <!-- bloco da logo (centro) -->
+    <LinearLayout
+        android:id="@+id/logoBlock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <ImageView
+            android:layout_width="180dp"
+            android:layout_height="104dp"
+            android:src="@drawable/logo_threepay_mark"
+            android:contentDescription="Three Pay" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Three "
+                android:textColor="#EEF4F7"
+                android:textSize="30sp"
+                android:textStyle="bold" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Pay"
+                android:textColor="#17b3ad"
+                android:textSize="30sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Pagamentos simples. Gestão inteligente."
+            android:textColor="#7FB9B4"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/valor"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text=""
+            android:textColor="#FFFFFF"
+            android:textSize="40sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- status + pontinhos -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Aguardando pedido"
+            android:textColor="#C8D6DD"
+            android:textSize="16sp" />
+
+        <LinearLayout
+            android:id="@+id/dots"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <View android:id="@+id/dot1" android:layout_width="7dp" android:layout_height="7dp" android:background="@drawable/dot_teal" />
+            <View android:id="@+id/dot2" android:layout_width="7dp" android:layout_height="7dp" android:layout_marginStart="4dp" android:background="@drawable/dot_teal" />
+            <View android:id="@+id/dot3" android:layout_width="7dp" android:layout_height="7dp" android:layout_marginStart="4dp" android:background="@drawable/dot_teal" />
+        </LinearLayout>
+    </LinearLayout>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Three Pay"
-        android:textColor="#A78BFA"
-        android:textSize="22sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/valor"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text=""
-        android:textColor="#FFFFFF"
-        android:textSize="44sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:text="Aguardando pedido…"
-        android:textColor="#C0C0D0"
-        android:textSize="18sp" />
-</LinearLayout>
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:text="Terminal pareado · POS L400"
+        android:textColor="#5A6F7C"
+        android:textSize="11sp" />
+</FrameLayout>
