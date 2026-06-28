@@ -48,9 +48,10 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Assina com a chave release (própria) se configurada; senão cai no debug.
-            signingConfig = if (temKeystore) signingConfigs.getByName("release")
-                            else signingConfigs.getByName("debug")
+            // A Cielo travou o certificado da 1ª versão (assinada com a chave de DEBUG
+            // padrão do Android). Atualizações DEVEM usar o MESMO certificado, então
+            // mantemos a assinatura debug aqui. (temKeystore fica disponível p/ futuro.)
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     buildFeatures { buildConfig = true }
