@@ -19,13 +19,12 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        // namespace (acima) = com.threedigital.threepay → mantém BuildConfig/R e o código.
-        // applicationId = id publicado; trocado pois "com.threedigital.threepay" já existe na Cielo.
-        applicationId = "com.tthreedigital.threepay"
+        // applicationId casa com o package do Client-ID/app cadastrado na Cielo.
+        applicationId = "com.threedigital.threepay"
         minSdk = 25   // exigido pelo SDK Cielo Order Manager
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
         // Defaults — sobrescreva em local.properties / na tela de pareamento
         buildConfigField("String", "BACKEND_URL", "\"https://app.tthreedigital.com.br\"")
         // Credenciais Cielo (Dev Portal > Perfil > Client-IDs Cadastrados).
