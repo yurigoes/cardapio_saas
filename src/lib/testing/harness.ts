@@ -5,10 +5,23 @@
 // ─────────────────────────────────────────────
 
 export type Caso = { nome: string; run: () => void | Promise<void> };
-export type Suite = { modulo: string; nome: string; casos: Caso[] };
+export type Suite = {
+  modulo: string;
+  nome: string;
+  categoria: string;
+  descricao: string;
+  casos: Caso[];
+};
 
 export type CasoResultado = { nome: string; status: "passed" | "failed"; erro?: string; ms: number };
-export type SuiteResultado = { modulo: string; nome: string; casos: CasoResultado[] };
+export type SuiteResultado = {
+  modulo: string;
+  nome: string;
+  categoria: string;
+  descricao: string;
+  ms: number;
+  casos: CasoResultado[];
+};
 
 function fmt(v: unknown): string {
   try { return JSON.stringify(v); } catch { return String(v); }
@@ -83,7 +96,8 @@ export async function rodarSuites(suites: Suite[]): Promise<SuiteResultado[]> {
         casos.push({ nome: c.nome, status: "failed", ms: Date.now() - t0, erro: String((e as Error)?.message ?? e) });
       }
     }
-    out.push({ modulo: s.modulo, nome: s.nome, casos });
+    const ms = casos.reduce((a, c) => a + c.ms, 0);
+    out.push({ modulo: s.modulo, nome: s.nome, categoria: s.categoria, descricao: s.descricao, ms, casos });
   }
   return out;
 }

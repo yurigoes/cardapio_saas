@@ -29,7 +29,9 @@ import { calcularSubtotal, calcularTotal } from "@/lib/pedidos/calculo";
 export const SUITES: Suite[] = [
   {
     modulo: "src/lib/utils/response.ts",
-    nome: "utils/response — envelopes de resposta HTTP",
+    nome: "Respostas da API",
+    categoria: "Núcleo da API",
+    descricao: "Padroniza todas as respostas HTTP do sistema: sucesso, erros e paginação.",
     casos: [
       { nome: "ok() retorna 200 com { success, data }", run: async () => {
         const r = ok({ id: "1" }); expect(r.status).toBe(200);
@@ -61,7 +63,9 @@ export const SUITES: Suite[] = [
   },
   {
     modulo: "src/lib/utils/errors.ts",
-    nome: "utils/errors — classes e type guards",
+    nome: "Tratamento de erros",
+    categoria: "Núcleo da API",
+    descricao: "Classes de erro padronizadas e detecção de erros do banco (duplicado, chave estrangeira).",
     casos: [
       { nome: "AppError defaults (APP_ERROR/400)", run: () => { const e = new AppError("x"); expect(e.code).toBe("APP_ERROR"); expect(e.status).toBe(400); } },
       { nome: "AuthError → 401", run: () => { const e = new AuthError(); expect(e.status).toBe(401); expect(e.code).toBe("UNAUTHORIZED"); } },
@@ -79,7 +83,9 @@ export const SUITES: Suite[] = [
   },
   {
     modulo: "src/lib/utils/validators.ts",
-    nome: "utils/validators — schemas Zod",
+    nome: "Validação de dados",
+    categoria: "Núcleo da API",
+    descricao: "Valida os dados de entrada: e-mail, senha, CNPJ/CPF, preços e pedidos.",
     casos: [
       { nome: "emailSchema normaliza minúsculas", run: () => { expect(emailSchema.parse("USER@EXAMPLE.COM")).toBe("user@example.com"); } },
       { nome: "emailSchema rejeita inválido", run: () => { expect(emailSchema.safeParse("nope").success).toBe(false); } },
@@ -97,7 +103,9 @@ export const SUITES: Suite[] = [
   },
   {
     modulo: "src/lib/security/sanitize.ts",
-    nome: "security/sanitize — proteção de entradas",
+    nome: "Sanitização de entradas",
+    categoria: "Segurança",
+    descricao: "Bloqueia XSS, SQL injection e path traversal; limpa nomes, slugs, telefones e uploads.",
     casos: [
       { nome: "sanitizeString remove <script> e escapa", run: () => { const o = sanitizeString("<script>x</script>ok"); expect(o).not.toContain("<script>"); expect(o).not.toContain("<"); } },
       { nome: "sanitizeString '' para não-string", run: () => { expect(sanitizeString(123)).toBe(""); } },
@@ -115,7 +123,9 @@ export const SUITES: Suite[] = [
   },
   {
     modulo: "src/lib/auth/rbac.ts",
-    nome: "auth/rbac — permissões e hierarquia",
+    nome: "Permissões (RBAC)",
+    categoria: "Autenticação e acesso",
+    descricao: "Controle de permissões por papel (admin, gerente, garçom...) e hierarquia de acesso.",
     casos: [
       { nome: "master tem qualquer permissão", run: () => { expect(temPermissao("master", "gateway:configurar")).toBe(true); } },
       { nome: "admin sim, garçom não (gateway)", run: () => { expect(temPermissao("admin", "gateway:configurar")).toBe(true); expect(temPermissao("garcom", "gateway:configurar")).toBe(false); } },
@@ -128,7 +138,9 @@ export const SUITES: Suite[] = [
   },
   {
     modulo: "src/lib/auth/jwt.ts",
-    nome: "auth/jwt — tokens",
+    nome: "Tokens de login (JWT)",
+    categoria: "Autenticação e acesso",
+    descricao: "Geração e verificação dos tokens de autenticação (assina, valida e rejeita adulterado).",
     casos: [
       { nome: "extractBearerToken extrai", run: () => { expect(extractBearerToken("Bearer abc.def")).toBe("abc.def"); } },
       { nome: "extractBearerToken null sem Bearer", run: () => { expect(extractBearerToken("Basic x")).toBeNull(); expect(extractBearerToken(null)).toBeNull(); } },
@@ -143,7 +155,9 @@ export const SUITES: Suite[] = [
   },
   {
     modulo: "src/lib/security/rate-limit.ts",
-    nome: "security/rate-limit — headers",
+    nome: "Limite de requisições",
+    categoria: "Segurança",
+    descricao: "Monta os cabeçalhos de rate limit (limite, restante, reset, retry-after).",
     casos: [
       { nome: "sucesso → Retry-After 0", run: () => { const h = rateLimitHeaders({ success: true, remaining: 50, resetAt: 60000, total: 100 }); expect(h["X-RateLimit-Limit"]).toBe("100"); expect(h["Retry-After"]).toBe("0"); expect(h["X-RateLimit-Reset"]).toBe("60"); } },
       { nome: "bloqueado → Retry-After > 0", run: () => { const h = rateLimitHeaders({ success: false, remaining: 0, resetAt: Date.now() + 30000, total: 100 }); expect(Number(h["Retry-After"]) > 0).toBe(true); } },
@@ -151,7 +165,9 @@ export const SUITES: Suite[] = [
   },
   {
     modulo: "src/lib/modules/registry.ts",
-    nome: "modules/registry — catálogo de módulos",
+    nome: "Catálogo de módulos",
+    categoria: "Núcleo da API",
+    descricao: "Registro dos módulos contratáveis do sistema (busca, listagem e agrupamento).",
     casos: [
       { nome: "getAllModulos() não-vazio", run: () => { expect(getAllModulos().length > 0).toBe(true); } },
       { nome: "getModuloInfo() existente e null", run: () => { const f = getAllModulos()[0]; expect(getModuloInfo(f.id)).toEqual(f); expect(getModuloInfo("__nope__" as never)).toBeNull(); } },
@@ -160,7 +176,9 @@ export const SUITES: Suite[] = [
   },
   {
     modulo: "src/lib/gateways/registry.ts",
-    nome: "gateways/registry — gateways de pagamento",
+    nome: "Gateways de pagamento",
+    categoria: "Pagamentos",
+    descricao: "Registro dos gateways suportados e quais têm implementação ativa (Stone, PIX...).",
     casos: [
       { nome: "GATEWAYS_INFO não-vazio", run: () => { expect(GATEWAYS_INFO.length > 0).toBe(true); } },
       { nome: "isGatewaySupported reconhece implementados", run: () => { expect(isGatewaySupported("stone")).toBe(true); expect(isGatewaySupported("pix_bancario")).toBe(true); } },
@@ -169,7 +187,9 @@ export const SUITES: Suite[] = [
   },
   {
     modulo: "src/lib/pedidos/calculo.ts",
-    nome: "pedidos/calculo — totais do pedido",
+    nome: "Pedidos — cálculo de totais",
+    categoria: "Operação",
+    descricao: "Soma do subtotal (preço × quantidade) e total com taxa de entrega e desconto.",
     casos: [
       { nome: "subtotal soma preço×qtd", run: () => { expect(calcularSubtotal([{ preco_unitario: 50, quantidade: 2 }, { preco_unitario: 30, quantidade: 1 }])).toBe(130); } },
       { nome: "subtotal vazio = 0", run: () => { expect(calcularSubtotal([])).toBe(0); } },

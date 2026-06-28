@@ -1,91 +1,153 @@
+import type { ComponentType } from "react";
 import { rodarSuites, type SuiteResultado } from "@/lib/testing/harness";
 import { SUITES } from "@/lib/testing/suites";
+import {
+  CheckCircle2, XCircle, Clock, Activity, CreditCard,
+  KeyRound, ShieldCheck, Boxes, RefreshCw,
+} from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Testes — Three Restaurantes" };
 
-const COR: Record<string, string> = { passed: "#16a34a", failed: "#dc2626" };
-const LABEL: Record<string, string> = { passed: "passou", failed: "falhou" };
+const CATEGORIA_ORDEM = ["Operação", "Pagamentos", "Autenticação e acesso", "Segurança", "Núcleo da API"];
 
-function Badge({ status }: { status: string }) {
-  const c = COR[status] ?? "#6b7280";
-  return (
-    <span style={{ background: c + "22", color: c, border: `1px solid ${c}55` }}
-      className="inline-block rounded px-2 py-0.5 text-xs font-medium whitespace-nowrap">
-      {LABEL[status] ?? status}
-    </span>
-  );
-}
+const CAT_ICON: Record<string, ComponentType<{ size?: number; className?: string }>> = {
+  "Operação": Activity,
+  "Pagamentos": CreditCard,
+  "Autenticação e acesso": KeyRound,
+  "Segurança": ShieldCheck,
+  "Núcleo da API": Boxes,
+};
 
-function Stat({ n, label, cor }: { n: number; label: string; cor: string }) {
+function StatCard({ valor, label, cor }: { valor: string | number; label: string; cor?: string }) {
   return (
-    <div className="rounded-lg bg-neutral-900 px-4 py-2">
-      <div className="text-xl font-medium" style={{ color: cor }}>{n}</div>
-      <div className="text-xs text-neutral-400">{label}</div>
+    <div className="rounded-xl bg-neutral-900 px-4 py-3 min-w-[110px]">
+      <div className="text-2xl font-semibold" style={cor ? { color: cor } : undefined}>{valor}</div>
+      <div className="text-xs text-neutral-400 mt-0.5">{label}</div>
     </div>
   );
 }
 
 export default async function TestesPage() {
+  const inicio = Date.now();
   const resultados: SuiteResultado[] = await rodarSuites(SUITES);
+  const duracaoMs = Date.now() - inicio;
+  const horario = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "medium" });
 
   const casos = resultados.flatMap((s) => s.casos);
   const passed = casos.filter((c) => c.status === "passed").length;
   const failed = casos.filter((c) => c.status === "failed").length;
 
+  // agrupa por categoria, na ordem definida
+  const porCategoria = new Map<string, SuiteResultado[]>();
+  for (const s of resultados) {
+    if (!porCategoria.has(s.categoria)) porCategoria.set(s.categoria, []);
+    porCategoria.get(s.categoria)!.push(s);
+  }
+  const categorias = [...porCategoria.keys()].sort(
+    (a, b) => (CATEGORIA_ORDEM.indexOf(a) + 1 || 99) - (CATEGORIA_ORDEM.indexOf(b) + 1 || 99)
+  );
+
   return (
     <main className="mx-auto max-w-4xl p-6 text-neutral-200">
-      <header className="mb-6">
-        <h1 className="text-2xl font-medium">Testes unitários — Three Restaurantes</h1>
-        <p className="mt-1 text-sm text-neutral-400">
-          {resultados.length} módulos · {casos.length} testes · executados ao vivo no servidor
-        </p>
-        <div className="mt-4 flex gap-3">
-          <Stat n={passed} label="passou" cor="#16a34a" />
-          <Stat n={failed} label="falhou" cor="#dc2626" />
+      <header className="mb-8">
+        <div className="flex items-center gap-2 text-sm text-neutral-400">
+          <Activity size={16} /> Painel de testes automatizados
         </div>
-        {failed === 0 ? (
-          <div className="mt-4 rounded-lg border border-green-500/40 bg-green-500/10 p-3 text-sm text-green-300">
-            Todos os {casos.length} testes passaram. ✓
-          </div>
-        ) : (
-          <div className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
-            {failed} teste(s) falhando — detalhes em vermelho abaixo.
-          </div>
-        )}
-        <p className="mt-2 text-xs text-neutral-500">Recarregue a página para rodar de novo.</p>
+        <h1 className="mt-1 text-2xl font-semibold">Three Restaurantes — Testes</h1>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          <StatCard valor={casos.length} label="testes" />
+          <StatCard valor={passed} label="passaram" cor="#22c55e" />
+          <StatCard valor={failed} label="falharam" cor={failed ? "#ef4444" : "#6b7280"} />
+          <StatCard valor={`${duracaoMs} ms`} label="duração da execução" cor="#38bdf8" />
+          <StatCard valor={resultados.length} label="módulos" />
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-neutral-400">
+          <span className="inline-flex items-center gap-1"><Clock size={14} /> Última execução: {horario}</span>
+          <span className="inline-flex items-center gap-1"><RefreshCw size={14} /> Recarregue a página para rodar de novo</span>
+        </div>
+
+        <div
+          className="mt-4 rounded-lg border p-3 text-sm"
+          style={
+            failed === 0
+              ? { borderColor: "#22c55e55", background: "#22c55e14", color: "#86efac" }
+              : { borderColor: "#ef444455", background: "#ef444414", color: "#fca5a5" }
+          }
+        >
+          {failed === 0
+            ? `✓ Sistema em operação: todos os ${casos.length} testes passaram.`
+            : `${failed} teste(s) falhando — veja os detalhes em vermelho abaixo.`}
+        </div>
       </header>
 
-      <div className="space-y-4">
-        {resultados.map((s, idx) => {
-          const sFail = s.casos.filter((c) => c.status === "failed").length;
-          const sPass = s.casos.length - sFail;
-          return (
-            <section key={idx} className="rounded-xl border border-neutral-800 bg-neutral-900/40">
-              <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-                <div>
-                  <h2 className="font-medium">{s.nome}</h2>
-                  <p className="text-xs text-neutral-500">{s.modulo}</p>
-                </div>
-                <span className="text-xs" style={{ color: sFail > 0 ? "#dc2626" : "#16a34a" }}>
-                  {sFail > 0 ? `${sFail} falha(s)` : `${sPass} ok`}
-                </span>
-              </div>
-              <ul className="divide-y divide-neutral-800/60">
-                {s.casos.map((c, i) => (
-                  <li key={i} className="flex items-start justify-between gap-3 px-4 py-2">
-                    <div className="min-w-0">
-                      <p className="text-sm text-neutral-300">{c.nome}</p>
-                      {c.erro && <p className="mt-1 break-words text-xs text-red-400">{c.erro}</p>}
+      {categorias.map((cat) => {
+        const suites = porCategoria.get(cat)!;
+        const Icon = CAT_ICON[cat] ?? Boxes;
+        const catCasos = suites.flatMap((s) => s.casos);
+        const catFail = catCasos.filter((c) => c.status === "failed").length;
+        const catMs = suites.reduce((a, s) => a + s.ms, 0);
+
+        return (
+          <section key={cat} className="mb-8">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-800 text-neutral-200">
+                <Icon size={18} />
+              </span>
+              <h2 className="text-lg font-medium">{cat}</h2>
+              <span className="text-xs text-neutral-500">
+                {catCasos.length} testes · {catMs} ms · {catFail === 0 ? "tudo ok" : `${catFail} falha(s)`}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {suites.map((s, idx) => {
+                const sFail = s.casos.filter((c) => c.status === "failed").length;
+                const ok = sFail === 0;
+                return (
+                  <div key={idx} className="rounded-xl border border-neutral-800 bg-neutral-900/40 overflow-hidden">
+                    <div className="flex items-start justify-between gap-3 border-b border-neutral-800 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          {ok ? <CheckCircle2 size={16} className="text-green-500" /> : <XCircle size={16} className="text-red-500" />}
+                          <h3 className="font-medium">{s.nome}</h3>
+                        </div>
+                        <p className="mt-1 text-xs text-neutral-400">{s.descricao}</p>
+                        <p className="mt-0.5 text-[11px] text-neutral-600">{s.modulo}</p>
+                      </div>
+                      <div className="text-right whitespace-nowrap">
+                        <div className="text-xs font-medium" style={{ color: ok ? "#22c55e" : "#ef4444" }}>
+                          {ok ? `${s.casos.length}/${s.casos.length} ok` : `${sFail} de ${s.casos.length} falhou`}
+                        </div>
+                        <div className="text-[11px] text-neutral-500 inline-flex items-center gap-1 justify-end">
+                          <Clock size={11} /> {s.ms} ms
+                        </div>
+                      </div>
                     </div>
-                    <Badge status={c.status} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          );
-        })}
-      </div>
+
+                    <ul className="divide-y divide-neutral-800/50">
+                      {s.casos.map((c, i) => (
+                        <li key={i} className="flex items-start gap-2 px-4 py-2">
+                          {c.status === "passed"
+                            ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-green-500" />
+                            : <XCircle size={15} className="mt-0.5 shrink-0 text-red-500" />}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm text-neutral-300">{c.nome}</p>
+                            {c.erro && <p className="mt-0.5 break-words text-xs text-red-400">{c.erro}</p>}
+                          </div>
+                          <span className="text-[11px] text-neutral-600 whitespace-nowrap">{c.ms} ms</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
     </main>
   );
 }
