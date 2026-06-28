@@ -20,6 +20,7 @@ import { notificarEvolution } from "@/lib/notify/evolution";
 import { dispatchCupomCozinha, dispatchCupomCliente, dispatchTicketAguardandoPagamento } from "@/lib/print/dispatch";
 import { lookupZonaParaEndereco } from "@/lib/delivery/lookup-zona";
 import { geocodeEndereco } from "@/lib/delivery/geocode";
+import { calcularSubtotal } from "@/lib/pedidos/calculo";
 import crypto from "crypto";
 import type { PoolClient } from "pg";
 
@@ -170,10 +171,7 @@ export async function POST(
 
     const pedido = await transaction(async (client: PoolClient) => {
       // Subtotal — preco_unitario já é number após preprocess
-      const subtotal = body.itens.reduce(
-        (acc, item) => acc + item.preco_unitario * item.quantidade,
-        0
-      );
+      const subtotal = calcularSubtotal(body.itens);
 
       // ── Acúmulo em pedido aberto da mesa (totem QR mesa, segunda rodada) ──
       // Se há mesa_id E a mesa tem pedido_ativo aberto, adiciona itens nele.

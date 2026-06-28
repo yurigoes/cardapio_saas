@@ -1,0 +1,85 @@
+{
+  "summary": { "mode": "catalogo", "generatedAt": "", "suites": 9, "total": 60, "passed": 0, "failed": 0, "pending": 60 },
+  "note": "Catálogo dos testes adicionados. Rode 'npm run test:report' para executar o Vitest e preencher os status reais de TODOS os módulos (inclusive api-key, evolution, trial, validators).",
+  "results": [
+    { "file": "response.test.ts", "name": "utils/response — envelopes de resposta HTTP", "modulo": "src/lib/utils/response.ts", "tests": [
+      { "name": "ok() retorna 200 com { success:true, data }", "status": "pending" },
+      { "name": "created() retorna 201", "status": "pending" },
+      { "name": "noContent() retorna 204", "status": "pending" },
+      { "name": "badRequest() retorna 400 com erro e code", "status": "pending" },
+      { "name": "unauthorized() default 401/UNAUTHORIZED", "status": "pending" },
+      { "name": "forbidden() retorna 403", "status": "pending" },
+      { "name": "notFound() retorna 404/NOT_FOUND", "status": "pending" },
+      { "name": "conflict() retorna 409", "status": "pending" },
+      { "name": "unprocessable() retorna 422 com details", "status": "pending" },
+      { "name": "serverError() retorna 500/INTERNAL_ERROR", "status": "pending" },
+      { "name": "paginatedOk() calcula a paginação (página do meio)", "status": "pending" },
+      { "name": "paginatedOk() última página: hasNext=false", "status": "pending" }
+    ] },
+    { "file": "errors.test.ts", "name": "utils/errors — classes e type guards", "modulo": "src/lib/utils/errors.ts", "tests": [
+      { "name": "AppError usa defaults (APP_ERROR / 400)", "status": "pending" },
+      { "name": "AuthError → 401/UNAUTHORIZED", "status": "pending" },
+      { "name": "ForbiddenError → 403", "status": "pending" },
+      { "name": "NotFoundError interpola o recurso", "status": "pending" },
+      { "name": "ValidationError → 422 e guarda details", "status": "pending" },
+      { "name": "ConflictError → 409", "status": "pending" },
+      { "name": "RateLimitError → 429", "status": "pending" },
+      { "name": "ModuleDisabledError cita o módulo", "status": "pending" },
+      { "name": "isAppError discrimina AppError de Error comum", "status": "pending" },
+      { "name": "isDatabaseError exige Error com code", "status": "pending" },
+      { "name": "isDuplicateKeyError reconhece 23505", "status": "pending" },
+      { "name": "isForeignKeyError reconhece 23503", "status": "pending" }
+    ] },
+    { "file": "sanitize.test.ts", "name": "security/sanitize — proteção de entradas", "modulo": "src/lib/security/sanitize.ts", "tests": [
+      { "name": "sanitizeString remove <script> e escapa < >", "status": "pending" },
+      { "name": "sanitizeString devolve '' para não-string", "status": "pending" },
+      { "name": "sanitizeHtml mantém <p> e remove <script>", "status": "pending" },
+      { "name": "detectSqlInjection detecta comandos SQL", "status": "pending" },
+      { "name": "detectPathTraversal detecta ../", "status": "pending" },
+      { "name": "sanitizeFilename troca caracteres especiais por _", "status": "pending" },
+      { "name": "sanitizeSlug remove acentos e normaliza", "status": "pending" },
+      { "name": "sanitizePhone mantém só dígitos (máx 15)", "status": "pending" },
+      { "name": "sanitizeCpfCnpj mantém só dígitos", "status": "pending" },
+      { "name": "sanitizeObject sanitiza recursivamente", "status": "pending" },
+      { "name": "validateContentType faz match case-insensitive", "status": "pending" },
+      { "name": "validateUploadedFile aceita imagem válida", "status": "pending" },
+      { "name": "validateUploadedFile rejeita tipo e tamanho inválidos", "status": "pending" }
+    ] },
+    { "file": "rbac.test.ts", "name": "auth/rbac — permissões e hierarquia de papéis", "modulo": "src/lib/auth/rbac.ts", "tests": [
+      { "name": "master tem qualquer permissão", "status": "pending" },
+      { "name": "admin pode configurar gateway, garçom não", "status": "pending" },
+      { "name": "garçom pode criar pedido", "status": "pending" },
+      { "name": "temRole compara a hierarquia corretamente", "status": "pending" },
+      { "name": "assertPermissao lança quando negado e passa quando ok", "status": "pending" },
+      { "name": "assertRole lança quando papel é insuficiente", "status": "pending" },
+      { "name": "hierarquia: master > admin > gerente", "status": "pending" }
+    ] },
+    { "file": "jwt.test.ts", "name": "auth/jwt — tokens", "modulo": "src/lib/auth/jwt.ts", "tests": [
+      { "name": "extractBearerToken extrai o token do header", "status": "pending" },
+      { "name": "extractBearerToken retorna null sem 'Bearer'", "status": "pending" },
+      { "name": "sign + verify (roundtrip) preserva o payload", "status": "pending" },
+      { "name": "verifyAccessToken rejeita token adulterado", "status": "pending" }
+    ] },
+    { "file": "rate-limit.test.ts", "name": "security/rate-limit — headers HTTP", "modulo": "src/lib/security/rate-limit.ts", "tests": [
+      { "name": "sucesso → Retry-After 0 e headers corretos", "status": "pending" },
+      { "name": "bloqueado → Retry-After maior que 0", "status": "pending" }
+    ] },
+    { "file": "modules.test.ts", "name": "modules/registry — catálogo de módulos", "modulo": "src/lib/modules/registry.ts", "tests": [
+      { "name": "getAllModulos() retorna lista não-vazia", "status": "pending" },
+      { "name": "getModuloInfo() acha existente e null para inexistente", "status": "pending" },
+      { "name": "getModulosByCategoria() agrupa sem perder módulos", "status": "pending" }
+    ] },
+    { "file": "gateways.test.ts", "name": "gateways/registry — gateways de pagamento", "modulo": "src/lib/gateways/registry.ts", "tests": [
+      { "name": "GATEWAYS_INFO não está vazio", "status": "pending" },
+      { "name": "isGatewaySupported reconhece gateways implementados", "status": "pending" },
+      { "name": "isGatewaySupported rejeita gateway inexistente", "status": "pending" }
+    ] },
+    { "file": "pedido-calculo.test.ts", "name": "pedidos/calculo — totais do pedido", "modulo": "src/lib/pedidos/calculo.ts", "tests": [
+      { "name": "subtotal soma preço × quantidade", "status": "pending" },
+      { "name": "subtotal de lista vazia é 0", "status": "pending" },
+      { "name": "total = subtotal + taxa de entrega − desconto", "status": "pending" },
+      { "name": "total nunca fica negativo (desconto maior que tudo)", "status": "pending" },
+      { "name": "total sem taxa/desconto = subtotal", "status": "pending" }
+    ] }
+  ]
+}

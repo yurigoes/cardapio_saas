@@ -9,6 +9,7 @@ import { ok, created, badRequest, forbidden, serverError, paginatedOk } from "@/
 import { auditLog } from "@/lib/security/audit";
 import { checkRateLimitByRequest, API_RATE_LIMIT } from "@/lib/security/rate-limit";
 import { isDuplicateKeyError } from "@/lib/utils/errors";
+import { calcularSubtotal } from "@/lib/pedidos/calculo";
 import { registrarSaidaEstoque } from "@/lib/estoque/movimento";
 import { notificarEvolution } from "@/lib/notify/evolution";
 import { dispatchCupomCozinha } from "@/lib/print/dispatch";
@@ -162,9 +163,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await transaction(async (client: PoolClient) => {
-      const subtotalNovo = body.itens.reduce(
-        (acc, item) => acc + item.preco_unitario * item.quantidade, 0
-      );
+      const subtotalNovo = calcularSubtotal(body.itens);
 
       // ── Acúmulo em pedido aberto da mesa ─────────────────────────────────
       // Para tipo=mesa, se a mesa tem pedido_ativo_id em estado aberto,

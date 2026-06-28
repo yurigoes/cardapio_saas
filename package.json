@@ -13,6 +13,7 @@
     "imagens:recomprimir:apply": "tsx scripts/recomprimir-imagens.ts --apply",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:report": "vitest run --reporter=json --outputFile=test-results.json",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
