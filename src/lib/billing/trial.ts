@@ -26,10 +26,9 @@ export function calcularTrial(input: {
   status:       string;
   trial_inicio: string | Date | null;
   trial_fim:    string | Date | null;
-}): TrialInfo {
+}, agora: Date = new Date()): TrialInfo {
   const status = (input.status as TrialInfo["status"]) ?? "cancelada";
   const fim    = input.trial_fim ? new Date(input.trial_fim) : null;
-  const agora  = new Date();
 
   const ativo    = status === "teste" && !!fim && fim.getTime() > agora.getTime();
   const expirado = status === "teste" && !!fim && fim.getTime() <= agora.getTime();

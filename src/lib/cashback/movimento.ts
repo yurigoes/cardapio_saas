@@ -2,6 +2,7 @@
  * Helpers de cashback. Idempotente por (pedido_id, tipo).
  */
 import type { PoolClient } from "pg";
+import { calcularCashback, aplicarCredito, aplicarDebito } from "./calculo";
 
 interface EmpresaCb {
   cashback_ativo:      boolean;
@@ -45,7 +46,7 @@ export async function creditarCashbackPedido(
 
   if (ja) return { creditado: false, motivo: "já creditado" };
 
-  const valor = Math.round((totalPedido * pct / 100) * 100) / 100;
+  const valor = calcularCashback(totalPedido, pct);
   if (valor <= 0) return { creditado: false, motivo: "valor calculado zero" };
 
   // Lock cliente para atualizar saldo atomicamente
@@ -57,7 +58,7 @@ export async function creditarCashbackPedido(
   if (!cliente) return { creditado: false, motivo: "cliente não existe" };
 
   const saldoAnterior = Number(cliente.saldo_cashback);
-  const saldoAtual    = Math.round((saldoAnterior + valor) * 100) / 100;
+  const saldoAtual    = aplicarCredito(saldoAnterior, valor);
 
   await client.query(
     `UPDATE clientes SET saldo_cashback = $1, updated_at = NOW() WHERE id = $2`,
@@ -110,7 +111,7 @@ export async function debitarCashbackPedido(
     return { debitado: false, motivo: "saldo insuficiente" };
   }
 
-  const saldoAtual = Math.round((saldoAnterior - valorUso) * 100) / 100;
+  const saldoAtual = aplicarDebito(saldoAnterior, valorUso);
 
   await client.query(
     `UPDATE clientes SET saldo_cashback = $1, updated_at = NOW() WHERE id = $2`,

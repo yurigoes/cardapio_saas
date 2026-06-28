@@ -25,6 +25,11 @@ import { rateLimitHeaders } from "@/lib/security/rate-limit";
 import { getModuloInfo, getAllModulos, getModulosByCategoria } from "@/lib/modules/registry";
 import { isGatewaySupported, GATEWAYS_INFO } from "@/lib/gateways/registry";
 import { calcularSubtotal, calcularTotal } from "@/lib/pedidos/calculo";
+import { sha256, extractAgentToken } from "@/lib/agentes/token";
+import { cardapioCacheKey } from "@/lib/cache/cardapio";
+import { parseUserModules, canAccessModule, firstAllowedModule } from "@/lib/adminModules";
+import { calcularCashback, aplicarCredito, aplicarDebito } from "@/lib/cashback/calculo";
+import { calcularTrial } from "@/lib/billing/trial";
 
 export const SUITES: Suite[] = [
   {
@@ -196,6 +201,82 @@ export const SUITES: Suite[] = [
       { nome: "total = subtotal + taxa − desconto", run: () => { expect(calcularTotal(130, 10, 5)).toBe(135); } },
       { nome: "total nunca negativo", run: () => { expect(calcularTotal(10, 0, 50)).toBe(0); } },
       { nome: "total sem taxa/desconto = subtotal", run: () => { expect(calcularTotal(100)).toBe(100); } },
+    ],
+  },
+  {
+    modulo: "src/lib/cashback/calculo.ts",
+    nome: "Cashback — cálculo",
+    categoria: "Operação",
+    descricao: "Calcula o cashback gerado (% sobre o total) e atualiza o saldo (crédito/débito).",
+    casos: [
+      { nome: "cashback = total × percentual", run: () => { expect(calcularCashback(100, 5)).toBe(5); } },
+      { nome: "arredonda para centavos", run: () => { expect(calcularCashback(33.33, 10)).toBe(3.33); } },
+      { nome: "total ou percentual zero → 0", run: () => { expect(calcularCashback(0, 5)).toBe(0); expect(calcularCashback(100, 0)).toBe(0); } },
+      { nome: "crédito soma ao saldo", run: () => { expect(aplicarCredito(10.1, 5.05)).toBe(15.15); } },
+      { nome: "débito subtrai do saldo", run: () => { expect(aplicarDebito(10, 3)).toBe(7); } },
+      { nome: "débito não fica negativo", run: () => { expect(aplicarDebito(2, 5)).toBe(0); } },
+    ],
+  },
+  {
+    modulo: "src/lib/billing/trial.ts",
+    nome: "Trial / vencimento",
+    categoria: "Faturamento",
+    descricao: "Estado do período de teste (ativo, expirado, dias restantes) a partir do status e datas.",
+    casos: [
+      { nome: "trial no futuro → ativo + dias restantes", run: () => {
+        const agora = new Date("2026-01-15T12:00:00Z");
+        const t = calcularTrial({ status: "teste", trial_inicio: null, trial_fim: "2026-01-20T12:00:00Z" }, agora);
+        expect(t.ativo).toBe(true); expect(t.expirado).toBe(false); expect(t.diasRestantes).toBe(5); } },
+      { nome: "trial no passado → expirado", run: () => {
+        const agora = new Date("2026-01-15T12:00:00Z");
+        const t = calcularTrial({ status: "teste", trial_inicio: null, trial_fim: "2026-01-14T12:00:00Z" }, agora);
+        expect(t.expirado).toBe(true); expect(t.ativo).toBe(false); expect(t.diasRestantes).toBe(0); } },
+      { nome: "status 'ativo' não conta como trial", run: () => {
+        const t = calcularTrial({ status: "ativo", trial_inicio: null, trial_fim: null }, new Date("2026-01-15T12:00:00Z"));
+        expect(t.ativo).toBe(false); expect(t.expirado).toBe(false); } },
+    ],
+  },
+  {
+    modulo: "src/lib/agentes/token.ts",
+    nome: "Tokens de agente",
+    categoria: "Autenticação e acesso",
+    descricao: "Hash SHA-256 determinístico e extração do token 'rdt_' do header Authorization.",
+    casos: [
+      { nome: "sha256 é determinístico (64 hex)", run: () => { const h = sha256("rdt_abc"); expect(h).toBe(sha256("rdt_abc")); expect(h.length).toBe(64); } },
+      { nome: "sha256 muda com a entrada", run: () => { expect(sha256("rdt_abc") === sha256("rdt_abd")).toBe(false); } },
+      { nome: "extractAgentToken lê 'Bearer rdt_...'", run: () => {
+        const tok = "rdt_" + "a".repeat(24);
+        const req = new Request("http://x", { headers: { authorization: `Bearer ${tok}` } });
+        expect(extractAgentToken(req)).toBe(tok); } },
+      { nome: "extractAgentToken null sem header", run: () => { expect(extractAgentToken(new Request("http://x"))).toBeNull(); } },
+    ],
+  },
+  {
+    modulo: "src/lib/cache/cardapio.ts",
+    nome: "Cache do cardápio",
+    categoria: "Núcleo da API",
+    descricao: "Monta a chave de cache do cardápio público por slug.",
+    casos: [
+      { nome: "chave = cardapio:pub:{slug}", run: () => { expect(cardapioCacheKey("burgaria")).toBe("cardapio:pub:burgaria"); } },
+    ],
+  },
+  {
+    modulo: "src/lib/adminModules.ts",
+    nome: "Acesso a módulos (admin)",
+    categoria: "Autenticação e acesso",
+    descricao: "Quais módulos do painel cada usuário pode acessar (por papel e lista de módulos).",
+    casos: [
+      { nome: "sem usuário → nenhum módulo", run: () => { expect(parseUserModules(null)).toEqual([]); } },
+      { nome: "ADM sem restrição → todos os módulos", run: () => {
+        const u = { role: "ADM" } as Parameters<typeof parseUserModules>[0];
+        expect(parseUserModules(u).length > 0).toBe(true); } },
+      { nome: "lista por string com vírgulas", run: () => {
+        const u = { role: "garcom", modulos_acesso: "a,b,c" } as Parameters<typeof parseUserModules>[0];
+        expect(parseUserModules(u)).toEqual(["a", "b", "c"]); } },
+      { nome: "canAccessModule: ADM acessa tudo, anônimo nada", run: () => {
+        expect(canAccessModule({ role: "ADM" } as Parameters<typeof canAccessModule>[0], "qualquer")).toBe(true);
+        expect(canAccessModule(null, "dashboard")).toBe(false); } },
+      { nome: "firstAllowedModule sem usuário → dashboard", run: () => { expect(firstAllowedModule(null)).toBe("dashboard"); } },
     ],
   },
 ];
