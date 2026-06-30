@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Plus, X, QrCode, Trash2, Printer, RefreshCw, Monitor, Copy, Pencil, Camera, FileText } from "lucide-react";
 import { notify, confirmModal } from "@/components/Notify";
 import { KitsInventario } from "./kits-inventario";
+import { CadastroFotoTVs } from "./cadastro-foto";
 
 function aapi(token: string, path: string, init?: RequestInit) {
   return fetch(path, { ...init, headers: { ...(init?.headers ?? {}), "Content-Type": "application/json", Authorization: `Bearer ${token}` } });
@@ -49,6 +50,7 @@ export function Inventario({ token }: { token: string }) {
   const [aba, setAba] = useState<"itens" | "kits" | "os">("itens");
   const [desvincularItem, setDesvincularItem] = useState<ItemInv | null>(null);
   const [moverItem, setMoverItem] = useState<ItemInv | null>(null);
+  const [foto, setFoto] = useState(false);
 
   function toggleSel(id: string) {
     setSelecionados(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -95,9 +97,12 @@ export function Inventario({ token }: { token: string }) {
           <button onClick={imprimirSelecionados} className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20" title="Imprime etiquetas em PDF (8 por pagina A4)">
             <FileText className="h-3.5 w-3.5" /> {selecionados.size > 0 ? `Etiquetas (${selecionados.size})` : "Todas etiquetas"}
           </button>
+          <button onClick={() => setFoto(true)} className="flex items-center gap-2 rounded-lg border border-brand/40 bg-brand/10 px-3 py-1.5 text-sm font-semibold text-brand hover:bg-brand/20" title="Fotografe a etiqueta — lê o serial pelo código de barras"><Camera className="h-4 w-4" /> Cadastrar por foto</button>
           <button onClick={() => setNovo(true)} className="flex items-center gap-2 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold hover:bg-brand-dark"><Plus className="h-4 w-4" /> Novo item</button>
         </div>
       </div>
+
+      {foto && <CadastroFotoTVs token={token} onClose={() => setFoto(false)} onSaved={load} />}
 
       <div className="mb-4 flex gap-1 border-b border-white/10">
         <button onClick={() => setAba("itens")} className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${aba === "itens" ? "border-brand text-white" : "border-transparent text-slate-400 hover:text-white"}`}>
