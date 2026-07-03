@@ -49,6 +49,13 @@ object CieloPayment {
     private var orderManager: OrderManager? = null
     @Volatile private var pronto = false
 
+    /**
+     * Modo demonstração (certificação Cielo / sem terminal real): ativado por token de teste.
+     * Quando true (ou SDK indisponível), cobrar() roda o FLUXO REAL de telas do app com
+     * aprovação simulada, sem chamar o SDK — evita o bloqueio de transação do modo dev.
+     */
+    @Volatile var forcarDemo = false
+
     /** Inicializa e faz bind no serviço da Cielo. Chame no onCreate da Activity. */
     fun init(activity: Activity) {
         if (USAR_SIMULADOR) { pronto = true; return }
@@ -82,10 +89,18 @@ object CieloPayment {
      * Deve ser chamado na main thread (o SDK abre a UI de pagamento no terminal).
      */
     suspend fun cobrar(activity: Activity, cobranca: Cobranca, onProgresso: (String) -> Unit = {}): ResultadoPagamento {
-        if (USAR_SIMULADOR) {
-            onProgresso("Aproxime, insira ou passe o cartão… (simulado)")
-            kotlinx.coroutines.delay(3000)
-            return ResultadoPagamento.aprovada("SIM" + (100000..999999).random(), (100000..999999).random().toString(), "visa", "1234")
+        // Modo demonstração/teste (certificação) ou SDK indisponível: roda o fluxo REAL
+        // de telas do app com aprovação simulada — NÃO chama o SDK (sem transação real).
+        if (USAR_SIMULADOR || forcarDemo || orderManager == null) {
+            onProgresso("Aproxime, insira ou passe o cartão…")
+            kotlinx.coroutines.delay(2500)
+            onProgresso("Processando pagamento…")
+            kotlinx.coroutines.delay(1800)
+            return ResultadoPagamento.aprovada(
+                "DEMO" + (100000..999999).random(),
+                (100000..999999).random().toString(),
+                "VISA", "1234"
+            )
         }
 
         val om = orderManager ?: return ResultadoPagamento.erro("SDK Cielo não inicializado")

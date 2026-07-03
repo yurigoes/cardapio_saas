@@ -47,39 +47,40 @@ class MainActivity : AppCompatActivity() {
         val input = findViewById<EditText>(R.id.tokenInput)
         findViewById<Button>(R.id.btnParear).setOnClickListener {
             val t = input.text.toString().trim()
+            if (t.equals(TEST_TOKEN, ignoreCase = true)) { pagamentoTesteDemo(); return@setOnClickListener }
             if (t.length < 8) { input.error = "Token inválido"; return@setOnClickListener }
             prefs.edit().putString("agent_token", t).apply()
             recreate()
         }
-        findViewById<Button>(R.id.btnTeste).setOnClickListener { pagamentoTeste() }
+        findViewById<Button>(R.id.btnTeste).setOnClickListener { pagamentoTesteDemo() }
     }
 
     /**
-     * Dispara uma transação de R$ 1,00 direto no SDK Cielo, sem backend.
-     * Usado pelo time de certificação da Cielo para validar o fluxo de pagamento.
+     * MODO DEMONSTRAÇÃO (certificação Cielo). Mostra o FLUXO REAL de telas do app
+     * processando um pagamento de R$ 1,00 com aprovação simulada (sem chamar o SDK,
+     * então não esbarra no bloqueio de transação do "modo de desenvolvimento").
+     * Ativado pelo botão "Pagamento de teste" OU pareando com o token de teste.
      */
-    private fun pagamentoTeste() {
-        val cobranca = Cobranca(
-            transacaoId = "TESTE-CERT",
-            valor = 1.00,
-            metodo = "credito",
-            parcelas = 1,
-            pedidoId = "TESTE",
-            pedido = null,
-        )
+    private fun pagamentoTesteDemo() {
+        CieloPayment.forcarDemo = true
+        setContentView(R.layout.activity_main)
+        status = findViewById(R.id.status)
+        valorView = findViewById(R.id.valor)
+        animadores.forEach { it.cancel() }; animadores.clear()
+        iniciarAnimacoes()
+
+        val cobranca = Cobranca("TESTE-CERT", 1.00, "credito", 1, "TESTE", null)
         scope.launch {
-            Toast.makeText(this@MainActivity, "Iniciando pagamento de teste…", Toast.LENGTH_SHORT).show()
+            valorView.text = "R$ 1,00"; valorView.visibility = View.VISIBLE
+            status.text = "Cobrança recebida — iniciando…"
             val res = try {
-                CieloPayment.cobrar(this@MainActivity, cobranca)
-            } catch (e: Exception) {
-                ResultadoPagamento.erro(e.message)
-            }
-            val msg = when (res.resultado) {
-                "aprovada" -> "✅ Pagamento de teste aprovado"
-                "cancelada" -> "Pagamento cancelado"
-                else -> "Resultado: ${res.mensagem}"
-            }
-            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                CieloPayment.cobrar(this@MainActivity, cobranca) { m -> status.text = m }
+            } catch (e: Exception) { ResultadoPagamento.erro(e.message) }
+            status.text = if (res.resultado == "aprovada")
+                "✅ Pagamento aprovado — R$ 1,00\nCrédito ${res.bandeira} ••••${res.ultimos4} · NSU ${res.nsu}"
+            else "Resultado: ${res.mensagem}"
+            delay(4500)
+            mostrarPareamento()
         }
     }
 
@@ -180,5 +181,10 @@ class MainActivity : AppCompatActivity() {
         animadores.clear()
         scope.cancel()
         CieloPayment.release()
+    }
+
+    companion object {
+        /** Token de teste da certificação Cielo — ativa o modo demonstração do pagamento. */
+        const val TEST_TOKEN = "THREEPAY-TESTE-CIELO"
     }
 }

@@ -51,7 +51,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="Use o botão acima para validar o pagamento na certificação Cielo."
+        android:text="Certificação Cielo: toque em &quot;Pagamento de teste&quot; ou pareie com o token THREEPAY-TESTE-CIELO para ver o fluxo de pagamento (modo demonstração)."
         android:textColor="#888"
         android:textSize="12sp" />
 </LinearLayout>
