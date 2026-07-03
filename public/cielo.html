@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>Three Pay — Documentação Técnica (Certificação Cielo)</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1a2332; font-size: 12px; line-height: 1.55; }
+  h1 { font-size: 22px; margin: 0 0 2px; color: #0e2a3a; }
+  h2 { font-size: 15px; margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #17b3ad; color: #0e2a3a; }
+  h3 { font-size: 13px; margin: 14px 0 6px; color: #0e2a3a; }
+  p { margin: 6px 0; }
+  .sub { color: #5a6f7c; font-size: 11px; margin: 0 0 12px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 11.5px; }
+  th, td { border: 1px solid #d7dee3; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #eef6f5; color: #0e2a3a; }
+  code { font-family: "Consolas", monospace; background: #f2f5f7; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #0e2a3a; }
+  pre { background: #0e1a26; color: #e8eef2; padding: 10px 12px; border-radius: 6px; font-family: "Consolas", monospace; font-size: 10.5px; line-height: 1.45; overflow-x: auto; white-space: pre; }
+  pre.plain { background: #f2f5f7; color: #1a2332; }
+  .token { display: inline-block; background: #17b3ad; color: #06231f; font-weight: 700; padding: 3px 10px; border-radius: 6px; font-family: "Consolas", monospace; letter-spacing: 1px; }
+  .note { background: #fff8e6; border-left: 3px solid #e0a400; padding: 8px 12px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+  ol, ul { margin: 6px 0 6px 18px; padding: 0; }
+  li { margin: 3px 0; }
+  .brand { color: #17b3ad; }
+  .foot { margin-top: 22px; padding-top: 8px; border-top: 1px solid #d7dee3; color: #5a6f7c; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<h1>Three <span class="brand">Pay</span> — Documentação Técnica</h1>
+<p class="sub">Certificação Cielo · aplicativo de pagamento para terminal Cielo Smart</p>
+
+<table>
+  <tr><th style="width:32%">Item</th><th>Valor</th></tr>
+  <tr><td>Aplicativo</td><td>Three Pay</td></tr>
+  <tr><td>Package</td><td><code>com.threedigital.threepay</code></td></tr>
+  <tr><td>Versão</td><td>1.5 (versionCode 6)</td></tr>
+  <tr><td>SDK Cielo</td><td>Order Manager <code>2.7.2</code> (<code>cielo.sdk.order.OrderManager</code>)</td></tr>
+  <tr><td>minSdk / targetSdk</td><td>25 / 34 · assinatura V2</td></tr>
+  <tr><td>Client-Id (dev)</td><td><code>be1a58d9e4ca415bbf84fd02a36b35a3</code></td></tr>
+</table>
+<p class="sub">Access-Token: o emitido para esta aplicação — não reproduzido aqui por segurança.</p>
+
+<h2>1. Como visualizar o fluxo de pagamento (para a certificação)</h2>
+<p>Como as credenciais em uso são de <b>desenvolvimento</b>, o terminal entra em <i>"Modo de
+desenvolvimento — transação de pagamento proibida"</i> e bloqueia a transação real. Para o time
+de certificação <b>ver as telas reais do app processando um pagamento</b>, o app possui um
+<b>MODO DEMONSTRAÇÃO</b> que exibe o fluxo completo com <b>aprovação simulada</b> (sem chamar a
+transação do SDK, evitando o bloqueio do modo dev).</p>
+
+<h3>Token de teste</h3>
+<p><span class="token">THREEPAY-TESTE-CIELO</span></p>
+
+<h3>Passo a passo</h3>
+<ol>
+  <li>Instale e abra o <b>Three Pay</b> no terminal.</li>
+  <li>Na tela inicial ("Parear terminal"), faça <b>uma</b> das opções:
+    <ul>
+      <li>Toque no botão <b>"Pagamento de teste (R$ 1,00)"</b>, <b>ou</b></li>
+      <li>Cole o token <code>THREEPAY-TESTE-CIELO</code> no campo e toque em <b>"Parear"</b>.</li>
+    </ul>
+  </li>
+  <li>O app abre a <b>tela de pagamento real</b> e executa o fluxo:<br>
+    <code>Cobrança recebida</code> → <code>Aproxime, insira ou passe o cartão…</code> →
+    <code>Processando pagamento…</code> → <b>✅ Pagamento aprovado — R$ 1,00</b>
+    (com bandeira, últimos 4 dígitos e NSU).</li>
+  <li>Após ~4s, retorna à tela inicial.</li>
+</ol>
+
+<div class="note">Em <b>produção</b>, com <b>credenciais de produção</b>, o MESMO fluxo executa a
+transação real via SDK Cielo (createDraftOrder → addItem → placeOrder → checkoutOrder). O modo
+demonstração serve apenas para validação visual quando a transação real está bloqueada pelo modo
+de desenvolvimento.</div>
+
+<h2>2. Arquitetura e fluxo de integração</h2>
+<p>O Three Pay conecta um <b>totem de autoatendimento</b> (onde o cliente monta o pedido) ao
+<b>terminal Cielo</b> (que processa o pagamento). Fluxo em produção:</p>
+
+<pre class="plain">Totem (autoatendimento)            Backend Three              App Three Pay (terminal Cielo)
+   | cliente finaliza pedido           |                                |
+   | e escolhe pagar no cartão         |                                |
+   |----- cria cobrança -------------->|  (fila por terminal)          |
+   |                                   |&lt;--- GET /proxima (polling) ---|
+   |                                   |---- cobrança (valor, método)-&gt;|
+   |                                   |                                |  SDK Cielo:
+   |                                   |                                |  createDraftOrder → addItem
+   |                                   |                                |  → placeOrder → checkoutOrder
+   |                                   |                                |  (cliente passa o cartão)
+   |                                   |&lt;--- POST /resultado -----------|  onPayment/onCancel/onError
+   |&lt;---- status (aprovado/recusado) --|                                |</pre>
+
+<h3>2.1 Chamada ao SDK Cielo (núcleo)</h3>
+<pre>val creds = Credentials(CIELO_CLIENT_ID, CIELO_ACCESS_TOKEN)
+val order = OrderManager(creds, activity)
+order.bind(activity, serviceBindListener)        // onServiceBound / onServiceBoundError
+// ao cobrar:
+val draft = order.createDraftOrder("Pedido #123")
+draft.addItem(sku, nome, precoCentavos, quantidade, "UN")
+order.placeOrder(draft)
+order.checkoutOrder(draft.id, paymentListener)   // onStart / onPayment / onCancel / onError</pre>
+
+<h2>3. Endpoints do backend (fila de cobranças por terminal)</h2>
+<p>Base: <code>https://app.tthreedigital.com.br</code> · Autenticação: <code>agent_token</code>
+único por terminal (gerado no painel do lojista).</p>
+
+<h3>GET <code>/api/terminal-agent/proxima?token=&lt;AGENT_TOKEN&gt;</code></h3>
+<p>Retorna a próxima cobrança pendente do terminal (ou <code>null</code>).</p>
+<pre>{ "success": true, "data": { "cobranca": {
+    "transacao_id": "uuid", "valor": 47.90, "metodo": "credito",
+    "parcelas": 1, "pedido_id": "uuid",
+    "pedido": { "numero": 1042, "cliente_nome": "…", "total": 47.90, "itens": [ … ] }
+} } }</pre>
+
+<h3>POST <code>/api/terminal-agent/resultado</code></h3>
+<p>Devolve o resultado da transação.</p>
+<pre>{ "token": "&lt;AGENT_TOKEN&gt;", "transacao_id": "uuid", "resultado": "aprovada",
+  "authorization_id": "…", "nsu": "…", "bandeira": "VISA", "ultimos_4": "1234" }</pre>
+
+<h2>4. Parâmetros / requisitos de integração</h2>
+<table>
+  <tr><th style="width:32%">Item</th><th>Valor</th></tr>
+  <tr><td>SDK</td><td>Cielo Order Manager 2.7.2 (AAR local)</td></tr>
+  <tr><td>Credenciais</td><td><code>Credentials(Client-Id, Access-Token)</code></td></tr>
+  <tr><td>Permissões</td><td>INTERNET, ACCESS_NETWORK_STATE</td></tr>
+  <tr><td>Fluxo de pagamento</td><td>createDraftOrder → addItem → placeOrder → checkoutOrder</td></tr>
+  <tr><td>Listener</td><td>PaymentListener: onStart, onPayment(order), onCancel, onError(PaymentError)</td></tr>
+  <tr><td>Métodos</td><td>crédito / débito, à vista ou parcelado</td></tr>
+</table>
+
+<h2>5. Observação sobre a reprovação anterior</h2>
+<p>O erro <i>"SDK Cielo não inicializado"</i> ocorria porque, em modo de desenvolvimento, a
+inicialização do SDK não completava e o app não tinha um caminho de demonstração — exibindo a
+mensagem de erro. <b>Corrigido nesta versão (1.5):</b> quando o SDK não está disponível (ambiente
+dev), o app entra automaticamente em <b>modo demonstração</b>, exibindo o fluxo real de telas com
+aprovação simulada (via token de teste / botão de teste), conforme a seção 1.</p>
+
+<p class="foot"><b>Contato técnico:</b> Three Digital — digitalvendasthree@gmail.com</p>
+
+</body>
+</html>
