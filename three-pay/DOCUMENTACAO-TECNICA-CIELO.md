@@ -2,41 +2,36 @@
 
 **App:** Three Pay
 **Package:** `com.threedigital.threepay`
-**Versão:** 1.5 (versionCode 6)
-**SDK Cielo:** Order Manager `2.7.2` (`cielo.sdk.order.OrderManager`)
+**Versão:** 1.6 (versionCode 7)
+**SDK Cielo:** Order Manager `2.7.2` + `event-tracker 1.0.1` (`cielo.sdk.order.OrderManager`)
 **minSdk:** 25 · **targetSdk:** 34 · assinatura V2
 **Client-Id (dev):** `be1a58d9e4ca415bbf84fd02a36b35a3`
 (Access-Token: o emitido para esta aplicação — não reproduzido aqui por segurança.)
 
 ---
 
-## 1. Como visualizar o fluxo de pagamento (para a certificação)
+## 1. Como testar o fluxo de pagamento (para a certificação)
 
-Como as credenciais em uso são de **desenvolvimento**, o terminal entra em *"Modo de
-desenvolvimento — transação de pagamento proibida"* e bloqueia a transação real. Para o
-time de certificação **ver as telas reais do app processando um pagamento**, o app possui
-um **MODO DEMONSTRAÇÃO** que exibe o fluxo completo com **aprovação simulada** (sem chamar
-a transação do SDK, evitando o bloqueio do modo dev).
+O app executa a **transação real via SDK Cielo**, acionando o terminal. Para facilitar a
+validação há um botão que dispara uma transação de teste de **R$ 1,00**.
 
-### Token de teste
-```
-THREEPAY-TESTE-CIELO
-```
-
-### Passo a passo
+### Como disparar
 1. Instale e abra o **Three Pay** no terminal.
-2. Na tela inicial ("Parear terminal"), faça **uma** das opções:
-   - Toque no botão **"Pagamento de teste (R$ 1,00)"**, **ou**
-   - Cole o token **`THREEPAY-TESTE-CIELO`** no campo e toque em **"Parear"**.
-3. O app abre a **tela de pagamento real** e executa o fluxo:
-   `Cobrança recebida` → `Aproxime, insira ou passe o cartão…` → `Processando pagamento…`
-   → **`✅ Pagamento aprovado — R$ 1,00`** (com bandeira, últimos 4 dígitos e NSU).
-4. Após ~4s, retorna à tela inicial.
+2. Na tela inicial ("Parear terminal"), toque em **"Pagamento de teste (R$ 1,00)"**
+   (ou cole o token **`THREEPAY-TESTE-CIELO`** e toque em "Parear").
+3. O app chama o SDK — `createDraftOrder → addItem → placeOrder → checkoutOrder` — que
+   **abre a tela de pagamento do próprio terminal Cielo** (`ExternalPaymentActivity`).
+   O cliente conclui com o cartão e o resultado (aprovado/recusado/cancelado) volta ao app
+   pelo `PaymentListener`.
 
-> Em **produção**, com **credenciais de produção**, o MESMO fluxo executa a transação real
-> via SDK Cielo (createDraftOrder → addItem → placeOrder → checkoutOrder). O modo
-> demonstração serve apenas para validação visual quando a transação real está bloqueada
-> pelo modo de desenvolvimento.
+Validação em ambiente de desenvolvimento (emulador Cielo Smart `br.com.cielosmart.orderservice`),
+comprovada por log: `Cielo SDK bound` → `cielo.launcher.CHECKOUT` →
+`br.com.cielosmart.orderservice/.ui.activity.ExternalPaymentActivity`.
+
+> Observação: em ambiente de desenvolvimento o terminal pode exibir *"Modo de desenvolvimento
+> — transação de pagamento proibida"* (controle do ambiente Cielo); no terminal homologado da
+> certificação a transação é processada. O **acionamento do terminal** (checkoutOrder → tela de
+> pagamento) já ocorre em ambos os ambientes.
 
 ---
 
@@ -111,12 +106,14 @@ Devolve o resultado da transação.
 
 ---
 
-## 5. Observação sobre a reprovação anterior
+## 5. Correção da reprovação anterior
 
-O erro *"SDK Cielo não inicializado"* ocorria porque, em modo de desenvolvimento, a
-inicialização do SDK não completava e o app não tinha um caminho de demonstração — exibindo
-a mensagem de erro. **Corrigido nesta versão (1.5):** quando o SDK não está disponível
-(ambiente dev), o app entra automaticamente em **modo demonstração**, exibindo o fluxo real
-de telas com aprovação simulada (via token de teste / botão de teste), conforme a seção 1.
+O erro *"SDK Cielo não inicializado"* era causado por uma **dependência faltando** no APK: o
+`OrderManager` depende do `event-tracker` (classe `cielo.smart.eventtracker.EventTracker`), que
+não estava empacotada — gerando `NoClassDefFoundError` na inicialização do SDK, sem acionar o
+terminal. **Corrigido nesta versão (1.6):** adicionadas as bibliotecas `event-tracker-1.0.1.aar`
+e as dependências Datadog exigidas por ela, e **removido** o caminho de simulação. O SDK agora
+**inicializa e conecta ao serviço do terminal** (`onServiceBound`) e o `checkoutOrder` **aciona a
+tela de pagamento do terminal** (`ExternalPaymentActivity`) — transação real, sem simulação.
 
 **Contato técnico:** Three Digital — digitalvendasthree@gmail.com
