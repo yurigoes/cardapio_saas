@@ -66,11 +66,16 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    // SDK Cielo Order Manager — distribuído como AAR LOCAL (não está no Maven).
-    // Baixe order-manager-2.7.2.aar e coloque em three-pay/app/libs/
+    // SDK Cielo Order Manager — AARs LOCAIS (não estão no Maven).
     //   Fonte: github.com/DeveloperCielo/LIO-SDK-Sample-Integracao-Local/tree/master/app/libs
-    //   (ou o pacote do SDK no portal de desenvolvedores Cielo)
     implementation(files("libs/order-manager-2.7.2.aar"))
-    // Dependências transitivas que o SDK costuma exigir (o AAR local não as puxa):
+    // event-tracker: EXIGIDO pelo OrderManager (cielo.smart.eventtracker.EventTracker).
+    // Sem ele o SDK lança NoClassDefFoundError e NÃO inicializa.
+    implementation(files("libs/event-tracker-1.0.1.aar"))
+    // Dependências transitivas do SDK (o AAR local não as puxa):
     implementation("com.google.code.gson:gson:2.10.1")
+    // Datadog — exigido pelo event-tracker (monitoramento do SDK Cielo):
+    implementation("com.datadoghq:dd-sdk-android-logs:2.16.0")
+    implementation("com.datadoghq:dd-sdk-android-trace:2.16.0")
+    implementation("com.datadoghq:dd-sdk-android-rum:2.16.0")
 }

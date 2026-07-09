@@ -51,7 +51,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="Certificação Cielo: toque em &quot;Pagamento de teste&quot; ou pareie com o token THREEPAY-TESTE-CIELO para ver o fluxo de pagamento (modo demonstração)."
+        android:text="Certificação Cielo: toque em &quot;Pagamento de teste (R$ 1,00)&quot; para executar uma transação real no terminal Cielo (aciona o SDK e a tela de pagamento do terminal)."
         android:textColor="#888"
         android:textSize="12sp" />
 </LinearLayout>
