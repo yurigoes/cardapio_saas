@@ -43,37 +43,32 @@ data class ResultadoPagamento(
 
 object CieloPayment {
 
-    /** true = simula aprovação (sem chamar o SDK). Pra testar fluxo sem terminal. */
+    /** Compile-time apenas: true simula (build de dev sem terminal). Produção/certificação = false. */
     const val USAR_SIMULADOR = false
 
     private var orderManager: OrderManager? = null
     @Volatile private var pronto = false
 
-    /**
-     * Modo demonstração (certificação Cielo / sem terminal real): ativado por token de teste.
-     * Quando true (ou SDK indisponível), cobrar() roda o FLUXO REAL de telas do app com
-     * aprovação simulada, sem chamar o SDK — evita o bloqueio de transação do modo dev.
-     */
-    @Volatile var forcarDemo = false
+    /** Último erro real de init/bind do SDK — exibido na tela para diagnóstico. */
+    @Volatile var ultimoErro: String? = null
+        private set
 
     /** Inicializa e faz bind no serviço da Cielo. Chame no onCreate da Activity. */
     fun init(activity: Activity) {
         if (USAR_SIMULADOR) { pronto = true; return }
         if (orderManager != null) return
-        // Em dispositivos sem o serviço/SDK Cielo (emuladores comuns como MEmu/BlueStacks),
-        // a inicialização pode lançar UnsatisfiedLinkError/NoClassDefFoundError. Protegemos
-        // pra não derrubar o app — o pagamento só funciona no terminal Cielo real.
         try {
             val creds = Credentials(BuildConfig.CIELO_CLIENT_ID, BuildConfig.CIELO_ACCESS_TOKEN)
             val om = OrderManager(creds, activity)
             om.bind(activity, object : ServiceBindListener {
-                override fun onServiceBound() { pronto = true; android.util.Log.d("ThreePay", "Cielo SDK bound") }
-                override fun onServiceBoundError(throwable: Throwable) { android.util.Log.w("ThreePay", "bind erro: ${throwable.message}") }
+                override fun onServiceBound() { pronto = true; ultimoErro = null; android.util.Log.d("ThreePay", "Cielo SDK bound") }
+                override fun onServiceBoundError(throwable: Throwable) { pronto = false; ultimoErro = "bind: ${throwable.message}"; android.util.Log.e("ThreePay", "Cielo bind erro", throwable) }
                 override fun onServiceUnbound() { pronto = false }
             })
             orderManager = om
         } catch (e: Throwable) {
-            android.util.Log.e("ThreePay", "SDK Cielo indisponivel (terminal nao-Cielo?): ${e.message}")
+            ultimoErro = "${e.javaClass.simpleName}: ${e.message}"
+            android.util.Log.e("ThreePay", "Falha ao iniciar SDK Cielo", e)
         }
     }
 
@@ -89,21 +84,23 @@ object CieloPayment {
      * Deve ser chamado na main thread (o SDK abre a UI de pagamento no terminal).
      */
     suspend fun cobrar(activity: Activity, cobranca: Cobranca, onProgresso: (String) -> Unit = {}): ResultadoPagamento {
-        // Modo demonstração/teste (certificação) ou SDK indisponível: roda o fluxo REAL
-        // de telas do app com aprovação simulada — NÃO chama o SDK (sem transação real).
-        if (USAR_SIMULADOR || forcarDemo || orderManager == null) {
-            onProgresso("Aproxime, insira ou passe o cartão…")
+        // Build de desenvolvimento sem terminal (compile-time). Em produção/cert = false.
+        if (USAR_SIMULADOR) {
+            onProgresso("Aproxime, insira ou passe o cartão… (simulado)")
             kotlinx.coroutines.delay(2500)
-            onProgresso("Processando pagamento…")
-            kotlinx.coroutines.delay(1800)
-            return ResultadoPagamento.aprovada(
-                "DEMO" + (100000..999999).random(),
-                (100000..999999).random().toString(),
-                "VISA", "1234"
-            )
+            return ResultadoPagamento.aprovada("SIM" + (100000..999999).random(), (100000..999999).random().toString(), "VISA", "1234")
         }
 
-        val om = orderManager ?: return ResultadoPagamento.erro("SDK Cielo não inicializado")
+        // Garante a inicialização e AGUARDA o bind do serviço Cielo (assíncrono) antes de cobrar.
+        if (orderManager == null) init(activity)
+        var esperou = 0
+        while (!pronto && orderManager != null && esperou < 8000) { kotlinx.coroutines.delay(300); esperou += 300 }
+
+        val om = orderManager
+            ?: return ResultadoPagamento.erro("SDK Cielo não inicializado" + (ultimoErro?.let { " — $it" } ?: ""))
+        if (!pronto)
+            return ResultadoPagamento.erro("Serviço de pagamento Cielo não conectou" + (ultimoErro?.let { " — $it" } ?: ""))
+
         val centavos = Math.round(cobranca.valor * 100)
 
         return suspendCancellableCoroutine { cont ->

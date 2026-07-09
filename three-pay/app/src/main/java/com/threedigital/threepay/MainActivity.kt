@@ -56,13 +56,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * MODO DEMONSTRAÇÃO (certificação Cielo). Mostra o FLUXO REAL de telas do app
-     * processando um pagamento de R$ 1,00 com aprovação simulada (sem chamar o SDK,
-     * então não esbarra no bloqueio de transação do "modo de desenvolvimento").
+     * Pagamento de teste (R$ 1,00) — executa uma TRANSAÇÃO REAL via SDK Cielo no terminal
+     * (createDraftOrder → placeOrder → checkoutOrder). Usado pelo time de certificação.
      * Ativado pelo botão "Pagamento de teste" OU pareando com o token de teste.
      */
     private fun pagamentoTesteDemo() {
-        CieloPayment.forcarDemo = true
         setContentView(R.layout.activity_main)
         status = findViewById(R.id.status)
         valorView = findViewById(R.id.valor)
@@ -72,14 +70,17 @@ class MainActivity : AppCompatActivity() {
         val cobranca = Cobranca("TESTE-CERT", 1.00, "credito", 1, "TESTE", null)
         scope.launch {
             valorView.text = "R$ 1,00"; valorView.visibility = View.VISIBLE
-            status.text = "Cobrança recebida — iniciando…"
+            status.text = "Iniciando pagamento…"
             val res = try {
                 CieloPayment.cobrar(this@MainActivity, cobranca) { m -> status.text = m }
             } catch (e: Exception) { ResultadoPagamento.erro(e.message) }
-            status.text = if (res.resultado == "aprovada")
-                "✅ Pagamento aprovado — R$ 1,00\nCrédito ${res.bandeira} ••••${res.ultimos4} · NSU ${res.nsu}"
-            else "Resultado: ${res.mensagem}"
-            delay(4500)
+            status.text = when (res.resultado) {
+                "aprovada" -> "✅ Pagamento aprovado — R$ 1,00"
+                "recusada" -> "❌ Pagamento recusado"
+                "cancelada" -> "Pagamento cancelado"
+                else -> "Erro: ${res.mensagem}"
+            }
+            delay(5000)
             mostrarPareamento()
         }
     }
